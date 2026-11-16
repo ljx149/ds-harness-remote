@@ -1,0 +1,76 @@
+/* xcodex website palette. Keep upstream layout separate from instance branding. */
+:root {
+  --color-bg: #f7f8fa;
+  --color-surface: #fff;
+  --color-surface-subtle: #f0f2f5;
+  --color-text: #17191d;
+  --color-text-muted: #62666e;
+  --color-border: #dce0e6;
+  --color-border-subtle: #e7e9ed;
+  --color-primary: #345b91;
+  --color-primary-strong: #284972;
+  --color-primary-soft: #e9eff8;
+  --color-focus: #9db6ef66;
+}
+:root[data-theme="dark"] {
+  --color-bg: #0a0a0a;
+  --color-surface: #141414;
+  --color-surface-subtle: #1b1b1b;
+  --color-text: #fafafa;
+  --color-text-muted: #adadad;
+  --color-border: #333;
+  --color-border-subtle: #242424;
+  --color-primary: #9db6ef;
+  --color-primary-strong: #b6ccf5;
+  --color-primary-soft: #9db6ef1a;
+  --color-focus: #9db6ef66;
+}
+:root .site-shell {
+  --landing-bg: var(--color-bg);
+  --landing-surface: var(--color-surface);
+  --landing-ink: var(--color-text);
+  --landing-muted: var(--color-text-muted);
+  --landing-dim: var(--color-text-muted);
+  --landing-line: var(--color-border-subtle);
+  --landing-border: var(--color-border);
+  --landing-accent: var(--color-primary);
+  --landing-accent-hover: var(--color-primary-strong);
+  --landing-focus: var(--color-primary);
+}
+:root .site-shell .site-topbar,
+:root .product-topbar { background: var(--color-surface); border-bottom: 1px solid var(--color-border-subtle); }
+:root .landing-hero { background: var(--color-bg); }
+:root .landing-hero::before,
+:root .landing-hero::after { background: none; }
+:root .landing-plugin,
+:root .auth-panel { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 16px; box-shadow: none; }
+:root .landing-plugin-panel,
+:root .landing-plugin-tabs,
+:root .plugin-install-scheme,
+:root .plugin-install-method,
+:root .plugin-install-command { background: var(--color-surface-subtle); border-color: var(--color-border); color: var(--color-text); }
+:root .site-shell .landing-action-primary,
+:root .site-shell .topbar-primary-action,
+:root .site-shell .landing-plugin-action { background: var(--color-text); color: var(--color-bg); border-color: var(--color-text); }
+:root .site-shell .landing-action-secondary { color: var(--color-text); border-color: var(--color-border); background: var(--color-surface); }
+:root .landing-plugin-status { color: var(--color-primary); background: var(--color-primary-soft); border-color: var(--color-border); }
+:root .auth-page { background: var(--color-bg); }
+:root .auth-page::before,
+:root .auth-page::after { background: none; }
+.topbar-brand-mark, .auth-brand-icon { border-radius: 12px; }
+.topbar-brand-word { letter-spacing: -0.04em; }
+@media (max-width: 600px) {
+  .topbar-brand-word { font-size: 19px; }
+  .topbar-brand-copy h3.ant-typography { font-size: 18px; }
+  .site-footer { flex-wrap: wrap; gap: 12px; }
+}
+:root .auth-logo-stack h1.ant-typography { color: var(--color-text); }
+:root .auth-intro .ant-typography-secondary { color: var(--color-text-muted); }
+:root .landing-plugin { animation: none; filter: none; }
+:root[data-theme] .landing-shell .landing-hero { background: var(--color-bg); }
+:root[data-theme] .landing-shell .landing-hero::before,
+:root[data-theme] .landing-shell .landing-hero::after { background: none; }
+:root[data-theme] .landing-shell .landing-plugin,
+:root[data-theme] .landing-shell .landing-plugin-panel,
+:root[data-theme] .landing-shell .landing-plugin-tabs { background: var(--color-surface); border-color: var(--color-border); box-shadow: none; backdrop-filter: none; animation: none; filter: none; }
+:root[data-theme] .landing-shell .landing-plugin-tabs button.is-active { background: var(--color-primary-soft); color: var(--color-primary); border-color: var(--color-border); }

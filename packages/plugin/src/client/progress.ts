@@ -12,25 +12,25 @@ export function createRemoteProgressView(React: ClientReact) {
     const percent = Math.max(0, Math.min(100, Math.round(progress.percent)))
     const activeTransports = new Set(progress.activeTransports ?? [])
     const detail = progress.transports !== undefined && activeTransports.size > 0
-      ? React.createElement('span', { className: 'dshRemoteProgressRoute' },
+      ? React.createElement('span', { className: 'xcodexRemoteProgressRoute' },
         props.t(progress.routeVerb === 'using' ? 'remoteProgressUsingPrefix' : 'remoteProgressTryingPrefix'),
         progress.transports.map((transport, index) => React.createElement(React.Fragment, { key: `${transport}:${index}` },
-          index === 0 ? null : React.createElement('span', { className: 'dshRemoteProgressRouteArrow', 'aria-hidden': true }, ' -> '),
+          index === 0 ? null : React.createElement('span', { className: 'xcodexRemoteProgressRouteArrow', 'aria-hidden': true }, ' -> '),
           React.createElement('span', {
             className: activeTransports.has(transport) ? 'isActive' : undefined,
           }, transportDiagnosticLabel(transport)))))
       : props.t(progress.detail)
     return React.createElement('div', {
-      className: 'dshRemoteProgress',
+      className: 'xcodexRemoteProgress',
       role: 'status',
       'aria-live': 'polite',
     },
-      React.createElement('div', { className: 'dshRemoteProgressHeader' },
+      React.createElement('div', { className: 'xcodexRemoteProgressHeader' },
         React.createElement('strong', null, props.t(progress.label)),
         React.createElement('span', null, `${percent}%`)),
       React.createElement('p', null, detail),
       React.createElement('div', {
-        className: 'dshRemoteProgressBar',
+        className: 'xcodexRemoteProgressBar',
         role: 'progressbar',
         'aria-valuemin': 0,
         'aria-valuemax': 100,

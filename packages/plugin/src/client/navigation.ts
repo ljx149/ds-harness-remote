@@ -1,6 +1,6 @@
 import type { RemoteWorkspaceSelection, WorkspacesClientServiceLike } from './types.js'
 
-export const pendingWorkspaceSelectionKey = 'dsh-remote:pending-workspace-selection'
+export const pendingWorkspaceSelectionKey = 'xcodex-remote:pending-workspace-selection'
 
 export function storedWorkspaceSelection(): RemoteWorkspaceSelection | undefined {
   const raw = window.sessionStorage.getItem(pendingWorkspaceSelectionKey)

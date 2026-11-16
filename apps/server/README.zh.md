@@ -1,5 +1,7 @@
 # 自部署 Server
 
+本分支新增可选 xcodex 多账号鉴权，默认仍是原单账号模式。见 [客户端契约、迁移和验收边界](../../docs/xcodex-account-auth.md)。改造已部署到 agent.xcodex.vip 供联调，上游镜像不包含本分支变更。
+
 [English](README.md) · **中文**
 
 单账号 Remote Server，支持 WebRTC（LAN / P2P / TURN）与端到端加密 Relay，环境变量配置账号密码，Web 提供首页、登录和设备状态页。Server 不包含在 Host 插件 bundle 中，需要单独部署。
@@ -159,3 +161,7 @@ NODE_ENV=production pnpm --workspace-concurrency=1 -r build
 node scripts/verify-dsh-plugin.mjs
 pnpm --dir packages/plugin pack --pack-destination /tmp/dsh-release-assets
 ```
+
+## xcodex device browser sign-in (fork)
+
+Device-bound browser handoff and the test plugin are documented in [the integration contract](../../docs/device-browser-login-plan.md). Configure `DSH_DEVICE_LOGIN_REDIRECT_URIS` as an exact comma-separated mobile callback allowlist; empty means desktop polling only (mobile can also poll). Never place pickup tokens or PKCE verifiers in URLs or logs. Production deployment and real-device acceptance are tracked separately.

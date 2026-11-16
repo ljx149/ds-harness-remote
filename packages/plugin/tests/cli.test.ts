@@ -20,9 +20,9 @@ afterEach(async () => {
 
 describe('Remote CLI', () => {
   it('automatically migrates storage before normal CLI commands without an extra migration step', async () => {
-    const dshHome = join(tmpdir(), `ds-harness-remote-cli-migration-${crypto.randomUUID()}`)
+    const dshHome = join(tmpdir(), `xcodex-remote-cli-migration-${crypto.randomUUID()}`)
     directories.push(dshHome)
-    const legacy = join(dshHome, 'remote')
+    const legacy = join(dshHome, 'xcodex-remote-legacy')
     const original = await new IdentityStore({ directory: legacy }).loadOrCreate('Legacy Host')
     const output = writer()
     const errors = writer()
@@ -33,7 +33,7 @@ describe('Remote CLI', () => {
     expect(createHostApi).not.toHaveBeenCalled()
     expect(await runCli(['status'], dependencies)).toBe(0)
     expect(await runCli(['status'], dependencies)).toBe(0)
-    expect((await readFile(join(dshHome, 'ds-harness-remote', 'device.key'), 'utf8')).trim()).toBe(original.privateKey)
+    expect((await readFile(join(dshHome, 'xcodex-remote', 'device.key'), 'utf8')).trim()).toBe(original.privateKey)
     await expect(stat(legacy)).rejects.toMatchObject({ code: 'ENOENT' })
     expect(output.text).not.toContain(original.privateKey)
   })
@@ -50,7 +50,7 @@ describe('Remote CLI', () => {
       if (url.endsWith('/auth/oauth/providers')) return json({ items: [providerInfo('github')] })
       if (url.endsWith('/auth/oauth/qr/start?provider=github')) return json({
         qrId: 'github-qr-session-1234567890',
-        scanUrl: 'https://dsh.r2049.cn/api/v1/auth/q/github-qr-session-1234567890',
+        scanUrl: 'https://agent.xcodex.vip/api/v1/auth/q/github-qr-session-1234567890',
         expiresIn: 600,
         provider: 'github',
       })
@@ -72,40 +72,40 @@ describe('Remote CLI', () => {
     })).resolves.toBe(0)
 
     expect(calls.map(call => call.url)).toEqual([
-      'https://dsh.r2049.cn/api/v1/auth/oauth/providers',
-      'https://dsh.r2049.cn/api/v1/auth/oauth/providers',
-      'https://dsh.r2049.cn/api/v1/auth/oauth/qr/start?provider=github',
-      'https://dsh.r2049.cn/api/v1/auth/oauth/qr/github-qr-session-1234567890',
-      'https://dsh.r2049.cn/api/v1/auth/me',
-      'https://dsh.r2049.cn/api/v1/devices/register',
+      'https://agent.xcodex.vip/api/v1/auth/oauth/providers',
+      'https://agent.xcodex.vip/api/v1/auth/oauth/providers',
+      'https://agent.xcodex.vip/api/v1/auth/oauth/qr/start?provider=github',
+      'https://agent.xcodex.vip/api/v1/auth/oauth/qr/github-qr-session-1234567890',
+      'https://agent.xcodex.vip/api/v1/auth/me',
+      'https://agent.xcodex.vip/api/v1/devices/register',
     ])
     expect(output.text).toContain('<terminal-qr>')
-    expect(output.text).toContain(`Authorization URL: \u001B]8;;https://dsh.r2049.cn/api/v1/auth/q/github-qr-session-1234567890\u0007https://dsh.r2049.cn/api/v1/auth/q/github-qr-session-1234567890\u001B]8;;\u0007`)
+    expect(output.text).toContain(`Authorization URL: \u001B]8;;https://agent.xcodex.vip/api/v1/auth/q/github-qr-session-1234567890\u0007https://agent.xcodex.vip/api/v1/auth/q/github-qr-session-1234567890\u001B]8;;\u0007`)
     expect(output.text).toContain('Remote Host login complete for host@example.com.')
     expect(output.text).toContain('Restart the Harness instance')
     expect(output.text).not.toContain('web-account-token-value')
     expect(output.text).not.toContain('access-token-value')
     expect(errors.text).toBe('')
 
-    const directory = serverStorageDirectory(join(dshHome, 'ds-harness-remote'), 'https://dsh.r2049.cn', 'host')
+    const directory = serverStorageDirectory(join(dshHome, 'xcodex-remote'), 'https://agent.xcodex.vip', 'host')
     const device = JSON.parse(await readFile(join(directory, 'device.json'), 'utf8')) as { deviceId: string }
-    await expect(new ServerCredentialStore(directory).load('https://dsh.r2049.cn', device.deviceId))
+    await expect(new ServerCredentialStore(directory).load('https://agent.xcodex.vip', device.deviceId))
       .resolves.toMatchObject({ authorizationMethod: 'account', account: 'host@example.com' })
   })
 
-  it('defaults login to Zhihu and reports an expired QR session', async () => {
+  it('retains explicit provider login and reports an expired QR session', async () => {
     const dshHome = join(tmpdir(), `dsh-remote-cli-expired-${crypto.randomUUID()}`)
     directories.push(dshHome)
     const output = writer()
     const errors = writer()
     const start = vi.fn(async () => ({
       qrId: 'zhihu-qr-session-1234567890',
-      scanUrl: 'https://dsh.r2049.cn/api/v1/auth/q/zhihu-qr-session-1234567890',
+      scanUrl: 'https://agent.xcodex.vip/api/v1/auth/q/zhihu-qr-session-1234567890',
       expiresIn: 600,
     }))
     const poll = vi.fn(async () => ({ status: 'expired' as const }))
 
-    await expect(runCli(['login'], {
+    await expect(runCli(['login', 'zhihu'], {
       env: { DSH_HOME: dshHome },
       stdout: output,
       stderr: errors,
@@ -131,11 +131,11 @@ describe('Remote CLI', () => {
     directories.push(dshHome)
     const env = { DSH_HOME: dshHome }
     const root = new IdentityStore({ env }).directory
-    const directory = serverStorageDirectory(root, 'https://dsh.r2049.cn', 'host')
+    const directory = serverStorageDirectory(root, 'https://agent.xcodex.vip', 'host')
     const identities = new IdentityStore({ directory, env })
     const original = await identities.loadOrCreate('CLI test Host')
     await new ServerCredentialStore(directory).save({
-      serverUrl: 'https://dsh.r2049.cn',
+      serverUrl: 'https://agent.xcodex.vip',
       deviceId: original.deviceId,
       authorizationMethod: 'account',
       account: 'host@example.com',
@@ -161,7 +161,7 @@ describe('Remote CLI', () => {
     expect(revoke).toHaveBeenCalledOnce()
     const rotated = JSON.parse(await readFile(join(directory, 'device.json'), 'utf8')) as { deviceId: string }
     expect(rotated.deviceId).not.toBe(original.deviceId)
-    await expect(new ServerCredentialStore(directory).load('https://dsh.r2049.cn', rotated.deviceId))
+    await expect(new ServerCredentialStore(directory).load('https://agent.xcodex.vip', rotated.deviceId))
       .resolves.toBeUndefined()
     expect(output.text).toContain('local device identity was rotated')
   })
@@ -170,11 +170,11 @@ describe('Remote CLI', () => {
     const dshHome = join(tmpdir(), `dsh-remote-cli-status-${crypto.randomUUID()}`)
     directories.push(dshHome)
     const env = { DSH_HOME: dshHome }
-    const root = join(dshHome, 'remote')
-    const directory = serverStorageDirectory(root, 'https://dsh.r2049.cn', 'host')
+    const root = join(dshHome, 'xcodex-remote-legacy')
+    const directory = serverStorageDirectory(root, 'https://agent.xcodex.vip', 'host')
     const identity = await new IdentityStore({ directory, env }).loadOrCreate('CLI status Host')
     await new ServerCredentialStore(directory).save({
-      serverUrl: 'https://dsh.r2049.cn',
+      serverUrl: 'https://agent.xcodex.vip',
       deviceId: identity.deviceId,
       authorizationMethod: 'account',
       account: 'status@example.com',
@@ -187,7 +187,7 @@ describe('Remote CLI', () => {
     const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
     let pending = true
     vi.mocked(rename).mockImplementation((from, to) => {
-      if (pending && from === root && to === join(dshHome, 'ds-harness-remote')) {
+      if (pending && from === root && to === join(dshHome, 'xcodex-remote')) {
         pending = false
         return Promise.reject(Object.assign(new Error('move unavailable'), { code: 'EACCES' }))
       }
@@ -201,7 +201,7 @@ describe('Remote CLI', () => {
     })).resolves.toBe(0)
 
     expect(await readFile(join(directory, 'server-credentials.json'))).toEqual(credentialBytes)
-    await expect(stat(join(dshHome, 'ds-harness-remote'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(stat(join(dshHome, 'xcodex-remote'))).rejects.toMatchObject({ code: 'ENOENT' })
 
     expect(output.text).toContain('Host control: enabled')
     expect(output.text).toContain('Authorization: logged in (account)')
@@ -217,14 +217,14 @@ describe('Remote CLI', () => {
     const dshHome = join(tmpdir(), `dsh-remote-cli-reset-${crypto.randomUUID()}`)
     directories.push(dshHome)
     const env = { DSH_HOME: dshHome }
-    const legacyRoot = join(dshHome, 'remote')
-    const hostLegacyDir = serverStorageDirectory(legacyRoot, 'https://dsh.r2049.cn', 'host')
-    const clientLegacyDir = serverStorageDirectory(legacyRoot, 'https://dsh.r2049.cn', 'client')
+    const legacyRoot = join(dshHome, 'xcodex-remote-legacy')
+    const hostLegacyDir = serverStorageDirectory(legacyRoot, 'https://agent.xcodex.vip', 'host')
+    const clientLegacyDir = serverStorageDirectory(legacyRoot, 'https://agent.xcodex.vip', 'client')
     const originalHost = await new IdentityStore({ directory: hostLegacyDir, env, role: 'host' }).loadOrCreate('Host')
     const originalClient = await new IdentityStore({ directory: clientLegacyDir, env, role: 'client' }).loadOrCreate('Client')
     await writeFile(join(clientLegacyDir, 'device.key'), 'corrupted-client-key\n')
     await new ServerCredentialStore(clientLegacyDir).save({
-      serverUrl: 'https://dsh.r2049.cn',
+      serverUrl: 'https://agent.xcodex.vip',
       deviceId: originalClient.deviceId,
       authorizationMethod: 'owned_device',
       ...tokens(),
@@ -236,9 +236,9 @@ describe('Remote CLI', () => {
     await expect(runCli(['reset-identity', 'client'], { env, stdout: output, stderr: errors })).resolves.toBe(0)
     expect(output.text).toContain('Remote client identity was reset')
 
-    const canonicalRoot = join(dshHome, 'ds-harness-remote')
-    const hostCanonicalDir = serverStorageDirectory(canonicalRoot, 'https://dsh.r2049.cn', 'host')
-    const clientCanonicalDir = serverStorageDirectory(canonicalRoot, 'https://dsh.r2049.cn', 'client')
+    const canonicalRoot = join(dshHome, 'xcodex-remote')
+    const hostCanonicalDir = serverStorageDirectory(canonicalRoot, 'https://agent.xcodex.vip', 'host')
+    const clientCanonicalDir = serverStorageDirectory(canonicalRoot, 'https://agent.xcodex.vip', 'client')
     const preservedHost = JSON.parse(await readFile(join(hostCanonicalDir, 'device.json'), 'utf8')) as { deviceId: string }
     const rotatedClient = JSON.parse(await readFile(join(clientCanonicalDir, 'device.json'), 'utf8')) as { deviceId: string }
     expect(preservedHost.deviceId).toBe(originalHost.deviceId)
@@ -250,13 +250,13 @@ describe('Remote CLI', () => {
     directories.push(dshHome)
     const env = { DSH_HOME: dshHome }
     const root = new IdentityStore({ env }).directory
-    const directory = serverStorageDirectory(root, 'https://dsh.r2049.cn', 'host')
+    const directory = serverStorageDirectory(root, 'https://agent.xcodex.vip', 'host')
     const identities = new IdentityStore({ directory, env, role: 'host' })
     const original = await identities.loadOrCreate('CLI test Host')
     // Corrupt the key file
     await writeFile(join(directory, 'device.key'), 'corrupted-private-key\n')
     await new ServerCredentialStore(directory).save({
-      serverUrl: 'https://dsh.r2049.cn',
+      serverUrl: 'https://agent.xcodex.vip',
       deviceId: original.deviceId,
       authorizationMethod: 'account',
       account: 'host@example.com',

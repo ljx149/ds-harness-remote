@@ -39,7 +39,7 @@ describe('Remote upload tool transfer and receipts', () => {
     await runScenarios(['success', 'cancel', 'changed', 'unknown'].map(kind => ({ name: kind, run: async () => {
       const root = await mkdtemp(join(tmpdir(), 'remote-upload-tool-'))
       const local = join(root, 'source.bin')
-      const remote = join(root, 'remote')
+      const remote = join(root, 'xcodex-remote-legacy')
       const { mkdir } = await import('node:fs/promises')
       await mkdir(remote)
       await writeFile(local, Buffer.alloc(140000, 7))

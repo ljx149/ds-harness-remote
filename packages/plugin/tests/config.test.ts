@@ -14,7 +14,7 @@ describe('plugin config', () => {
       codex: { enabled: true, binary: 'codex' },
       cursor: { enabled: false, binary: 'agent' },
     })
-    expect(resolveConfig({}, { DSH_REMOTE_TERMINAL_ENABLED: 'false' }).terminal.enabled).toBe(false)
+    expect(resolveConfig({}, { XCODEX_REMOTE_TERMINAL_ENABLED: 'false' }).terminal.enabled).toBe(false)
   })
 
   it('keeps Remote Tools enabled by default while allowing an explicit opt-out', () => {
@@ -88,8 +88,8 @@ describe('plugin config', () => {
     expect(resolveConfig({ serverUrl: 'http://[2001:db8::5]:8080', httpServerAllowlist: ['2001:db8::/32'] }).serverUrl)
       .toBe('http://[2001:db8::5]:8080')
     expect(resolveConfig({}, {
-      DSH_REMOTE_SERVER: 'http://11.23.4.5:8080',
-      DSH_REMOTE_HTTP_SERVER_ALLOWLIST: '11.0.0.0/8, 2001:db8::/32',
+      XCODEX_REMOTE_SERVER: 'http://11.23.4.5:8080',
+      XCODEX_REMOTE_HTTP_SERVER_ALLOWLIST: '11.0.0.0/8, 2001:db8::/32',
     })).toMatchObject({
       serverUrl: 'http://11.23.4.5:8080',
       httpServerAllowlist: ['11.0.0.0/8', '2001:db8::/32'],

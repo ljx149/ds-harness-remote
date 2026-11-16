@@ -710,7 +710,7 @@ describe('AcpVirtualHarness', () => {
           }
 
           const target = new AcpVirtualHarness(client, { deviceId: 'host-1', name: 'Host' }, 'antigravity')
-          const workspaceId = acpCwdWorkspaceId('/var/lib/dsh/workspace/ds-harness-remote', 'antigravity')
+          const workspaceId = acpCwdWorkspaceId('/var/lib/dsh/workspace/xcodex-remote', 'antigravity')
           const ws = await target.selectWorkspace(workspaceId)
           expect(client.listSessions).toHaveBeenCalled()
           expect(ws.sessionIds).toContain('acp:remote-conv-1')

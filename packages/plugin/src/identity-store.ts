@@ -90,7 +90,7 @@ export class IdentityStore {
   constructor(options: IdentityStoreOptions = {}) {
     const env = options.env ?? process.env
     const dshHome = env.DSH_HOME || join(options.homeDirectory ?? homedir(), '.dsh')
-    this.storageDirectory = options.directory ?? join(dshHome, 'ds-harness-remote')
+    this.storageDirectory = options.directory ?? join(dshHome, 'xcodex-remote')
     this.defaultOptions = options.directory === undefined ? options : undefined
     this.role = options.role
   }
@@ -332,11 +332,11 @@ async function withDefaultStorageTransaction<T>(
 ): Promise<T> {
   const env = options.env ?? process.env
   const home = env.DSH_HOME || join(options.homeDirectory ?? homedir(), '.dsh')
-  const source = join(home, 'remote')
-  const target = join(home, 'ds-harness-remote')
+  const source = join(home, 'xcodex-remote-legacy')
+  const target = join(home, 'xcodex-remote')
   await mkdir(home, { recursive: true, mode: 0o700 })
   // Kept outside the renamed tree so competing new-version migrators share one lock.
-  const lockDirectory = join(home, '.ds-harness-remote-migration')
+  const lockDirectory = join(home, '.xcodex-remote-migration')
   await storageDirectoryStat(lockDirectory)
   await ensureDirectory(lockDirectory)
   return withIdentityLock(lockDirectory, () => withDefaultCredentialMigrationGate(home,

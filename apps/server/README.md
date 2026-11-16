@@ -1,5 +1,7 @@
 # Self-hosted Server
 
+This checkout adds optional xcodex multi-user authentication; the default remains local single-account mode. See the [client contract, migration and verification limits](../../docs/xcodex-account-auth.md). This change is deployed to agent.xcodex.vip for integration testing; it is not included in the upstream image.
+
 **English** · [中文](README.zh.md)
 
 A single-account Remote Server with WebRTC (LAN / P2P / TURN) and end-to-end encrypted Relay, configured through environment variables. Its Web UI includes a landing page, sign-in, and device status page. The Server is deployed separately from the Host plugin bundle.
@@ -159,3 +161,7 @@ NODE_ENV=production pnpm --workspace-concurrency=1 -r build
 node scripts/verify-dsh-plugin.mjs
 pnpm --dir packages/plugin pack --pack-destination /tmp/dsh-release-assets
 ```
+
+## xcodex device browser sign-in (fork)
+
+Device-bound browser handoff and the test plugin are documented in [the integration contract](../../docs/device-browser-login-plan.md). Configure `DSH_DEVICE_LOGIN_REDIRECT_URIS` as an exact comma-separated mobile callback allowlist; empty means desktop polling only (mobile can also poll). Never place pickup tokens or PKCE verifiers in URLs or logs. Production deployment and real-device acceptance are tracked separately.

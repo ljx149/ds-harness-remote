@@ -62,9 +62,16 @@ await buildBundle({
   },
 })
 
+// The command-line helper does not require a running Harness or its peer loader.
+await buildBundle({
+  entryPoints: [join(root, 'src/cli.ts')], bundle: true, platform: 'node', format: 'esm',
+  outfile: join(root, 'dist/cli.bundle.js'),
+  banner: { js: 'import { createRequire as __dshCreateRequire } from "node:module";\nconst require = __dshCreateRequire(import.meta.url);' },
+})
+
 for (const [moduleId, outfile] of [
-  ['ds-harness-remote', 'client.js'],
-  ['ds-harness-remote', 'client.github.js'],
+  ['xcodex-remote', 'client.js'],
+  ['xcodex-remote', 'client.github.js'],
 ]) {
   await buildBundle({
     entryPoints: [join(root, 'src/client.ts')],
@@ -73,7 +80,7 @@ for (const [moduleId, outfile] of [
     format: 'iife',
     minifySyntax: true,
     define: {
-      DSH_REMOTE_CLIENT_MODULE_ID: JSON.stringify(moduleId),
+      XCODEX_REMOTE_CLIENT_MODULE_ID: JSON.stringify(moduleId),
     },
     outfile: join(root, 'dist', outfile),
   })

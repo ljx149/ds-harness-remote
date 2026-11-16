@@ -1,4 +1,48 @@
+## xcodex 浏览器设备登录（2026-11-13）
+
+- [x] 服务端设备绑定、PKCE、领取/兑换、取消/过期/重放；三种网页登录自动交接。
+- [x] 插件浏览器登录、默认服务地址、自动 Host 上线；独立 tgz 构建、安装及试部署（延长监测失败后已回退）。
+- [x] 用户接受偶发慢请求后重试部署并完成可用性验收；前次超时原因未作归因。
+- [ ] 手机回调白名单与 App 接入、真实两账号/断网恢复/消息验收。
+- [ ] Mac/Windows Desktop 真机安装与运行；Android 依赖解析失败的全量测试复验。
+- [ ] 当前 fork 变更提交与目标仓库确认（上游 origin 不擅自推送）。
+- 契约、安装与实际验证边界：[device-browser-login-plan.md](device-browser-login-plan.md)。
+
 # TODO
+
+## xcodex Remote 品牌统一（2026-11-13）
+
+- [x] 复用旧 AgentPort A 标识，首页/登录/设备页/页脚/标题统一 xcodex Remote，参考官网深灰和浅蓝配色，保留浅色模式。
+- [x] 类型检查、构建和手机/桌面深浅主题浏览器检查；保留实际安装命令，不更名 npm 包。
+- 设计来源与维护位置见 docs/branding-xcodex.md；生产发布以部署记录为准。
+
+## Google 回跳导航修复（2026-11-13）
+
+- [x] 定位 callback 303 后设备页 403：跨站导航链被 API 级全局校验误拦截。
+- [x] 公开 GET 页面/资源放行，受保护 API/WS 不放宽；94 tests、构建、390px/1280px 真正跨站模拟回跳通过。
+- [ ] 用户重新发起真实 Google 登录验收；一次性回调不可直接刷新重放。
+- 构建 oauth-nav-fix-20261113-e7d786b4a005，详情见 docs/xcodex-account-auth.md。
+
+## Supabase 网页登录（2026-11-13，已试运行上线）
+
+- [x] Google PKCE、邮箱验证码、邮箱密码三入口；上游凭证留服务端，复用 /me 和多用户设备归属。
+- [x] 93 项服务端测试、类型检查、构建及 Chromium 390px/1280px 模拟上游登录通过；真实 Google 授权入口返回 302。
+- [x] 用户明确接受延迟波动后重试部署成功：supabase-web-20261113-25fd524fd383；33 个既有目标 561 次请求无新增可达性/TLS/状态异常，生产页面两种宽度检查通过。原始阻断记录保留。
+- [ ] 用户已确认配置 Supabase 回调白名单，仍待真实 Google/验证码/密码登录；手机客户端与 PC 浏览器授权交接另行联调，不将网页登录视为 Host 上线。
+- 详细配置与边界见 `docs/xcodex-account-auth.md`（相对仓库根目录）。
+
+## xcodex 账号直连（2026-11-13）
+
+- [x] 固定上游登录与 /me 身份校验、加密上游凭证、v2 用户归属与 legacy 隔离、HTTP/WS/Relay 授权。
+- [x] 85 项服务端测试通过；覆盖迁移备份、跨账号、停用断连和刷新故障边界。
+- [ ] 真实两类 xcodex 账号、电脑插件、手机真机、P2P 撤权联调，以及真实账号联调后的正式验收；隔离部署/回滚演练和试运行部署已通过。
+- 契约与配置见 [对接文档](xcodex-account-auth.md)。当前已试运行部署 xcodex-20261113-f24687b67690；不能把模拟测试写成真实账号验收。
+
+## agent.xcodex.vip 自部署（2026-11-12）
+
+- [x] 当前提交的 Server 构建、独立非 root 服务部署、HTTPS/认证/加密 Relay/90 秒 WebSocket 及浏览器登录验收；详见 [部署记录](deployment-agent-xcodex-vip.md)。共享入口未修改或重载。
+- [ ] 用户真实 DSH Host 和手机客户端跨网络接入、模型回复、允许/拒绝审批及长期重连；目前的协议探测不是实际模型对话验收。
+- [ ] 按实际使用规模评估代理 IP 共用限流；STUN/TURN 如有需求再独立规划，不宣称已验收。
 
 ## Android 断线保留输入草稿（Issue #7 / 上游 #409）
 
@@ -409,3 +453,17 @@ Typert Remote contract，不得在 Plugin Host 恢复 `sessions.*`、`session.se
 ## DSH-Go pairing acceptance
 
 Implement Dart mobile proof vectors, scanner/credential integration and Android end-to-end acceptance using docs/dsh-go-pairing-integration.md. C# Server/Remote integration uses a simulated Node phone, not an Android build. Local UI and `isTrusted` cannot establish genuine human presence against OS automation; use a trusted native primitive if Harness makes one available. No deployment/release is included.
+
+## 2026-11-13 Xcodex 独立插件
+
+- [x] 独立包与身份/控制命名空间；与官方 0.6.4 共存试装。
+- [x] Xcodex 邮箱密码与 Google 登录 UI；密码接口复用 Supabase。
+- [ ] 用户指定非 ecjoy OSS 位置后上传同一已试装包，并验证匿名下载摘要。
+- [ ] 真实账号与 macOS/Windows、手机联调；Android 测试依赖加载问题。
+- 详见 [实施记录](xcodex-plugin-isolation.md)。
+
+## Exchange 400 安全诊断（2026-11-13）
+
+- [x] 提供精确 exchange schema；不放宽校验。
+- [x] 增加不含凭据的字段类型/长度/原因与 requestId 关联，103 项服务端测试通过。
+- [ ] 客户端重新发起登录，核对真实失败明细；历史 400 无法追补字段。

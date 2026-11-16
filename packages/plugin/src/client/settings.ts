@@ -1,3 +1,4 @@
+import { createBrowserLogin } from './browser-login.js'
 import { createHostPairingPanel } from './pairing.js'
 import { createServerNotice } from './server-notice.js'
 import QRCode from 'qrcode'
@@ -35,6 +36,7 @@ const sidebarEntryChoices: ReadonlyArray<{ value: SidebarEntryStyle; label: 'sid
 ]
 
 export function createRemotePluginOptions(React: ClientReact) {
+  const BrowserLogin = createBrowserLogin(React)
   const ServerNotice = createServerNotice(React)
   const HostPairingPanel = createHostPairingPanel(React)
   function RemotePluginOptions(props: {
@@ -126,7 +128,7 @@ export function createRemotePluginOptions(React: ClientReact) {
 
     const applyView = (view: PluginSettingsView, updateAssociations = true): void => {
       setSettingsView(view)
-      if (!serverDraftEdited.current) setServerUrl(view.config.serverUrl ?? 'https://dsh.r2049.cn')
+      if (!serverDraftEdited.current) setServerUrl(view.config.serverUrl ?? 'https://agent.xcodex.vip')
       setTerminalEnabled(view.config.terminal?.enabled ?? true)
       setDebugLogging(view.config.logLevel === 'debug')
       setRemoteToolsEnabled(view.config.remoteTools?.enabled ?? true)
@@ -177,41 +179,7 @@ export function createRemotePluginOptions(React: ClientReact) {
       return () => { active = false; unsubscribe() }
     }, [props.statusFeed])
 
-    React.useEffect(() => {
-      if (!signInOpen || savingServer || serverDirty) return
-      let active = true
-      const run = ++providerRequestRun.current
-      qrFlowRun.current += 1
-      setQrSession(undefined)
-      setQrImage(undefined)
-      setQrExpired(false)
-      setQrFailed(false)
-      setQrBusy(false)
-      setQrCompleted(false)
-      setOAuthProviders([])
-      setProvidersLoading(true)
-      setProvidersFailed(false)
-      void props.control<OAuthProviderInfo[]>('client.account.providers').then(items => {
-        if (!active || run !== providerRequestRun.current) return
-        const pairingSupported = items.some(item => item.devicePairing === true)
-        setPairingServerUrl(pairingSupported ? savedServerUrl : undefined)
-        const available = items.filter(item => item.qrStartUrl != null)
-        setOAuthProviders(available)
-        setLoginMethod(current => {
-          if (loginMethodManuallySelected.current && (current === 'password' || current === 'device_pairing' && pairingSupported
-            || available.some(item => `oauth:${item.id}` === current))) return current
-          const preferred = available.find(item => item.id === props.preferredQrProvider) ?? available[0]
-          return preferred === undefined ? 'password' : `oauth:${preferred.id}`
-        })
-      }).catch(() => {
-        if (!active || run !== providerRequestRun.current) return
-        setProvidersFailed(true)
-        setLoginMethod(current => loginMethodManuallySelected.current && current === 'device_pairing' ? current : 'password')
-      }).finally(() => {
-        if (active && run === providerRequestRun.current) setProvidersLoading(false)
-      })
-      return () => { active = false }
-    }, [signInOpen, props.preferredQrProvider, providerReload, savingServer, serverDirty, savedServerUrl])
+
 
     React.useEffect(() => {
       if (!signInOpen || savingServer || serverDirty || providersLoading || !loginMethod.startsWith('oauth:')
@@ -353,7 +321,7 @@ export function createRemotePluginOptions(React: ClientReact) {
       try {
         const result = await props.control<PluginConfigureResult>('settings.configure', {
           role: 'client',
-          serverUrl: serverUrl.trim() || 'https://dsh.r2049.cn',
+          serverUrl: serverUrl.trim() || 'https://agent.xcodex.vip',
           email: loginEmail.trim(),
           password: loginPassword,
         })
@@ -548,8 +516,8 @@ export function createRemotePluginOptions(React: ClientReact) {
       finally { setDebugBusy(false) }
     }
 
-    const developmentSetting = React.createElement('section', { className: 'dshRemoteDevelopmentSettings' },
-      React.createElement('div', { className: 'dshRemoteAuthorizationSetting' },
+    const developmentSetting = React.createElement('section', { className: 'xcodexRemoteDevelopmentSettings' },
+      React.createElement('div', { className: 'xcodexRemoteAuthorizationSetting' },
         React.createElement('div', null,
           React.createElement('strong', null, t('debugLogging')),
           React.createElement('p', null, t('debugLoggingHint'))),
@@ -558,7 +526,7 @@ export function createRemotePluginOptions(React: ClientReact) {
           disabled: busy || debugBusy || !writable, 'aria-label': t('debugLogging'),
           onChange: (event: Event) => void setDebug((event.target as HTMLInputElement).checked),
         })),
-      React.createElement('div', { className: 'dshRemoteAuthorizationSetting' },
+      React.createElement('div', { className: 'xcodexRemoteAuthorizationSetting' },
         React.createElement('div', null,
           React.createElement('strong', null, t('terminalRemote')),
           React.createElement('p', null, t('terminalRemoteHint'))),
@@ -567,7 +535,7 @@ export function createRemotePluginOptions(React: ClientReact) {
           disabled: busy || terminalBusy || !writable, 'aria-label': t('terminalRemote'),
           onChange: (event: Event) => void setTerminalRemote((event.target as HTMLInputElement).checked),
         })),
-      React.createElement('div', { className: 'dshRemoteAuthorizationSetting' },
+      React.createElement('div', { className: 'xcodexRemoteAuthorizationSetting' },
         React.createElement('div', null,
           React.createElement('strong', null, t('remoteTools')),
           React.createElement('p', null, t('remoteToolsHint'))),
@@ -632,36 +600,36 @@ export function createRemotePluginOptions(React: ClientReact) {
       }
     }
 
-    const resetIdentitySetting = React.createElement('div', { className: 'dshRemoteAuthorizationSetting' },
+    const resetIdentitySetting = React.createElement('div', { className: 'xcodexRemoteAuthorizationSetting' },
       React.createElement('div', null,
         React.createElement('strong', null, t('resetIdentity')),
         React.createElement('p', null, t('resetIdentityHint'))),
       React.createElement('button', {
         type: 'button',
-        className: 'dshRemoteDiscard',
+        className: 'xcodexRemoteDiscard',
         disabled: busy || resetBusy || !writable || resetDisabledByStartupState,
         onClick: () => void resetIdentity(),
       }, t(resetBusy ? 'resettingAction' : 'resetIdentity')),
     )
 
     const startupErrorBanner = settingsView?.startupError !== undefined
-      ? React.createElement('div', { className: 'dshRemoteError', role: 'alert' },
+      ? React.createElement('div', { className: 'xcodexRemoteError', role: 'alert' },
           React.createElement('p', null, startupErrorMessage(settingsView.startupError, t)),
           React.createElement('button', {
             type: 'button',
-            className: 'dshRemoteDiscard',
+            className: 'xcodexRemoteDiscard',
             disabled: busy || resetBusy || retryStartupBusy,
             onClick: () => void retryStartup(),
           }, t('retryStartup')))
       : null
 
     // switches instead of inside the Host-facing settings block.
-    const sidebarEntrySetting = React.createElement('div', { className: 'dshRemoteAuthorizationSetting' },
+    const sidebarEntrySetting = React.createElement('div', { className: 'xcodexRemoteAuthorizationSetting' },
       React.createElement('div', null,
         React.createElement('strong', null, t('sidebarEntry')),
         React.createElement('p', null, t('sidebarEntryHint'))),
       React.createElement('div', {
-        className: 'dshRemoteEntryStyleChoices',
+        className: 'xcodexRemoteEntryStyleChoices',
         role: 'radiogroup',
         'aria-label': t('sidebarEntry'),
       }, sidebarEntryChoices.map(choice => React.createElement('button', {
@@ -674,18 +642,18 @@ export function createRemotePluginOptions(React: ClientReact) {
         onClick: () => void setSidebarEntryStyle(choice.value),
       }, t(choice.label)))))
 
-    const acpSetting = React.createElement('details', { className: 'dshRemoteAuthorizationSetting dshRemoteAcpSetting' },
+    const acpSetting = React.createElement('details', { className: 'xcodexRemoteAuthorizationSetting xcodexRemoteAcpSetting' },
       React.createElement('summary', null,
-        React.createElement('div', { className: 'dshRemoteAcpSummaryText' },
+        React.createElement('div', { className: 'xcodexRemoteAcpSummaryText' },
           React.createElement('strong', null, t('agentBackends')),
           React.createElement('p', null, t('acpHint'), React.createElement('a', {
             href: 'https://github.com/liguobao/ds-harness-remote/blob/feat/cursor-remote/docs/acp-remote.md',
             target: '_blank', rel: 'noopener noreferrer',
             onClick: (event: Event) => event.stopPropagation(),
           }, t('acpDocumentation'))))),
-      React.createElement('div', { className: 'dshRemoteAcpList' }, acpBackends.map(item => React.createElement('div', { key: item.id, className: 'dshRemoteAuthorizationSetting' },
+      React.createElement('div', { className: 'xcodexRemoteAcpList' }, acpBackends.map(item => React.createElement('div', { key: item.id, className: 'xcodexRemoteAuthorizationSetting' },
         React.createElement('div', null, React.createElement('strong', null, item.id === 'codex' ? 'CodeX' : item.id === 'cursor' ? 'Cursor' : item.id === 'antigravity' ? 'AGY' : item.id === 'claude' ? 'Claude' : item.id === 'pi' ? 'Pi' : item.id === 'opencode' ? 'OpenCode' : item.id === 'hermes' ? 'Hermes' : item.id), null),
-        React.createElement('span', { className: 'dshRemoteAcpCheckCell' },
+        React.createElement('span', { className: 'xcodexRemoteAcpCheckCell' },
           // One entry per backend: while the command is unresolved this slot is
           // the fix (scan / install), once it resolves it turns back into the
           // read-only availability check. Keeping both visible at once made the
@@ -693,12 +661,12 @@ export function createRemotePluginOptions(React: ClientReact) {
           writable && !busy && acpAvailability[item.id] !== true && ['codex', 'cursor', 'antigravity', 'pi', 'claude', 'opencode', 'hermes'].includes(item.id)
             ? React.createElement('a', {
               href: `#install-acp-${item.id}`,
-              className: `dshRemoteAcpInstallLink${acpInstalling[item.id] ? ' isInstalling' : ''}`,
+              className: `xcodexRemoteAcpInstallLink${acpInstalling[item.id] ? ' isInstalling' : ''}`,
               onClick: (event: Event) => { event.preventDefault(); void installOrConfigureAcp(item.id) },
             }, acpInstalling[item.id] ? t('installingAcp') : (['cursor', 'antigravity', 'hermes'].includes(item.id) ? t('configureAcp') : t('installAcp')))
-            : React.createElement('a', { href: `#check-acp-${item.id}`, className: `dshRemoteAcpCheckLink${acpChecking[item.id] ? ' isChecking' : acpCheckResults[item.id] === undefined ? '' : acpCheckResults[item.id] ? ' isPassed' : ' isFailed'}`, onClick: (event: Event) => { event.preventDefault(); void checkAcp(item.id) } },
+            : React.createElement('a', { href: `#check-acp-${item.id}`, className: `xcodexRemoteAcpCheckLink${acpChecking[item.id] ? ' isChecking' : acpCheckResults[item.id] === undefined ? '' : acpCheckResults[item.id] ? ' isPassed' : ' isFailed'}`, onClick: (event: Event) => { event.preventDefault(); void checkAcp(item.id) } },
               acpChecking[item.id] ? t('checkingAcp') : acpCheckResults[item.id] === undefined ? t('checkAcp') : t(acpCheckResults[item.id] ? 'acpCheckPassed' : 'acpCheckFailed'))),
-        ['codex', 'cursor', 'antigravity', 'pi', 'claude', 'opencode', 'hermes'].includes(item.id) ? null : React.createElement('a', { href: `#remove-acp-${item.id}`, className: 'dshRemoteAcpRemoveLink', onClick: (event: Event) => { event.preventDefault(); void removeAcp(item.id) } }, t('removeAcp')),
+        ['codex', 'cursor', 'antigravity', 'pi', 'claude', 'opencode', 'hermes'].includes(item.id) ? null : React.createElement('a', { href: `#remove-acp-${item.id}`, className: 'xcodexRemoteAcpRemoveLink', onClick: (event: Event) => { event.preventDefault(); void removeAcp(item.id) } }, t('removeAcp')),
         React.createElement('input', {
           type: 'checkbox', role: 'switch', checked: settingsView?.config.acp?.enabled === true && item.enabled && acpAvailability[item.id] === true, 'aria-label': item.id, disabled: busy || !writable || acpChecking[item.id] === true || acpAvailability[item.id] !== true,
           onChange: (event: Event) => void props.control<PluginSettingsView>('settings.acp.set', { backend: item.id, enabled: (event.target as HTMLInputElement).checked }).then(view => { applyView(view); setAcpBackends((view.config.acp?.backends ?? []).map(v => ({ id: v.id, enabled: v.enabled !== false }))) }).catch(reason => setError(messageOf(reason, t)))
@@ -716,126 +684,26 @@ export function createRemotePluginOptions(React: ClientReact) {
     )
 
     const qrLoginTab = (provider: OAuthProviderInfo): unknown => React.createElement('button', {
-      key: provider.id, type: 'button', role: 'tab', id: `dsh-remote-settings-oauth:${provider.id}-tab`,
-      'aria-selected': loginMethod === `oauth:${provider.id}`, 'aria-controls': `dsh-remote-settings-oauth:${provider.id}-panel`,
+      key: provider.id, type: 'button', role: 'tab', id: `xcodex-remote-settings-oauth:${provider.id}-tab`,
+      'aria-selected': loginMethod === `oauth:${provider.id}`, 'aria-controls': `xcodex-remote-settings-oauth:${provider.id}-panel`,
       className: loginMethod === `oauth:${provider.id}` ? 'isActive' : '', disabled: busy,
       onClick: () => selectLoginMethod(`oauth:${provider.id}`),
     }, provider.displayName)
 
     const inlineSignIn = !signInOpen || association !== undefined ? null : React.createElement('div', {
-      id: 'dsh-remote-inline-signin',
-      className: 'dshRemoteInlineSignIn',
+      id: 'xcodex-remote-inline-signin',
+      className: 'xcodexRemoteInlineSignIn',
     },
-      serverDirty && loginMethod !== 'device_pairing' ? React.createElement('p', { className: 'dshRemoteSettingsState', role: 'status' }, t('saveServerBeforeLogin')) : null,
-      React.createElement('div', { className: 'dshRemoteLoginTabs', role: 'tablist', 'aria-label': t('signInAccount') },
-        pairingAvailable ? React.createElement('button', {
-          type: 'button', role: 'tab', id: 'dsh-remote-settings-device-pairing-tab',
-          'aria-selected': loginMethod === 'device_pairing', 'aria-controls': 'dsh-remote-settings-device-pairing-panel',
-          className: loginMethod === 'device_pairing' ? 'isActive' : '', disabled: busy,
-          onClick: () => selectLoginMethod('device_pairing'),
-        }, t('pairingLoginTab')) : null,
-        ...orderedQrProviders.map(qrLoginTab),
-        React.createElement('button', {
-          type: 'button', role: 'tab', id: 'dsh-remote-settings-password-tab',
-          'aria-selected': passwordVisible, 'aria-controls': 'dsh-remote-settings-password-panel',
-          className: passwordVisible ? 'isActive' : '', disabled: busy,
-          onClick: () => selectLoginMethod('password'),
-        }, t('accountPasswordLogin'))),
-      React.createElement('div', { className: 'dshRemoteLoginContent' },
-      providersLoading && loginMethod !== 'device_pairing' ? React.createElement('p', { className: 'dshRemoteSettingsState', role: 'status' }, t('loadingLoginProviders')) : null,
-      providersFailed ? React.createElement('p', { className: 'dshRemoteSettingsState', role: 'status' },
-        t('noLoginProviders'), ' ', React.createElement('button', {
-          type: 'button', disabled: busy || savingServer || serverDirty,
-          onClick: () => setProviderReload(value => value + 1),
-        }, t('retryLoginProviders'))) : null,
-      loginMethod === 'device_pairing' && pairingAvailable
-        ? React.createElement('div', { role: 'tabpanel', id: 'dsh-remote-settings-device-pairing-panel', 'aria-labelledby': 'dsh-remote-settings-device-pairing-tab' },
-          React.createElement(HostPairingPanel, { key: settingsView?.config.serverUrl ?? '', control: props.control, serverUrl: settingsView?.config.serverUrl ?? '', disabled: busy || !writable || serverDirty, t, onComplete: () => void props.control<PluginSettingsView>('settings.get').then(view => { applyView(view); setSignInOpen(false); props.onSignIn?.() }).catch(() => undefined) }))
-        : passwordVisible
-        ? React.createElement('div', {
-          className: 'dshRemoteClientLogin', role: 'tabpanel', id: 'dsh-remote-settings-password-panel',
-          'aria-labelledby': 'dsh-remote-settings-password-tab',
-        },
-          React.createElement('input', {
-            type: 'email', value: loginEmail, disabled: busy, autoComplete: 'username', placeholder: t('account'),
-            'aria-label': t('account'), onChange: (event: Event) => setLoginEmail((event.target as HTMLInputElement).value),
-          }),
-          React.createElement('input', {
-            type: 'password', value: loginPassword, disabled: busy, autoComplete: 'current-password', placeholder: t('password'),
-            'aria-label': t('password'), onChange: (event: Event) => setLoginPassword((event.target as HTMLInputElement).value),
-          }),
-          React.createElement('button', {
-            type: 'button', disabled: busy || loginEmail.trim() === '' || loginPassword === '',
-            onClick: () => void signInClient(),
-          }, t(busy ? 'signingIn' : 'startSignIn')),
-          React.createElement('p', { className: 'dshRemotePasswordHint' }, t('passwordHint')))
-        : !savingServer && !serverDirty && selectedProvider !== undefined
-          ? React.createElement('div', {
-            className: 'dshRemoteQrLogin', role: 'tabpanel', id: `dsh-remote-settings-${loginMethod}-panel`,
-            'aria-labelledby': `dsh-remote-settings-${loginMethod}-tab`,
-          },
-            qrCompleted
-              ? React.createElement('div', { className: 'dshRemoteInlineSignInQrState' },
-                React.createElement('p', null, t('loadingSettings')),
-                React.createElement('button', {
-                  type: 'button', className: 'dshRemoteReconnect', disabled: busy,
-                  onClick: () => {
-                    setError(undefined)
-                    setCompletionReload(v => v + 1)
-                  },
-                }, t('retryLoginProviders')))
-              : qrFailed
-              ? React.createElement('div', { className: 'dshRemoteInlineSignInQrState' },
-                React.createElement('p', null, t('retryLoginProviders')),
-                React.createElement('button', {
-                  type: 'button', className: 'dshRemoteReconnect', disabled: qrBusy,
-                  onClick: () => {
-                    setQrFailed(false)
-                    setQrExpired(false)
-                    setQrSession(undefined)
-                    setQrImage(undefined)
-                  },
-                }, t('retryLoginProviders')))
-              : qrExpired
-                ? React.createElement('div', { className: 'dshRemoteInlineSignInQrState' },
-                  React.createElement('p', null, t('qrLoginExpired')),
-                  React.createElement('button', {
-                    type: 'button', className: 'dshRemoteReconnect', disabled: qrBusy,
-                    onClick: () => {
-                      setQrExpired(false)
-                      setQrFailed(false)
-                      setQrSession(undefined)
-                      setQrImage(undefined)
-                    },
-                  }, t('refreshQrCode')))
-                : qrImage === undefined
-                  ? React.createElement('div', { className: 'dshRemoteQrPlaceholder', 'aria-busy': qrBusy },
-                    React.createElement('span', null, t('checkingConnection')))
-                  : qrSession !== undefined
-                    ? React.createElement('a', {
-                      className: 'dshRemoteQrOpen', href: qrSession.scanUrl,
-                      target: '_blank', rel: 'noopener noreferrer',
-                      'aria-label': t('openInBrowser'),
-                    },
-                      React.createElement('img', {
-                        src: qrImage, width: 184, height: 184,
-                        alt: scanLabel,
-                      }),
-                      React.createElement('span', null, t('openInBrowser'), ' ↗'))
-                    : null,
-            React.createElement('strong', null, scanLabel),
-            React.createElement('p', null, t('scanLoginHint')))
-          : null,
-      ),
-              React.createElement('div', { className: 'dshRemoteServiceAddress' },
+      React.createElement(BrowserLogin, { control: props.control, t, serverUrl, disabled: serverDirty || savingServer, onComplete: async () => { await load(); setSignInOpen(false) } }),
+              React.createElement('div', { className: 'xcodexRemoteServiceAddress' },
                 React.createElement('span', null, t('currentServiceAddress')),
                 editingServer
                   ? React.createElement('form', {
-                    className: 'dshRemoteLoginServer',
+                    className: 'xcodexRemoteLoginServer',
                     onSubmit: (event: Event) => { event.preventDefault(); void saveLoginServer() },
                   },
                     React.createElement('input', {
-                      id: 'dsh-remote-settings-server', type: 'url', required: true,
+                      id: 'xcodex-remote-settings-server', type: 'url', required: true,
                       'aria-label': t('serverUrl'), value: serverUrl,
                       disabled: busy || savingServer || !writable, autoComplete: 'url',
                       placeholder: t('serverUrl'), onChange: (event: Event) => {
@@ -848,13 +716,13 @@ export function createRemotePluginOptions(React: ClientReact) {
                     }, t(savingServer ? 'saving' : 'save')),
                     React.createElement('button', {
                       type: 'button', disabled: busy || savingServer || !writable,
-                      onClick: () => { serverDraftEdited.current = true; setServerUrl('https://dsh.r2049.cn'); void saveLoginServer('https://dsh.r2049.cn') },
+                      onClick: () => { serverDraftEdited.current = true; setServerUrl('https://agent.xcodex.vip'); void saveLoginServer('https://agent.xcodex.vip') },
                     }, t('restoreDefaultServiceAddress')),
                     React.createElement('button', {
                       type: 'button', disabled: busy || savingServer || !writable,
                       onClick: () => {
                         serverDraftEdited.current = false
-                        setServerUrl(savedServerUrl ?? 'https://dsh.r2049.cn')
+                        setServerUrl(savedServerUrl ?? 'https://agent.xcodex.vip')
                         setEditingServer(false)
                       },
                     }, t('cancelServiceAddressEdit')))
@@ -863,7 +731,7 @@ export function createRemotePluginOptions(React: ClientReact) {
                       href: savedServerUrl ?? serverUrl, target: '_blank', rel: 'noreferrer',
                     }, savedServerUrl ?? serverUrl),
                     React.createElement('button', {
-                      type: 'button', className: 'dshRemoteServiceAddressEdit',
+                      type: 'button', className: 'xcodexRemoteServiceAddressEdit',
                       disabled: busy || savingServer || !writable,
                       title: t('editServiceAddress'), 'aria-label': t('editServiceAddress'),
                       onClick: () => setEditingServer(true),
@@ -875,22 +743,22 @@ export function createRemotePluginOptions(React: ClientReact) {
     )
 
     return React.createElement(props.view === 'page' ? 'div' : 'li', {
-      className: `dshRemotePluginCard${open ? ' isOpen' : ''}${props.view === 'page' ? ' dshRemotePluginModern' : ''}`,
-      ...(props.view === 'page' ? { 'data-dsh-remote-settings': '' } : {}),
+      className: `xcodexRemotePluginCard${open ? ' isOpen' : ''}${props.view === 'page' ? ' xcodexRemotePluginModern' : ''}`,
+      ...(props.view === 'page' ? { 'data-xcodex-remote-settings': '' } : {}),
     },
-      React.createElement('div', { className: 'dshRemotePluginCardHeader' },
+      React.createElement('div', { className: 'xcodexRemotePluginCardHeader' },
         React.createElement('button', {
           type: 'button',
-          className: 'dshRemotePluginCardToggle',
+          className: 'xcodexRemotePluginCardToggle',
           'aria-expanded': open,
           'aria-label': t(open ? 'collapseSettings' : 'expandSettings', { name: t('pluginTitle') }),
           onClick: () => setOpen(current => !current),
         },
-          React.createElement('span', { className: 'dshRemotePluginCardHeading' },
+          React.createElement('span', { className: 'xcodexRemotePluginCardHeading' },
             React.createElement('strong', null, t('pluginTitle')),
             React.createElement('span', null, t('pluginDescription'))),
           association === undefined ? null : React.createElement('span', {
-            className: `dshRemotePluginCardStatus${connectionStatusClass(hostStatus)}`,
+            className: `xcodexRemotePluginCardStatus${connectionStatusClass(hostStatus)}`,
           }, hostStatus?.authorized && !hostStatus.accountRequired && !hostStatus.online
             && (hostStatus.error !== undefined || hostStatus.lastActiveAt !== undefined)
             ? React.createElement(ServerNotice, {
@@ -901,20 +769,20 @@ export function createRemotePluginOptions(React: ClientReact) {
             : modeStatus?.mode === 'remote'
               ? t('remoteTarget', { name: modeStatus.target?.name ?? t('host') })
               : t('local')),
-          React.createElement('span', { className: 'dshRemotePluginCardChevron', 'aria-hidden': true }, '⌄'))),
-      !open ? null : React.createElement('div', { className: 'dshRemotePluginCardBody' },
+          React.createElement('span', { className: 'xcodexRemotePluginCardChevron', 'aria-hidden': true }, '⌄'))),
+      !open ? null : React.createElement('div', { className: 'xcodexRemotePluginCardBody' },
         !loaded
-          ? React.createElement('p', { className: 'dshRemoteSettingsState' }, error ?? t('loadingSettings'))
+          ? React.createElement('p', { className: 'xcodexRemoteSettingsState' }, error ?? t('loadingSettings'))
           : association !== undefined
-            ? React.createElement('div', { className: 'dshRemoteSettings' },
-              React.createElement('div', { className: 'dshRemoteSettingsTop' },
-                React.createElement('div', { className: 'dshRemoteAssociation' },
+            ? React.createElement('div', { className: 'xcodexRemoteSettings' },
+              React.createElement('div', { className: 'xcodexRemoteSettingsTop' },
+                React.createElement('div', { className: 'xcodexRemoteAssociation' },
                   React.createElement('span', null, t(association.account === undefined ? 'authorization' : 'account')),
                   React.createElement('strong', null, association.account === undefined ? t('authorizationComplete') : displayRemoteAccount(association.account)),
                   React.createElement('p', null, association.account === undefined
                     ? serverUrl
                     : t('authorizedOn', { role: 'Remote', serverUrl })))),
-              React.createElement('div', { className: 'dshRemoteHostIdentity' },
+              React.createElement('div', { className: 'xcodexRemoteHostIdentity' },
                 React.createElement('div', null,
                   React.createElement('span', null, t('hostName')),
                   React.createElement('strong', null, hostName || '—')),
@@ -926,7 +794,7 @@ export function createRemotePluginOptions(React: ClientReact) {
               sidebarEntrySetting,
               resetIdentitySetting,
               acpSetting,
-              React.createElement('div', { className: 'dshRemoteAuthorizationSetting' },
+              React.createElement('div', { className: 'xcodexRemoteAuthorizationSetting' },
                 React.createElement('div', null,
                   React.createElement('strong', null, t('allowControlCurrentDevice')),
                   React.createElement('p', null, t('thisMachineHost'))),
@@ -936,12 +804,12 @@ export function createRemotePluginOptions(React: ClientReact) {
                   checked: hostStatus?.authorized === true,
                   onChange: (event: Event) => void setCurrentDeviceControl((event.target as HTMLInputElement).checked),
                 })),
-              React.createElement('div', { className: 'dshRemoteConnection', 'aria-live': 'polite' },
-                React.createElement('div', { className: 'dshRemoteConnectionSummary' },
+              React.createElement('div', { className: 'xcodexRemoteConnection', 'aria-live': 'polite' },
+                React.createElement('div', { className: 'xcodexRemoteConnectionSummary' },
                   React.createElement('span', null, t('connection')),
                   React.createElement('strong', null,
                     React.createElement('span', {
-                      className: `dshRemoteConnectionDot${connectionStatusClass(hostStatus)}`,
+                      className: `xcodexRemoteConnectionDot${connectionStatusClass(hostStatus)}`,
                       'aria-hidden': true,
                     }),
                     connectionStatusLabel(hostStatus, t)),
@@ -952,7 +820,7 @@ export function createRemotePluginOptions(React: ClientReact) {
                       : t('lastActive', { time: formatLocalTime(hostStatus.lastActiveAt) }))),
                 React.createElement('button', {
                   type: 'button',
-                  className: 'dshRemoteReconnect',
+                  className: 'xcodexRemoteReconnect',
                   disabled: reconnectBusy || hostStatus?.configured === false,
                   onClick: () => void reconnectHost(),
                 }, t(reconnectBusy ? 'reconnectingAction' : 'reconnect'))),
@@ -963,23 +831,23 @@ export function createRemotePluginOptions(React: ClientReact) {
               }) : null,
               hostStatus?.error === undefined || hostStatus.online || (hostStatus.reconnecting && hostStatus.error === 'CONNECTION_FAILED')
                 ? null
-                : React.createElement('p', { className: 'dshRemoteConnectionIssue', role: 'status' }, connectionErrorMessage(hostStatus.error, t)),
-              !writable ? React.createElement('p', { className: 'dshRemoteError' }, t('readOnly')) : null,
-              React.createElement('div', { className: 'dshRemoteSettingsFooter' },
+                : React.createElement('p', { className: 'xcodexRemoteConnectionIssue', role: 'status' }, connectionErrorMessage(hostStatus.error, t)),
+              !writable ? React.createElement('p', { className: 'xcodexRemoteError' }, t('readOnly')) : null,
+              React.createElement('div', { className: 'xcodexRemoteSettingsFooter' },
                 React.createElement('p', {
-                  className: error !== undefined ? 'dshRemoteError' : 'dshRemoteNotice',
+                  className: error !== undefined ? 'xcodexRemoteError' : 'xcodexRemoteNotice',
                   role: error !== undefined ? 'alert' : 'status',
                 }, error ?? (notice === undefined ? '' : t(notice.key, notice.params))),
                 React.createElement('button', {
                   type: 'button',
-                  className: 'dshRemoteDiscard',
+                  className: 'xcodexRemoteDiscard',
                   disabled: busy || !writable,
                   onClick: () => void logout(),
                 }, t(busy ? 'signingOut' : 'signOut'))),
               inlineSignIn)
-            : React.createElement('div', { className: 'dshRemoteSettings' },
+            : React.createElement('div', { className: 'xcodexRemoteSettings' },
               startupErrorBanner,
-              React.createElement('div', { className: 'dshRemoteHostIdentity' },
+              React.createElement('div', { className: 'xcodexRemoteHostIdentity' },
                 React.createElement('div', null,
                   React.createElement('span', null, t('hostName')),
                   React.createElement('strong', null, hostName || '—')),
@@ -990,24 +858,24 @@ export function createRemotePluginOptions(React: ClientReact) {
               sidebarEntrySetting,
               resetIdentitySetting,
               acpSetting,
-              React.createElement('div', { className: 'dshRemoteSettingsSignIn' },
-                React.createElement('p', { className: 'dshRemoteSettingsState' }, t('authorizeFromRemote')),
+              React.createElement('div', { className: 'xcodexRemoteSettingsSignIn' },
+                React.createElement('p', { className: 'xcodexRemoteSettingsState' }, t('authorizeFromRemote')),
                 React.createElement('button', {
                   type: 'button',
-                  className: signInOpen ? 'dshRemoteDiscard' : 'dshRemoteSave',
+                  className: signInOpen ? 'xcodexRemoteDiscard' : 'xcodexRemoteSave',
                   disabled: busy || resetBusy || !loaded || settingsView?.startupError !== undefined,
                   'aria-expanded': signInOpen,
-                  'aria-controls': 'dsh-remote-inline-signin',
+                  'aria-controls': 'xcodex-remote-inline-signin',
                   onClick: () => {
                     setError(undefined)
                     setSignInOpen(current => !current)
                   },
                 }, t(signInOpen ? 'close' : 'signInAccount'))),
               inlineSignIn,
-              !writable ? React.createElement('p', { className: 'dshRemoteError' }, t('readOnly')) : null,
-              error !== undefined || notice !== undefined ? React.createElement('div', { className: 'dshRemoteSettingsFooter' },
+              !writable ? React.createElement('p', { className: 'xcodexRemoteError' }, t('readOnly')) : null,
+              error !== undefined || notice !== undefined ? React.createElement('div', { className: 'xcodexRemoteSettingsFooter' },
                 React.createElement('p', {
-                  className: error !== undefined ? 'dshRemoteError' : 'dshRemoteNotice',
+                  className: error !== undefined ? 'xcodexRemoteError' : 'xcodexRemoteNotice',
                   role: error !== undefined ? 'alert' : 'status',
                 }, error ?? t(notice!.key, notice!.params))) : null)))
   }

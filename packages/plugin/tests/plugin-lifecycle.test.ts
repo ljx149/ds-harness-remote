@@ -17,7 +17,7 @@ afterEach(async () => {
 })
 
 describe('Cordis plugin lifecycle', () => {
-  it('migrates only owned legacy entries without disabling an unrelated plugin', async () => {
+  it('does not disable official or unrelated plugin entries', async () => {
     const dshHome = await mkdtemp(join(tmpdir(), 'dsh-remote-legacy-ownership-'))
     directories.push(dshHome)
     vi.stubEnv('DSH_HOME', dshHome)
@@ -41,11 +41,11 @@ describe('Cordis plugin lifecycle', () => {
     ctx.provide('connection', connection())
     const fiber = await ctx.plugin(remotePlugin, { ...disabledAgentDomains, deviceName: 'Cordis ownership test host' })
     try {
-      await vi.waitFor(() => expect(ctx.dshRemote.currentIdentity()).toBeDefined())
-      expect(update.mock.calls).toEqual([['owned', { disabled: true }]])
+      await vi.waitFor(() => expect(ctx.xcodexRemote.currentIdentity()).toBeDefined())
+      expect(update.mock.calls).toEqual([])
       expect(entries.map(entry => [entry.id, entry.options.disabled])).toEqual([
         ['current', false], ['foreign', false], ['foreign-null', null], ['foreign-disabled', true],
-        ['owned', true], ['owned-disabled', true], ['other', false],
+        ['owned', false], ['owned-disabled', true], ['other', false],
       ])
     } finally {
       await fiber.dispose()
@@ -83,9 +83,9 @@ describe('Cordis plugin lifecycle', () => {
     ctx.provide('connection', connection())
     const fiber = await ctx.plugin(remotePlugin, config)
     try {
-      await vi.waitFor(() => { expect(ctx.get('dshRemote')).toBeDefined() })
+      await vi.waitFor(() => { expect(ctx.get('xcodexRemote')).toBeDefined() })
       expect(register).toHaveBeenCalledOnce()
-      expect(ctx.dshRemoteClient.status().serverUrl).toBe('https://legacy.example.com')
+      expect(ctx.xcodexRemoteClient.status().serverUrl).toBe('https://legacy.example.com')
       // Nested entry Config must survive: schemastery resolves `loopback` and
       // `acp` to default-only containers, which previously overwrote the entry
       // Config when it was merged as a flat layer on read.
@@ -133,8 +133,8 @@ describe('Cordis plugin lifecycle', () => {
     const fiber = await ctx.plugin(remotePlugin, config)
     const call = (endpoint: string, payload: unknown = {}) => handler(endpoint, payload, new AbortController().signal)
     try {
-      await vi.waitFor(() => { expect(ctx.dshRemoteClient.status().serverUrl).toBe(config.serverUrl) })
-      const oldHost = ctx.dshRemote, oldClient = ctx.dshRemoteClient
+      await vi.waitFor(() => { expect(ctx.xcodexRemoteClient.status().serverUrl).toBe(config.serverUrl) })
+      const oldHost = ctx.xcodexRemote, oldClient = ctx.xcodexRemoteClient
       const hostClose = vi.spyOn(oldHost, 'close'), clientClose = vi.spyOn(oldClient, 'close')
       const pending = call('client.account.providers')
       await vi.waitFor(() => { expect(oldRequestSignal).toBeDefined() })
@@ -145,14 +145,14 @@ describe('Cordis plugin lifecycle', () => {
       await expect(pending).resolves.toMatchObject({ ok: false })
       expect(hostClose).toHaveBeenCalledOnce()
       expect(clientClose).toHaveBeenCalledOnce()
-      expect(ctx.dshRemote).not.toBe(oldHost)
-      expect(ctx.dshRemoteClient).not.toBe(oldClient)
-      expect(ctx.dshRemote.currentIdentity().deviceId).not.toBe(oldHost.currentIdentity().deviceId)
+      expect(ctx.xcodexRemote).not.toBe(oldHost)
+      expect(ctx.xcodexRemoteClient).not.toBe(oldClient)
+      expect(ctx.xcodexRemote.currentIdentity().deviceId).not.toBe(oldHost.currentIdentity().deviceId)
       await expect(call('status')).resolves.toMatchObject({ ok: true, value: { serverUrl: 'https://new.example.com' } })
       await expect(call('client.account.providers')).resolves.toMatchObject({ ok: true, value: [{ id: 'github' }] })
-      const newHost = ctx.dshRemote
+      const newHost = ctx.xcodexRemote
       await call('settings.server.set', { serverUrl: 'https://new.example.com' })
-      expect(ctx.dshRemote).toBe(newHost)
+      expect(ctx.xcodexRemote).toBe(newHost)
       expect(requests.filter(url => url === 'https://new.example.com/api/v1/auth/oauth/providers')).toHaveLength(1)
     } finally {
       await fiber.dispose()
@@ -166,7 +166,7 @@ describe('Cordis plugin lifecycle', () => {
 
     expect(fiber.state).toBe(2)
     expect(fiber.inject).toEqual({})
-    expect(ctx.get('dshRemote')).toBeUndefined()
+    expect(ctx.get('xcodexRemote')).toBeUndefined()
 
     await fiber.dispose()
     await ctx.fiber.dispose()
@@ -177,7 +177,7 @@ describe('Cordis plugin lifecycle', () => {
     directories.push(dshHome)
     vi.stubEnv('DSH_HOME', dshHome)
 
-    const original = await new remotePlugin.IdentityStore({ directory: join(dshHome, 'remote') }).loadOrCreate('Cordis test host')
+    const original = await new remotePlugin.IdentityStore({ directory: join(dshHome, 'xcodex-remote-legacy') }).loadOrCreate('Cordis test host')
 
     const ctx = new Context()
     let identityReadyWhenControlRegistered: boolean | undefined
@@ -185,7 +185,7 @@ describe('Cordis plugin lifecycle', () => {
     ctx.provide('typertGateway', typertGateway())
     ctx.provide('connection', connection(() => {
       try {
-        ctx.dshRemote.currentIdentity()
+        ctx.xcodexRemote.currentIdentity()
         identityReadyWhenControlRegistered = true
       } catch {
         identityReadyWhenControlRegistered = false
@@ -194,18 +194,18 @@ describe('Cordis plugin lifecycle', () => {
     const fiber = await ctx.plugin(remotePlugin, { ...disabledAgentDomains, deviceName: 'Cordis test host' })
 
     await vi.waitFor(() => {
-      expect(ctx.dshRemote.currentIdentity()).toMatchObject({ name: 'Cordis test host' })
-      expect(ctx.dshRemote.diagnostics()).toMatchObject({
+      expect(ctx.xcodexRemote.currentIdentity()).toMatchObject({ name: 'Cordis test host' })
+      expect(ctx.xcodexRemote.diagnostics()).toMatchObject({
         loaded: true,
         capabilities: expect.arrayContaining(['harness.remote.v1', 'harness.remote.transfer.v1']),
       })
     })
-    expect(ctx.dshRemote.currentIdentity()).toEqual(original)
+    expect(ctx.xcodexRemote.currentIdentity()).toEqual(original)
 
     expect(identityReadyWhenControlRegistered).toBe(false)
 
     await fiber.dispose()
-    expect(ctx.get('dshRemote')).toBeUndefined()
+    expect(ctx.get('xcodexRemote')).toBeUndefined()
     await ctx.fiber.dispose()
   })
 
@@ -215,7 +215,7 @@ describe('Cordis plugin lifecycle', () => {
     vi.stubEnv('DSH_HOME', dshHome)
 
     const serverUrl = 'https://dsh.r2049.cn'
-    const legacyRoot = join(dshHome, 'remote')
+    const legacyRoot = join(dshHome, 'xcodex-remote-legacy')
     const hostDir = remotePlugin.serverStorageDirectory(legacyRoot, serverUrl, 'host')
     const clientDir = remotePlugin.serverStorageDirectory(legacyRoot, serverUrl, 'client')
     const hostStore = new remotePlugin.IdentityStore({ directory: hostDir, role: 'host' })
@@ -281,14 +281,14 @@ describe('Cordis plugin lifecycle', () => {
     ctx.provide('connection', connection())
     const fiber = await ctx.plugin(remotePlugin, { ...disabledAgentDomains, deviceName: 'Host', serverUrl })
     try {
-      const migratedHostDir = remotePlugin.serverStorageDirectory(join(dshHome, 'ds-harness-remote'), serverUrl, 'host')
+      const migratedHostDir = remotePlugin.serverStorageDirectory(join(dshHome, 'xcodex-remote'), serverUrl, 'host')
       await vi.waitFor(async () => {
         expect(refreshCalls.some(url => url.endsWith('/api/v1/auth/refresh'))).toBe(true)
         const updated = await new remotePlugin.ServerCredentialStore(migratedHostDir).load(serverUrl, hostIdentity.deviceId)
         expect(updated?.accessToken).toBe(refreshedAccessToken)
         expect(updated?.accessTokenExpiresAt).toBe(refreshedExpiresAt)
       }, { timeout: 5_000 })
-      expect(ctx.dshRemote.currentIdentity()).toEqual(hostIdentity)
+      expect(ctx.xcodexRemote.currentIdentity()).toEqual(hostIdentity)
       expect(await readFile(join(migratedHostDir, 'device.json'))).toEqual(hostDeviceBytes)
       expect(await readFile(join(migratedHostDir, 'device.key'))).toEqual(hostKeyBytes)
       expect(await readFile(join(migratedHostDir, 'trusted-peers.json'))).toEqual(hostPeersBytes)
@@ -312,17 +312,17 @@ describe('Cordis plugin lifecycle', () => {
     ctx.provide('typertGateway', typertGateway())
     const fiber = await ctx.plugin(remotePlugin, { ...disabledAgentDomains, deviceName: 'Cordis delayed connection host' })
 
-    expect(ctx.get('dshRemote')).toBeUndefined()
+    expect(ctx.get('xcodexRemote')).toBeUndefined()
     ctx.provide('connection', { rpc: { handle } } as never)
     await vi.waitFor(() => {
-      expect(ctx.dshRemote.currentIdentity()).toMatchObject({ name: 'Cordis delayed connection host' })
+      expect(ctx.xcodexRemote.currentIdentity()).toMatchObject({ name: 'Cordis delayed connection host' })
     })
-    expect(handle).toHaveBeenCalledWith('/ds-harness-remote', expect.any(Function), {
+    expect(handle).toHaveBeenCalledWith('/xcodex-remote', expect.any(Function), {
       authority: 'loopback',
     })
 
     await fiber.dispose()
-    expect(ctx.get('dshRemote')).toBeUndefined()
+    expect(ctx.get('xcodexRemote')).toBeUndefined()
     await ctx.fiber.dispose()
   })
 
@@ -350,9 +350,9 @@ describe('Cordis plugin lifecycle', () => {
     } as never)
     const fiber = await ctx.plugin(remotePlugin, { ...disabledAgentDomains, deviceName: 'Cordis delayed rc.2 host' })
 
-    expect(ctx.get('dshRemote')).toBeUndefined()
+    expect(ctx.get('xcodexRemote')).toBeUndefined()
     await vi.waitFor(() => expect(handlers).toHaveLength(1))
-    expect(handlers[0]?.channel).toBe('/ds-harness-remote')
+    expect(handlers[0]?.channel).toBe('/xcodex-remote')
     await expect(handlers[0]?.handler('status', {}, new AbortController().signal)).resolves.toMatchObject({
       ok: true,
       value: {
@@ -363,11 +363,11 @@ describe('Cordis plugin lifecycle', () => {
     })
     ctx.provide('apiProxy', {} as never)
     await new Promise(resolve => setTimeout(resolve, 0))
-    expect(ctx.get('dshRemote')).toBeUndefined()
+    expect(ctx.get('xcodexRemote')).toBeUndefined()
     expect(handlers[0]?.disposed).toBe(false)
 
     await fiber.dispose()
-    expect(ctx.get('dshRemote')).toBeUndefined()
+    expect(ctx.get('xcodexRemote')).toBeUndefined()
     await ctx.fiber.dispose()
   })
 
@@ -381,7 +381,7 @@ describe('Cordis plugin lifecycle', () => {
     )))
 
     const serverUrl = 'https://dsh.r2049.cn'
-    const legacyRoot = join(dshHome, 'remote')
+    const legacyRoot = join(dshHome, 'xcodex-remote-legacy')
     const hostDir = remotePlugin.serverStorageDirectory(legacyRoot, serverUrl, 'host')
     const clientDir = remotePlugin.serverStorageDirectory(legacyRoot, serverUrl, 'client')
     const hostIdentity = await new remotePlugin.IdentityStore({ directory: hostDir, role: 'host' }).loadOrCreate('Host')
@@ -427,7 +427,7 @@ describe('Cordis plugin lifecycle', () => {
         ok: true,
         value: { applies: 'live' },
       })
-      expect(ctx.dshRemote.currentIdentity().deviceId).toBe(hostIdentity.deviceId)
+      expect(ctx.xcodexRemote.currentIdentity().deviceId).toBe(hostIdentity.deviceId)
       const statusAfter = await call('status')
       expect(statusAfter).toMatchObject({
         ok: true,
@@ -443,7 +443,7 @@ describe('Cordis plugin lifecycle', () => {
     }
   })
 
-  it('registers loopback control, remote tools, and live Server switching when another plugin already provides dshRemote services', async () => {
+  it('registers loopback control, remote tools, and live Server switching when another plugin already provides xcodexRemote services', async () => {
     const dshHome = await mkdtemp(join(tmpdir(), 'dsh-remote-service-conflict-'))
     directories.push(dshHome)
     vi.stubEnv('DSH_HOME', dshHome)
@@ -478,8 +478,8 @@ describe('Cordis plugin lifecycle', () => {
     const foreignFiber = await ctx.plugin({
       name: 'dsh-remote',
       apply(peerCtx: Context) {
-        peerCtx.provide('dshRemote', foreignHostService as never)
-        peerCtx.provide('dshRemoteClient', foreignClientService as never)
+        peerCtx.provide('xcodexRemote', foreignHostService as never)
+        peerCtx.provide('xcodexRemoteClient', foreignClientService as never)
       },
     })
     const fiber = await ctx.plugin(remotePlugin, config)
@@ -487,10 +487,10 @@ describe('Cordis plugin lifecycle', () => {
     try {
       await vi.waitFor(() => {
         expect(handler).toBeDefined()
-        expect(registeredTools).toContain('remote_list_hosts')
+        expect(registeredTools).toContain('xcodex_remote_list_hosts')
       })
-      expect(ctx.get('dshRemote')).toBe(foreignHostService)
-      expect(ctx.get('dshRemoteClient')).toBe(foreignClientService)
+      expect(ctx.get('xcodexRemote')).toBe(foreignHostService)
+      expect(ctx.get('xcodexRemoteClient')).toBe(foreignClientService)
       await expect(call('status')).resolves.toMatchObject({
         ok: true,
         value: {
@@ -505,8 +505,8 @@ describe('Cordis plugin lifecycle', () => {
           applies: 'live',
         },
       })
-      expect(ctx.get('dshRemote')).toBe(foreignHostService)
-      expect(ctx.get('dshRemoteClient')).toBe(foreignClientService)
+      expect(ctx.get('xcodexRemote')).toBe(foreignHostService)
+      expect(ctx.get('xcodexRemoteClient')).toBe(foreignClientService)
 
       await foreignFiber.dispose()
       await expect(call('settings.server.set', { serverUrl: 'https://third.example.com/' })).resolves.toMatchObject({
@@ -516,8 +516,8 @@ describe('Cordis plugin lifecycle', () => {
           applies: 'live',
         },
       })
-      expect(ctx.dshRemote.currentIdentity()).toBeDefined()
-      expect(ctx.dshRemoteClient.status().serverUrl).toBe('https://third.example.com')
+      expect(ctx.xcodexRemote.currentIdentity()).toBeDefined()
+      expect(ctx.xcodexRemoteClient.status().serverUrl).toBe('https://third.example.com')
     } finally {
       await fiber.dispose()
       await foreignFiber.dispose()
@@ -532,7 +532,7 @@ function settings(value: Record<string, unknown>) {
     // These tests exercise Harness registration/disposal, not installed Agent
     // CLIs. Keep optional processes out of the fixture (including the bundled
     // CodeX fallback, which is discoverable even with an isolated PATH).
-    describe: () => [{ ns: 'ds-harness-remote', value: {
+    describe: () => [{ ns: 'xcodex-remote', value: {
       ...disabledAgentDomains,
       ...value,
     } }],

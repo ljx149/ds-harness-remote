@@ -1,3 +1,4 @@
+import { createBrowserLogin } from './client/browser-login.js'
 import { renderBodyPortal } from './client/portal.js'
 import type { Translate } from './client-locale.js'
 import { en, localeNamespace, zh } from './client-locale.js'
@@ -42,15 +43,15 @@ declare global {
     __ModuleLoader__: {
       load(input: { id: string; factory: (require: (id: string) => unknown) => unknown }): void
     }
-    __DS_HARNESS_REMOTE_CLIENT_ACTIVE__?: boolean
+    __XCODEX_REMOTE_CLIENT_ACTIVE__?: boolean
   }
 }
 
-declare const DSH_REMOTE_CLIENT_MODULE_ID: string | undefined
+declare const XCODEX_REMOTE_CLIENT_MODULE_ID: string | undefined
 
-const clientModuleId = typeof DSH_REMOTE_CLIENT_MODULE_ID === 'string'
-  ? DSH_REMOTE_CLIENT_MODULE_ID
-  : 'ds-harness-remote'
+const clientModuleId = typeof XCODEX_REMOTE_CLIENT_MODULE_ID === 'string'
+  ? XCODEX_REMOTE_CLIENT_MODULE_ID
+  : 'xcodex-remote'
 const controlRouteBackoffStepsMs = [1_000, 2_000, 5_000, 10_000, 30_000] as const
 
 class ControlRouteUnavailableError extends Error {
@@ -98,22 +99,23 @@ window.__ModuleLoader__.load({
         return undefined
       }
     })()
+    const BrowserLogin = createBrowserLogin(React)
     const RemotePluginOptions = createRemotePluginOptions(React)
     // Detail-page action beside the official Uninstall/Enable controls. The
     // 0.2.2 bundle page renders the official README before the configuration
     // section, so this jumps straight to the Remote card instead of requiring a
     // scroll through the whole document.
     function RemotePluginSettingsAction(props: { t: Translate; subject?: unknown }): unknown {
-      if (pluginSubjectPackageName(props.subject) !== 'ds-harness-remote') return null
+      if (pluginSubjectPackageName(props.subject) !== 'xcodex-remote') return null
       const label = props.t('openPluginSettings')
       return React.createElement('button', {
         type: 'button',
-        className: 'dshRemoteDetailSettingsAction',
+        className: 'xcodexRemoteDetailSettingsAction',
         'aria-label': label,
         onClick: (event: Event) => {
           const button = event.currentTarget as Element | null
           const page = button?.closest('[data-plugin-detail],[data-plugin-row-detail]') ?? document
-          const target = page.querySelector('[data-dsh-remote-settings]')
+          const target = page.querySelector('[data-xcodex-remote-settings]')
           target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
         },
       }, label)
@@ -240,21 +242,21 @@ window.__ModuleLoader__.load({
       return React.createElement(React.Fragment, null,
         React.createElement('button', {
           type: 'button',
-          className: 'dshRemoteModeButton',
+          className: 'xcodexRemoteModeButton',
           title: t('switchTarget'),
           'aria-label': t('switchTarget'),
           onClick: () => setOpen(true),
         }, React.createElement('span', { 'aria-hidden': true }, '◎'), props.wide
           ? React.createElement('span', null, label)
           : null),
-        open ? renderBodyPortal(portal, React.createElement('div', { className: 'dshRemoteBackdrop', role: 'presentation', onMouseDown: (event: MouseEvent) => { if (event.target === event.currentTarget) setOpen(false) } },
+        open ? renderBodyPortal(portal, React.createElement('div', { className: 'xcodexRemoteBackdrop', role: 'presentation', onMouseDown: (event: MouseEvent) => { if (event.target === event.currentTarget) setOpen(false) } },
           React.createElement('section', {
-            className: 'dshRemoteDialog',
+            className: 'xcodexRemoteDialog',
             role: 'dialog',
             'aria-modal': true,
             'aria-label': t('harnessTarget'),
           },
-          React.createElement('div', { className: 'dshRemoteHeader' },
+          React.createElement('div', { className: 'xcodexRemoteHeader' },
             React.createElement('strong', null, t('harnessTarget')),
             React.createElement('button', { type: 'button', onClick: () => setOpen(false), 'aria-label': t('close') }, '×')),
           React.createElement('button', {
@@ -262,7 +264,7 @@ window.__ModuleLoader__.load({
             disabled: busy || status?.mode === 'local',
             onClick: () => void switchMode('local'),
           }, t('thisMachineLocal')),
-          React.createElement('div', { className: 'dshRemoteDevices' }, devices.length === 0
+          React.createElement('div', { className: 'xcodexRemoteDevices' }, devices.length === 0
             ? React.createElement('p', null, t('noRemoteHosts'))
             : devices.map(device => React.createElement('button', {
               type: 'button',
@@ -272,7 +274,7 @@ window.__ModuleLoader__.load({
             }, `${device.name} · ${t(device.online ? 'online' : 'offline')}`))),
           React.createElement(RemoteProgressView, { progress, t }),
           status?.hostAuthorizationAvailable && status.host !== undefined
-            ? React.createElement('div', { className: 'dshRemoteHostAccount' },
+            ? React.createElement('div', { className: 'xcodexRemoteHostAccount' },
               React.createElement('strong', null, t('thisMachineHost')),
               React.createElement('p', null, status.host.online
                 ? status.host.account === undefined ? t('connected') : t('connectedAs', { account: status.host.account })
@@ -281,45 +283,10 @@ window.__ModuleLoader__.load({
                   : status.host.error === undefined
                     ? t('checkingHost')
                     : t('hostUnavailable', { error: connectionErrorMessage(status.host.error, t) })),
-              status.host.accountRequired ? React.createElement('div', { className: 'dshRemoteLogin' },
-                React.createElement('input', {
-                  type: 'email',
-                  value: email,
-                  disabled: busy,
-                  autoComplete: 'username',
-                  placeholder: t('serverAccountEmail'),
-                  'aria-label': t('serverAccountEmail'),
-                  onChange: (event: Event) => setEmail((event.target as HTMLInputElement).value),
-                }),
-                React.createElement('input', {
-                  type: 'password',
-                  value: password,
-                  disabled: busy,
-                  autoComplete: 'current-password',
-                  placeholder: t('password'),
-                  'aria-label': t('serverAccountPassword'),
-                  onChange: (event: Event) => setPassword((event.target as HTMLInputElement).value),
-                }),
-                React.createElement('button', {
-                  type: 'button',
-                  disabled: busy || email.trim() === '' || password === '',
-                  onClick: () => void loginHost(),
-                }, t(busy ? 'signingIn' : 'signInRegisterHost')),
-                React.createElement('input', {
-                  value: hostRegistrationCode,
-                  disabled: busy,
-                  autoComplete: 'one-time-code',
-                  placeholder: t('hostRegistrationCode'),
-                  'aria-label': t('hostRegistrationCode'),
-                  onChange: (event: Event) => setHostRegistrationCode((event.target as HTMLInputElement).value),
-                }),
-                React.createElement('button', {
-                  type: 'button',
-                  disabled: busy || hostRegistrationCode.trim() === '',
-                  onClick: () => void registerHostWithCode(),
-                }, t(busy ? 'registering' : 'useRegistrationCode'))) : null)
+              status.host.accountRequired ? React.createElement('div', { className: 'xcodexRemoteLogin' },
+                React.createElement(BrowserLogin, { control: props.control, t, hostOnly: true, serverUrl: status.serverUrl, onComplete: refreshStatus })) : null)
             : null,
-          error === undefined ? null : React.createElement('p', { className: 'dshRemoteError', role: 'alert' }, error))))
+          error === undefined ? null : React.createElement('p', { className: 'xcodexRemoteError', role: 'alert' }, error))))
           : null)
     }
 
@@ -343,13 +310,13 @@ window.__ModuleLoader__.load({
         register(options: Record<string, unknown>, component: unknown): unknown
       }
     }): void {
-      if (window.__DS_HARNESS_REMOTE_CLIENT_ACTIVE__) return
-      window.__DS_HARNESS_REMOTE_CLIENT_ACTIVE__ = true
+      if (window.__XCODEX_REMOTE_CLIENT_ACTIVE__) return
+      window.__XCODEX_REMOTE_CLIENT_ACTIVE__ = true
       readyPluginSessions(ctx.sessions)
-      ctx.effect(() => () => { window.__DS_HARNESS_REMOTE_CLIENT_ACTIVE__ = false }, 'ds-harness-remote: client singleton')
+      ctx.effect(() => () => { window.__XCODEX_REMOTE_CLIENT_ACTIVE__ = false }, 'xcodex-remote: client singleton')
       ctx.effect(() => () => {
         if (pluginRouteFetch !== undefined && window.fetch === pluginRouteFetch) window.fetch = originalPluginFetch
-      }, 'ds-harness-remote: plugin route fetch')
+      }, 'xcodex-remote: plugin route fetch')
 
       const t = ctx.locale.bind(localeNamespace)
       const remoteOpenListeners = new Set<() => void>()
@@ -402,20 +369,20 @@ window.__ModuleLoader__.load({
         url: STATUS_STREAM_PATH.slice(1),
         readStatus: () => control<RemoteStatus>('status'),
         onFallback: reason => {
-          console.warn('ds-harness-remote: status event stream unavailable, polling status instead:', reason)
+          console.warn('xcodex-remote: status event stream unavailable, polling status instead:', reason)
         },
       })
-      ctx.effect(() => () => statusFeed.close(), 'ds-harness-remote: status stream')
+      ctx.effect(() => () => statusFeed.close(), 'xcodex-remote: status stream')
       ctx.effect(() => {
         const unsubscribe = statusFeed.subscribe(status => {
-          document.documentElement.classList.toggle('dshRemoteBrowserUnavailable', status.mode === 'remote')
+          document.documentElement.classList.toggle('xcodexRemoteBrowserUnavailable', status.mode === 'remote')
         })
         return () => {
           unsubscribe()
-          document.documentElement.classList.remove('dshRemoteBrowserUnavailable')
+          document.documentElement.classList.remove('xcodexRemoteBrowserUnavailable')
         }
-      }, 'ds-harness-remote: hide local browser entry in remote mode')
-      ctx.effect(() => subscribeRemoteRecovery(statusFeed, () => ctx.connection.reconnect?.()), 'ds-harness-remote: carrier recovery')
+      }, 'xcodex-remote: hide local browser entry in remote mode')
+      ctx.effect(() => subscribeRemoteRecovery(statusFeed, () => ctx.connection.reconnect?.()), 'xcodex-remote: carrier recovery')
       ctx.effect(() => {
         let disposed = false
         let unsubscribeWorkspaces: (() => void) | undefined
@@ -486,7 +453,7 @@ window.__ModuleLoader__.load({
           unsubscribeWorkspaces?.()
           unsubscribeSessions?.()
         }
-      }, 'ds-harness-remote: resume selected workspace')
+      }, 'xcodex-remote: resume selected workspace')
       ctx.inject(['fileViewer'], fileViewerContext => {
         const viewer = fileViewerContext.get<FileViewerClientServiceLike>('fileViewer')
         if (viewer === undefined) return
@@ -517,7 +484,7 @@ window.__ModuleLoader__.load({
             unsubscribe()
             unregister?.()
           }
-        }, 'ds-harness-remote: remote file viewer provider')
+        }, 'xcodex-remote: remote file viewer provider')
       })
       // Add Remote Hosts as an @ mention source through Harness' input-trigger
       // service. The source owns only discovery and target switching; it never
@@ -532,7 +499,7 @@ window.__ModuleLoader__.load({
         strokeLinecap: 'round',
         strokeLinejoin: 'round',
         'aria-hidden': true,
-        className: 'dshRemoteComputerIcon',
+        className: 'xcodexRemoteComputerIcon',
       }, React.createElement('rect', { x: 3, y: 4, width: 18, height: 13, rx: 2 }),
         React.createElement('path', { d: 'M8 21h8M12 17v4' }))
       ctx.inject(['inputTriggers'], inputContext => {
@@ -588,7 +555,7 @@ window.__ModuleLoader__.load({
               if (candidate.includes(device.name) && candidate.length > invocation.length && candidate.length < 4000) invocation = candidate
               container = container.parentElement
             }
-            window.dispatchEvent(new CustomEvent('dsh-remote-host-reference', {
+            window.dispatchEvent(new CustomEvent('xcodex-remote-host-reference', {
               detail: { label: device.name, platform: device.platform, deviceId: device.deviceId, invocation },
             }))
           }
@@ -598,21 +565,21 @@ window.__ModuleLoader__.load({
             document.removeEventListener('click', stopHostFileOpen, true)
             unregister()
           }
-        }, 'ds-harness-remote: host mention source')
+        }, 'xcodex-remote: host mention source')
       })
-      ctx.effect(() => ctx.locale.register(localeNamespace, { zh, en }), 'ds-harness-remote: dictionaries')
-      ctx.effect(() => installStyle(clientModuleId), 'ds-harness-remote: client styles')
-      ctx.effect(() => installTerminalAvailabilityNotice(statusFeed, t), 'ds-harness-remote: terminal availability notice')
+      ctx.effect(() => ctx.locale.register(localeNamespace, { zh, en }), 'xcodex-remote: dictionaries')
+      ctx.effect(() => installStyle(clientModuleId), 'xcodex-remote: client styles')
+      ctx.effect(() => installTerminalAvailabilityNotice(statusFeed, t), 'xcodex-remote: terminal availability notice')
       ctx.slots.inject('shell.overlay', () => ctx.slots.register({
         name: 'shell.overlay',
-        id: 'ds-harness-remote-global-context',
+        id: 'xcodex-remote-global-context',
         order: 20,
         locale: localeNamespace,
         inject: () => ({ control, statusFeed, onSignIn: openRemote }),
       }, RemoteSessionHeaderAction))
       ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
         name: 'sidebar.footer.action',
-        id: 'ds-harness-remote-workspace',
+        id: 'xcodex-remote-workspace',
         order: -20,
         locale: localeNamespace,
         inject: () => ({
@@ -631,10 +598,10 @@ window.__ModuleLoader__.load({
       // reads as an official plugin) — a bundle's configuration belongs in the
       // two config slots below instead.
       // Row-scoped: keyed `<package>#<row id>` from the bundle's own patch
-      // (`cordis.patch.yml` row `ds-harness-remote`).
+      // (`cordis.patch.yml` row `xcodex-remote`).
       ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
         name: 'plugins.row.config',
-        key: 'ds-harness-remote#ds-harness-remote',
+        key: 'xcodex-remote#xcodex-remote',
         locale: localeNamespace,
         inject: () => ({
           control,
@@ -648,7 +615,7 @@ window.__ModuleLoader__.load({
       // package name.
       ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
         name: 'plugins.bundle.config',
-        key: 'ds-harness-remote',
+        key: 'xcodex-remote',
         locale: localeNamespace,
         inject: () => ({
           control,
@@ -662,7 +629,7 @@ window.__ModuleLoader__.load({
       // and a single row's page (the bundle's README moved the card far down).
       ctx.slots.inject('plugins.detail.actions', () => ctx.slots.register({
         name: 'plugins.detail.actions',
-        id: 'ds-harness-remote-settings-link',
+        id: 'xcodex-remote-settings-link',
         order: 30,
         locale: localeNamespace,
         inject: () => ({}),

@@ -1,5 +1,64 @@
 # Repository Guide for Agents
 
+## 仓库与分支约定（2026-11-16）
+
+- `origin`: https://github.com/ljx149/ds-harness-remote.git，用户自己的 fork，已授权提交并推送本次本地完成的修改。
+- `upstream`: https://github.com/liguobao/ds-harness-remote.git，只作为上游同步来源，不向其推送。
+- `production`: 当前线上运行代码的基线分支；首次基线对应 server `exchange-diagnostics-20261113-4492148c416b` 和插件 `0.6.4-xcodex.2`。分支推送本身不代表已部署。
+- `dev`: 后续日常开发分支，从 production 基线建立；本地工作区保持在 dev 上。
+- 不直接在 production 做日常开发。dev 验证通过且发布获得授权后，再更新 production 并按部署流程上线，记录实际发布版本和回滚点。
+- main 保留现状；上游/远程 main 的新增提交须在 dev 上另行审查和集成，不能混入线上基线快照。
+- 详细说明见 docs/development-workflow.md。此前文档中的“未提交/禁止推送上游 origin”属于历史状态，以本约定的远程映射为准。
+
+## Exchange 安全诊断（2026-11-13）
+
+当前 server release 为 `exchange-diagnostics-20261113-4492148c416b`；exchange 原 schema 不变（四个必填 43 字符字段，strict）。400 响应新增安全 details.failures，WARN `device_exchange_rejected` 以 error.requestId 关联，仅字段名/类型/长度/固定原因，禁止输出 body/凭据/原始 Zod issues。103 tests 通过，合成探测不是用户的历史失败。待客户端重试，详见 docs/device-exchange-diagnostics.md。
+
+## Xcodex 独立插件与统一登录（2026-11-13）
+
+当前新包 `xcodex-remote@0.6.4-xcodex.2`，Component `vip.xcodex.remote`；与官方包/设置/服务/目录隔离，不迁移官方凭据、不禁用官方插件。登录统一邮箱密码和 Google；密码新增原生 API `/api/v1/auth/account/password`，使用同网页 Supabase provider。服务端已更新为 `xcodex-plugin-auth-20261113-2bddbdc1ccb2`，Nginx/DNS/证书不变。不得推送上游 upstream。OSS 禁用 ecjoy，等待用户指定目标桶。详见 docs/xcodex-plugin-isolation.md 与部署记录。
+
+## xcodex 浏览器设备登录（2026-11-13）
+
+先写计划再实现，详见 docs/device-browser-login-plan.md。服务端/网页/插件已实现；首次因旧站请求超时回退，用户调整可用性门槛后已重试上线 device-login-20261113-0a46c1069965，新接口当前在线；设备绑定+PKCE，不将账号 token 交给客户端。真实 DSH 隔离安装后 Host 自动上线（模拟身份上游）；Server 99 tests、Plugin 核心 67 tests、构建、包外 WebRTC 和六种浏览器场景通过。全量 Plugin 的 Android 密码学依赖解析失败仍待复验；手机真机/真实账号联调未完成。测试包 0.6.4-xcodex.1 不覆盖上游 npm，URL/file 安装；禁止直接推送上游 upstream。
+
+## xcodex Remote 品牌统一（2026-11-13）
+
+- [x] 复用旧 AgentPort A 标识，首页/登录/设备页/页脚/标题统一 xcodex Remote，参考官网深灰和浅蓝配色，保留浅色模式。
+- [x] 类型检查、构建和手机/桌面深浅主题浏览器检查；保留实际安装命令，不更名 npm 包。
+- 设计来源与维护位置见 docs/branding-xcodex.md；生产发布以部署记录为准。
+
+## Google 回跳导航修复（2026-11-13）
+
+- [x] 定位 callback 303 后设备页 403：跨站导航链被 API 级全局校验误拦截。
+- [x] 公开 GET 页面/资源放行，受保护 API/WS 不放宽；94 tests、构建、390px/1280px 真正跨站模拟回跳通过。
+- [ ] 用户重新发起真实 Google 登录验收；一次性回调不可直接刷新重放。
+- 构建 oauth-nav-fix-20261113-e7d786b4a005，详情见 docs/xcodex-account-auth.md。
+
+## Supabase 网页登录（2026-11-13，已试运行上线）
+
+- [x] Google PKCE、邮箱验证码、邮箱密码三入口；上游凭证留服务端，复用 /me 和多用户设备归属。
+- [x] 93 项服务端测试、类型检查、构建及 Chromium 390px/1280px 模拟上游登录通过；真实 Google 授权入口返回 302。
+- [x] 用户明确接受延迟波动后重试部署成功：supabase-web-20261113-25fd524fd383；33 个既有目标 561 次请求无新增可达性/TLS/状态异常，生产页面两种宽度检查通过。原始阻断记录保留。
+- [ ] 用户已确认配置 Supabase 回调白名单，仍待真实 Google/验证码/密码登录；手机客户端与 PC 浏览器授权交接另行联调，不将网页登录视为 Host 上线。
+- 详细配置与边界见 `docs/xcodex-account-auth.md`（相对仓库根目录）。
+
+## xcodex 多用户服务端（2026-11-13，已试运行部署）
+
+- [x] 固定上游登录与 /me 身份校验、加密上游凭证、v2 用户归属与 legacy 隔离、HTTP/WS/Relay 授权。
+- [x] 85 项服务端测试通过；覆盖迁移备份、跨账号、停用断连和刷新故障边界。
+- [ ] 真实两类 xcodex 账号、电脑插件、手机真机、P2P 撤权联调，以及真实账号联调后的正式验收；隔离部署/回滚演练和试运行部署已通过。
+- 契约与配置见 `docs/xcodex-account-auth.md`。当前已试运行部署 xcodex-20261113-f24687b67690；不能把模拟测试写成真实账号验收。
+
+## agent.xcodex.vip 自部署实例（2026-11-12）
+
+用户指定本仓库 Server 替换已停止的 AgentPort。已从 `d48a11c63318db27ebe188d828db05dd20d7067d`
+构建并部署独立 `ds-harness-remote-server.service`，仅监听 `127.0.0.1:3005`，DynamicUser 非 root
+运行。沿用域名、证书和代理，共享 Nginx 未修改或重载。Server check、62 tests、构建、包外加载、
+隔离烟测、生产认证/Noise IK/双向 Relay/重放拒绝、90 秒 WS 和 Chromium 两种宽度登录通过。
+33 个既有端点共 1716 次探测无基线变化，4 个既有 502 未修复；真实 Host/手机客户端对话待验证。
+路径、限流边界、私有凭据文件位置及回滚见 `docs/deployment-agent-xcodex-vip.md`，禁止把凭据写入文档。
+
 ## Android offline composer drafts (Issue #7 / upstream #409, 2026-11-12)
 
 Android 聊天输入框不再随连接状态禁用。新增 `apps/android/src/screens/chat/composer-gate.ts`

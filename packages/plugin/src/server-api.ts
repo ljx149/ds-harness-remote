@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from 'node:crypto'
 import type { PairingCredentials } from './pairing-contract.js'
 import { platform } from 'node:os'
 import { fromBase64Url, toBase64Url } from '@dsh-remote/crypto'
@@ -69,6 +70,9 @@ export interface AuthorizedPeerDevice extends ServerHostDevice {
 }
 
 export class HostServerApi {
+  private browserFlow?: { requestId: string; pickupToken: string; verifier: string; state: string; identity: HostIdentity; expiresAt: number; complete?: boolean }
+  private browserGeneration = 0
+  private browserPollFlight?: Promise<{ status: string }>
   readonly baseUrl: string
   private hostOnly = false
   private identity?: HostIdentity
@@ -93,6 +97,8 @@ export class HostServerApi {
 
   /** End this runtime's HTTP requests, including authentication and response bodies. */
   close(): void {
+    this.browserFlow = undefined
+    this.browserGeneration++
     this.lifetime.abort(new ServerApiError('CONNECTION_CLOSED', 'The Server API has been closed.', false))
   }
 
@@ -137,6 +143,9 @@ export class HostServerApi {
   }
 
   async clearAuthorization(): Promise<void> {
+    const pending = this.browserPollFlight
+    await this.cancelBrowserLogin()
+    await pending?.catch(() => {})
     this.credentials = undefined
     this.credentialsPromise = undefined
     await this.store.clear()
@@ -161,12 +170,15 @@ export class HostServerApi {
     password: string,
     recoverIdentity?: () => Promise<HostIdentity>,
   ): Promise<DeviceAuthorization> {
+    const pending = this.browserPollFlight
+    await this.cancelBrowserLogin()
+    await pending?.catch(() => {})
     this.bindIdentity(identity)
     const account = email.trim()
     if (account.length === 0 || password.length === 0) {
       throw new ServerApiError('INVALID_MESSAGE', 'Email and password are required.', false)
     }
-    const login = validateWebLogin(await this.publicRequest<unknown>('/api/v1/auth/login', {
+    const login = validateWebLogin(await this.publicRequest<unknown>('/api/v1/auth/account/password', {
       method: 'POST',
       body: JSON.stringify({ email: account, password }),
     }))
@@ -193,6 +205,78 @@ export class HostServerApi {
       expiresAt: login.expiresAt,
       isAdmin: login.isAdmin,
     }
+  }
+
+  async startBrowserLogin(identity: HostIdentity) {
+    const cancellation = this.cancelBrowserLogin()
+    const generation = this.browserGeneration
+    await cancellation
+    if (generation !== this.browserGeneration) throw new ServerApiError('DEVICE_LOGIN_CANCELLED', 'Login cancelled.', false)
+    this.bindIdentity(identity)
+    const verifier = randomBytes(32).toString('base64url'), state = randomBytes(32).toString('base64url')
+    const result = await this.publicRequest<{ requestId: string; pickupToken: string; loginUrl: string; expiresAt: number }>('/api/v1/auth/device/start', {
+      method: 'POST', body: JSON.stringify({ device: this.deviceDescriptor(identity), state,
+        codeChallenge: createHash('sha256').update(verifier).digest('base64url') }),
+    })
+    if (generation !== this.browserGeneration) throw new ServerApiError('DEVICE_LOGIN_CANCELLED', 'Login cancelled.', false)
+    if (!/^[A-Za-z0-9_-]{43}$/.test(result.requestId) || !/^[A-Za-z0-9_-]{43}$/.test(result.pickupToken)
+      || !Number.isFinite(result.expiresAt) || !normalizeOAuthScanUrl(result.loginUrl, this.baseUrl)) throw new ServerApiError('INVALID_MESSAGE', 'Invalid browser login response.', false)
+    this.browserFlow = { ...result, verifier, state, identity }
+    // Deliberately exclude pickupToken and PKCE verifier from the renderer response.
+    return { requestId: result.requestId, loginUrl: result.loginUrl, expiresAt: result.expiresAt }
+  }
+
+  async cancelBrowserLogin(requestId?: string) {
+    const flow = this.browserFlow
+    if (requestId && flow?.requestId !== requestId) return { status: 'cancelled' }
+    this.browserGeneration++
+    this.browserFlow = undefined
+    this.browserPollFlight = undefined
+    if (flow && !flow.complete) {
+      try { await this.publicRequest('/api/v1/auth/device/cancel', { method: 'POST', body: JSON.stringify({ requestId: flow.requestId, pickupToken: flow.pickupToken }) }) } catch { /* Local cancellation must succeed while offline. */ }
+    }
+    return { status: 'cancelled' }
+  }
+
+  pollBrowserLogin(requestId: string): Promise<{ status: string }> {
+    const flow = this.browserFlow
+    if (!flow || flow.requestId !== requestId) return Promise.reject(new ServerApiError('DEVICE_LOGIN_EXPIRED', 'Start browser login again.', false))
+    if (flow.complete) return Promise.resolve({ status: 'complete' })
+    if (this.browserPollFlight) return this.browserPollFlight
+    const active = () => {
+      if (this.browserFlow !== flow || this.identity?.deviceId !== flow.identity.deviceId) throw new ServerApiError('DEVICE_LOGIN_CANCELLED', 'Login cancelled.', false)
+      this.lifetime.signal.throwIfAborted()
+    }
+    const task = async () => {
+      active()
+      const proof = { requestId, pickupToken: flow.pickupToken }
+      const result = await this.publicRequest<{ status: string; code?: string; state?: string }>('/api/v1/auth/device/poll', { method: 'POST', body: JSON.stringify(proof) })
+      active()
+      if (result.status !== 'ready') {
+        if (!['pending', 'expired', 'cancelled'].includes(result.status)) throw new ServerApiError('INVALID_MESSAGE', 'Invalid login status.', false)
+        return { status: result.status }
+      }
+      if (result.state !== flow.state || typeof result.code !== 'string') throw new ServerApiError('AUTH_INVALID', 'Login state mismatch.', false)
+      await this.store.withRefreshLock(async () => {
+        active()
+        const response = await this.publicRequest<TokenPair & { deviceId: string; account: string }>('/api/v1/auth/device/exchange', {
+          method: 'POST', body: JSON.stringify({ ...proof, code: result.code, codeVerifier: flow.verifier }),
+        })
+        active()
+        if (response.deviceId !== flow.identity.deviceId || typeof response.account !== 'string' || !response.account) throw new ServerApiError('AUTH_INVALID', 'Device identity mismatch.', false)
+        const previous = await this.store.load(this.baseUrl, flow.identity.deviceId)
+        active()
+        if (previous?.account && previous.account !== response.account) throw new ServerApiError('AUTH_INVALID', 'Sign out before switching accounts.', false)
+        this.credentials = await this.saveTokens(flow.identity, validateTokens({ accessToken: response.accessToken, accessTokenExpiresAt: response.accessTokenExpiresAt, refreshToken: response.refreshToken, refreshTokenExpiresAt: response.refreshTokenExpiresAt }), { authorizationMethod: 'account', account: response.account })
+        try { active() } catch (error) { await this.store.clear(); this.credentials = undefined; throw error }
+        flow.complete = true
+        flow.verifier = ''; flow.pickupToken = ''
+      })
+      return { status: 'complete' }
+    }
+    const flight = task().finally(() => { if (this.browserPollFlight === flight) this.browserPollFlight = undefined })
+    this.browserPollFlight = flight
+    return flight
   }
 
   async oauthProviders(): Promise<OAuthProviderInfo[]> {

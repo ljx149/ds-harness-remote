@@ -3,7 +3,7 @@ import type { Volatile, VolatileSnapshot } from '@deepseek-ai/cordis'
 import s from '@deepseek-ai/schemastery'
 import { z } from 'zod'
 
-export const DEFAULT_REMOTE_SERVER_URL = 'https://dsh.r2049.cn'
+export const DEFAULT_REMOTE_SERVER_URL = 'https://agent.xcodex.vip'
 
 export interface Config {
   enabled?: boolean
@@ -202,9 +202,9 @@ export function resolveConfig(input: ConfigInput = {}, env: NodeJS.ProcessEnv = 
   const codexEnabled = codexBackend?.enabled ?? parsed.codex?.enabled ?? true
   const acpEnabled = parsed.acp?.enabled ?? true
   const reconnect = typeof parsed.reconnect === 'object' ? parsed.reconnect : {}
-  const configuredServerUrl = parsed.serverUrl ?? env.DSH_REMOTE_SERVER
+  const configuredServerUrl = parsed.serverUrl ?? env.XCODEX_REMOTE_SERVER
   const httpServerAllowlist = normalizeHttpServerAllowlist(
-    parsed.httpServerAllowlist ?? parseHttpServerAllowlistEnv(env.DSH_REMOTE_HTTP_SERVER_ALLOWLIST),
+    parsed.httpServerAllowlist ?? parseHttpServerAllowlistEnv(env.XCODEX_REMOTE_HTTP_SERVER_ALLOWLIST),
   )
   const serverUrl = configuredServerUrl === undefined ? undefined : normalizeServerUrl(configuredServerUrl, httpServerAllowlist)
   const initialDelayMs = reconnect.initialDelayMs ?? 4_000
@@ -217,9 +217,9 @@ export function resolveConfig(input: ConfigInput = {}, env: NodeJS.ProcessEnv = 
     role: parsed.role ?? 'host',
     ...(serverUrl === undefined ? {} : { serverUrl }),
     httpServerAllowlist,
-    deviceName: parsed.deviceName ?? env.DSH_REMOTE_DEVICE_NAME ?? hostname(),
+    deviceName: parsed.deviceName ?? env.XCODEX_REMOTE_DEVICE_NAME ?? hostname(),
     hostControl: { enabled: parsed.hostControl?.enabled ?? true },
-    terminal: { enabled: parsed.terminal?.enabled ?? (env.DSH_REMOTE_TERMINAL_ENABLED === undefined || env.DSH_REMOTE_TERMINAL_ENABLED === 'true') },
+    terminal: { enabled: parsed.terminal?.enabled ?? (env.XCODEX_REMOTE_TERMINAL_ENABLED === undefined || env.XCODEX_REMOTE_TERMINAL_ENABLED === 'true') },
     remoteTools: { enabled: parsed.remoteTools?.enabled ?? true },
     sidebar: { entry: parsed.sidebar?.entry === 'compact' ? 'compact' : 'standard' },
     loopback: { ports: [...new Set(parsed.loopback?.ports ?? [])] },
@@ -238,7 +238,7 @@ export function resolveConfig(input: ConfigInput = {}, env: NodeJS.ProcessEnv = 
     },
     cursor: {
       enabled: cursorEnabled,
-      binary: configuredCursorBackend?.command ?? parsed.cursor?.binary ?? env.DSH_REMOTE_CURSOR_BINARY ?? env.DSH_REMOTE_ACP_BINARY ?? 'agent',
+      binary: configuredCursorBackend?.command ?? parsed.cursor?.binary ?? env.XCODEX_REMOTE_CURSOR_BINARY ?? env.XCODEX_REMOTE_ACP_BINARY ?? 'agent',
     },
     acp: {
       enabled: acpEnabled,
@@ -247,7 +247,7 @@ export function resolveConfig(input: ConfigInput = {}, env: NodeJS.ProcessEnv = 
         const legacy = parsed.acp?.backend === id ? parsed.acp : undefined
         const defaults: Record<string, string> = { codex: 'codex', cursor: 'agent', antigravity: 'agy', pi: 'pi-acp', claude: 'claude-agent-acp', opencode: 'opencode', hermes: 'hermes' }
         const cursorCommand = id === 'codex' ? parsed.codex?.binary : id === 'cursor'
-          ? parsed.cursor?.binary ?? env.DSH_REMOTE_CURSOR_BINARY ?? env.DSH_REMOTE_ACP_BINARY
+          ? parsed.cursor?.binary ?? env.XCODEX_REMOTE_CURSOR_BINARY ?? env.XCODEX_REMOTE_ACP_BINARY
           : undefined
         const cwd = configured?.cwd ?? legacy?.cwd
         return {

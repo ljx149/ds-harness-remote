@@ -71,33 +71,33 @@ export function createHostPairingPanel(React: ClientReact) {
       : view.state === 'claimed' ? 'pairingEnter' : view.state === 'completed' ? 'pairingComplete'
         : view.state === 'approved' ? 'pairingPending' : 'pairingClosed'
     const instructionLines = t(status).split('\n')
-    const countdown = !active ? null : React.createElement('span', { className: 'dshRemotePairingCountdown', role: 'timer' }, remaining > 0 ? t('pairingExpires', { time: remainingText }) : t('pairingExpired'))
-    return React.createElement('section', { className: 'dshRemotePairing', 'aria-label': t('pairingTitle') },
-      React.createElement('div', { className: 'dshRemotePairingHeading' },
-      React.createElement('p', { role: 'status', 'aria-live': 'polite', className: 'dshRemotePairingInstructions' }, ...instructionLines.flatMap((line, lineIndex) => [React.createElement('span', { key: lineIndex, className: lineIndex === 0 ? 'dshRemotePairingInstructionPrimary' : 'dshRemotePairingInstructionSecondary' }, ...line.split('DSH Go').flatMap((part, index) => index === 0 ? [part] : [React.createElement('a', { key: index, href: 'https://github.com/ccch1mneyyy/dsh-go', target: '_blank', rel: 'noopener noreferrer' }, 'DSH Go'), part])), lineIndex < instructionLines.length - 1 ? React.createElement('br', { key: `break-${lineIndex}` }) : null])),
+    const countdown = !active ? null : React.createElement('span', { className: 'xcodexRemotePairingCountdown', role: 'timer' }, remaining > 0 ? t('pairingExpires', { time: remainingText }) : t('pairingExpired'))
+    return React.createElement('section', { className: 'xcodexRemotePairing', 'aria-label': t('pairingTitle') },
+      React.createElement('div', { className: 'xcodexRemotePairingHeading' },
+      React.createElement('p', { role: 'status', 'aria-live': 'polite', className: 'xcodexRemotePairingInstructions' }, ...instructionLines.flatMap((line, lineIndex) => [React.createElement('span', { key: lineIndex, className: lineIndex === 0 ? 'xcodexRemotePairingInstructionPrimary' : 'xcodexRemotePairingInstructionSecondary' }, ...line.split('DSH Go').flatMap((part, index) => index === 0 ? [part] : [React.createElement('a', { key: index, href: 'https://github.com/ccch1mneyyy/dsh-go', target: '_blank', rel: 'noopener noreferrer' }, 'DSH Go'), part])), lineIndex < instructionLines.length - 1 ? React.createElement('br', { key: `break-${lineIndex}` }) : null])),
         active && view?.state !== 'created' ? countdown : null),
       props.disabled ? React.createElement('p', null, t('pairingSaveServer')) : null,
-      image === undefined ? null : React.createElement('img', { src: image, width: 200, height: 200, alt: t('pairingQr'), className: 'dshRemotePairingQr' }),
-      view?.state !== 'created' ? null : React.createElement('div', { className: 'dshRemotePairingQrActions' },
+      image === undefined ? null : React.createElement('img', { src: image, width: 200, height: 200, alt: t('pairingQr'), className: 'xcodexRemotePairingQr' }),
+      view?.state !== 'created' ? null : React.createElement('div', { className: 'xcodexRemotePairingQrActions' },
         countdown,
-        React.createElement('button', { type: 'button', className: 'dshRemoteDiscard', disabled: busy || props.disabled,
+        React.createElement('button', { type: 'button', className: 'xcodexRemoteDiscard', disabled: busy || props.disabled,
           onClick: () => void run('cancel') }, t(busy ? 'pairingBusy' : 'pairingCancel'))),
-      view?.mobile === undefined ? null : React.createElement('p', { className: 'dshRemotePairingIdentity' }, React.createElement('strong', null, view.mobile.name), React.createElement('br'), React.createElement('code', null, view.mobile.fingerprint)),
-      view?.state !== 'claimed' || retry ? null : React.createElement('form', { className: 'dshRemotePairingCodeForm', onSubmit: (event: { preventDefault(): void; nativeEvent?: Event }) => {
+      view?.mobile === undefined ? null : React.createElement('p', { className: 'xcodexRemotePairingIdentity' }, React.createElement('strong', null, view.mobile.name), React.createElement('br'), React.createElement('code', null, view.mobile.fingerprint)),
+      view?.state !== 'claimed' || retry ? null : React.createElement('form', { className: 'xcodexRemotePairingCodeForm', onSubmit: (event: { preventDefault(): void; nativeEvent?: Event }) => {
         event.preventDefault()
         // Reject synthetic dispatch; this is not a claim of protection from OS automation.
         if (event.nativeEvent?.isTrusted && /^[0-9]{8}$/.test(code)) void run('confirm')
       } }, React.createElement('label', null, t('pairingCode'), React.createElement('input', {
         type: 'text', inputMode: 'numeric', autoComplete: 'off', pattern: '[0-9]{8}', maxLength: 8, value: code, disabled: busy,
         onChange: (event: Event) => setCode((event.target as HTMLInputElement).value.replace(/[^0-9]/g, '').slice(0, 8)),
-      })), React.createElement('p', { className: 'dshRemotePairingCodeWarning' }, t('pairingWarning')),
-      React.createElement('div', { className: 'dshRemotePairingCodeActions' }, React.createElement('button', { type: 'submit', className: 'dshRemoteSave', disabled: busy || props.disabled || !/^[0-9]{8}$/.test(code) }, t('pairingConfirm')), React.createElement('button', { type: 'button', className: 'dshRemoteDiscard', disabled: busy || props.disabled, onClick: () => void run('cancel') }, t('pairingCancel')))),
-      error === undefined ? null : React.createElement('p', { role: 'alert', className: 'dshRemoteError' }, error),
-      React.createElement('div', { className: 'dshRemotePairingActions' },
-        active && retry ? React.createElement('button', { type: 'button', disabled: busy || props.disabled, className: 'dshRemoteSave',
+      })), React.createElement('p', { className: 'xcodexRemotePairingCodeWarning' }, t('pairingWarning')),
+      React.createElement('div', { className: 'xcodexRemotePairingCodeActions' }, React.createElement('button', { type: 'submit', className: 'xcodexRemoteSave', disabled: busy || props.disabled || !/^[0-9]{8}$/.test(code) }, t('pairingConfirm')), React.createElement('button', { type: 'button', className: 'xcodexRemoteDiscard', disabled: busy || props.disabled, onClick: () => void run('cancel') }, t('pairingCancel')))),
+      error === undefined ? null : React.createElement('p', { role: 'alert', className: 'xcodexRemoteError' }, error),
+      React.createElement('div', { className: 'xcodexRemotePairingActions' },
+        active && retry ? React.createElement('button', { type: 'button', disabled: busy || props.disabled, className: 'xcodexRemoteSave',
           onClick: (event: { nativeEvent?: Event }) => { if (event.nativeEvent?.isTrusted) void run('confirm', true) } }, t('pairingRetry')) : null,
-        active && retry ? React.createElement('button', { type: 'button', className: 'dshRemoteDiscard', disabled: busy || props.disabled, onClick: () => void run('cancel') }, t('pairingCancel')) : null,
-        active || view?.state === 'completed' ? null : React.createElement('button', { type: 'button', className: 'dshRemoteSave', disabled: busy || props.disabled || !props.serverUrl,
+        active && retry ? React.createElement('button', { type: 'button', className: 'xcodexRemoteDiscard', disabled: busy || props.disabled, onClick: () => void run('cancel') }, t('pairingCancel')) : null,
+        active || view?.state === 'completed' ? null : React.createElement('button', { type: 'button', className: 'xcodexRemoteSave', disabled: busy || props.disabled || !props.serverUrl,
           onClick: () => void run(active ? 'cancel' : 'start') }, t(busy ? 'pairingBusy' : active ? 'pairingCancel' : 'pairingStart'))))
   }
 }

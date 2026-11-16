@@ -34,11 +34,27 @@ afterEach(async () => {
 })
 
 describe('IdentityStore', () => {
+  it('keeps official plugin storage untouched and creates a distinct Xcodex identity', async () => {
+    const home = await temporaryDirectory()
+    for (const name of ['remote', 'ds-harness-remote']) {
+      await mkdir(join(home, name))
+      await writeFile(join(home, name, 'official-data'), 'must remain unchanged')
+    }
+    const root = await prepareDefaultIdentityDirectory({ env: { DSH_HOME: home } })
+    expect(root).toBe(join(home, 'xcodex-remote'))
+    const identity = await new IdentityStore({ env: { DSH_HOME: home } }).loadOrCreate('Xcodex computer')
+    expect(identity.deviceId).toBeTruthy()
+    for (const name of ['remote', 'ds-harness-remote']) {
+      expect(await readFile(join(home, name, 'official-data'), 'utf8')).toBe('must remain unchanged')
+      expect(await readdir(join(home, name))).toEqual(['official-data'])
+    }
+  })
+
   it('moves all Server roles without changing identities, trust or credential bytes, and serializes repeated migration', async () => {
     const home = await temporaryDirectory()
     const env = { DSH_HOME: home }
-    const source = join(home, 'remote')
-    const target = join(home, 'ds-harness-remote')
+    const source = join(home, 'xcodex-remote-legacy')
+    const target = join(home, 'xcodex-remote')
     const records: Array<{ directory: string; identity: Awaited<ReturnType<IdentityStore['loadOrCreate']>>; peers: unknown; files: Map<string, Buffer> }> = []
     for (const origin of ['https://first.example.com', 'https://second.example.com']) {
       for (const role of ['host', 'client'] as const) {
@@ -71,7 +87,7 @@ describe('IdentityStore', () => {
     const dead = await deadPid()
     for (const role of ['flat', 'host', 'client'] as const) {
       const home = await temporaryDirectory()
-      const source = join(home, 'remote')
+      const source = join(home, 'xcodex-remote-legacy')
       const directory = role === 'flat' ? source : serverStorageDirectory(source, 'https://example.com', role)
       const store = new IdentityStore({ directory })
       const identity = await store.loadOrCreate('Host')
@@ -126,7 +142,7 @@ describe('IdentityStore', () => {
 
     // Migration must also refuse to move legacy storage while a live process has an unrenamed temp file.
     const home = await temporaryDirectory()
-    const source = join(home, 'remote')
+    const source = join(home, 'xcodex-remote-legacy')
     const hostIdentity = await new IdentityStore({ directory: source }).loadOrCreate('Host')
     const liveMigrationTemp = join(source, inFlightCredTemp)
     const validCredPayload = JSON.stringify({
@@ -146,7 +162,7 @@ describe('IdentityStore', () => {
     })
     await rename(liveMigrationTemp, join(source, 'server-credentials.json'))
     await chmod(join(source, 'server-credentials.json'), 0o600)
-    expect(await prepareDefaultIdentityDirectory({ env: { DSH_HOME: home } })).toBe(join(home, 'ds-harness-remote'))
+    expect(await prepareDefaultIdentityDirectory({ env: { DSH_HOME: home } })).toBe(join(home, 'xcodex-remote'))
   })
 
   it('reclaims exited-owner identity and interrupted real-hash takeover locks during migration and runtime load while preserving live lock and concurrent takeover protection', async () => {
@@ -160,7 +176,7 @@ describe('IdentityStore', () => {
 
     for (const role of ['flat', 'host', 'client'] as const) {
       const home = await temporaryDirectory()
-      const source = join(home, 'remote')
+      const source = join(home, 'xcodex-remote-legacy')
       const directory = role === 'flat' ? source : serverStorageDirectory(source, serverUrl, role)
       const store = new IdentityStore({ directory, role: role === 'flat' ? undefined : role })
       const identity = await store.loadOrCreate('Host')
@@ -184,7 +200,7 @@ describe('IdentityStore', () => {
       await writeFile(join(directory, secondTakeover), `${deadSecondContender}\n`, { mode: 0o600 })
 
       const target = await prepareDefaultIdentityDirectory({ env: { DSH_HOME: home } })
-      expect(target).toBe(join(home, 'ds-harness-remote'))
+      expect(target).toBe(join(home, 'xcodex-remote'))
       const moved = directory.replace(source, target)
       expect(await readdir(moved)).not.toContain('device.lock')
       expect(await readdir(moved)).not.toContain(realTakeover)
@@ -214,7 +230,7 @@ describe('IdentityStore', () => {
     // Live lock owner or live concurrent takeover contender must reject with IDENTITY_LOCKED without altering any file.
     for (const liveScenario of ['live-lock-with-dead-takeover', 'dead-lock-with-live-takeover'] as const) {
       const home = await temporaryDirectory()
-      const source = join(home, 'remote')
+      const source = join(home, 'xcodex-remote-legacy')
       const hostDir = serverStorageDirectory(source, serverUrl, 'host')
       const store = new IdentityStore({ directory: hostDir, role: 'host' })
       const identity = await store.loadOrCreate('Host')
@@ -245,7 +261,7 @@ describe('IdentityStore', () => {
       for (const [name, bytes] of beforeBytes) {
         expect(await readFile(join(hostDir, name)), `${liveScenario}:${name}`).toEqual(bytes)
       }
-      await expect(stat(join(home, 'ds-harness-remote'))).rejects.toMatchObject({ code: 'ENOENT' })
+      await expect(stat(join(home, 'xcodex-remote'))).rejects.toMatchObject({ code: 'ENOENT' })
     }
   })
 
@@ -260,7 +276,7 @@ describe('IdentityStore', () => {
       'corrupt-flat-key',
     ] as const) {
       const home = await temporaryDirectory()
-      const source = join(home, 'remote')
+      const source = join(home, 'xcodex-remote-legacy')
       const hostDir = serverStorageDirectory(source, serverUrl, 'host')
       const clientDir = serverStorageDirectory(source, serverUrl, 'client')
       const hostIdentity = await new IdentityStore({ directory: hostDir, role: 'host' }).loadOrCreate('Host')
@@ -312,7 +328,7 @@ describe('IdentityStore', () => {
       }
 
       const target = await prepareDefaultIdentityDirectory({ env: { DSH_HOME: home } })
-      expect(target, scenario).toBe(join(home, 'ds-harness-remote'))
+      expect(target, scenario).toBe(join(home, 'xcodex-remote'))
       const movedHostDir = serverStorageDirectory(target, serverUrl, 'host')
       expect(await new IdentityStore({ directory: movedHostDir, role: 'host' }).loadOrCreate('Host'), scenario).toEqual(hostIdentity)
       expect(await readFile(join(movedHostDir, 'server-credentials.json')), scenario).toEqual(hostCredentialBytes)
@@ -325,7 +341,7 @@ describe('IdentityStore', () => {
 
     // Broken flat root without a verified scoped identity must still be rejected.
     const unverifiedHome = await temporaryDirectory()
-    const unverifiedSource = join(unverifiedHome, 'remote')
+    const unverifiedSource = join(unverifiedHome, 'xcodex-remote-legacy')
     const unverifiedClientDir = serverStorageDirectory(unverifiedSource, serverUrl, 'client')
     const other = await new IdentityStore({ directory: await temporaryDirectory() }).loadOrCreate('Other')
     await new IdentityStore({ directory: unverifiedSource }).loadOrCreate('Flat')
@@ -339,7 +355,7 @@ describe('IdentityStore', () => {
 
     // Flat root credential with mismatched deviceId must still be rejected even when a valid scoped host exists.
     const mismatchHome = await temporaryDirectory()
-    const mismatchSource = join(mismatchHome, 'remote')
+    const mismatchSource = join(mismatchHome, 'xcodex-remote-legacy')
     const mismatchHostDir = serverStorageDirectory(mismatchSource, serverUrl, 'host')
     const validHost = await new IdentityStore({ directory: mismatchHostDir, role: 'host' }).loadOrCreate('Host')
     await new IdentityStore({ directory: mismatchSource }).loadOrCreate('Flat')
@@ -375,7 +391,7 @@ describe('IdentityStore', () => {
   it('rejects unknown or malformed peer temporary names without deleting them', async () => {
     for (const name of ['foreign.json.1.01a1b6d8-e8b5-7000-8000-000000000001.tmp', 'trusted-peers.json.other.tmp']) {
       const home = await temporaryDirectory()
-      const source = join(home, 'remote')
+      const source = join(home, 'xcodex-remote-legacy')
       await new IdentityStore({ directory: source }).loadOrCreate('Host')
       await writeFile(join(source, name), 'keep')
       await expect(prepareDefaultIdentityDirectory({ env: { DSH_HOME: home } })).rejects.toMatchObject({ code: 'STORAGE_CONFLICT' })
@@ -387,8 +403,8 @@ describe('IdentityStore', () => {
   it('refuses conflicting roots, lock records and symlinks without modifying either storage tree', async () => {
     for (const scenario of ['conflict', 'destination-race', 'identity-lock', 'refresh-lock', 'symlink']) {
       const home = await temporaryDirectory()
-      const source = join(home, 'remote')
-      const target = join(home, 'ds-harness-remote')
+      const source = join(home, 'xcodex-remote-legacy')
+      const target = join(home, 'xcodex-remote')
       const original = await new IdentityStore({ directory: source }).loadOrCreate('Host')
       if (scenario === 'conflict') await mkdir(target)
       if (scenario === 'destination-race') await mockMoveFailure(source, target, 'EEXIST', true)
@@ -405,7 +421,7 @@ describe('IdentityStore', () => {
 
   it('moves an idle refresh queue marker and rejects an active queue holder', async () => {
     const home = await temporaryDirectory()
-    const source = join(home, 'remote')
+    const source = join(home, 'xcodex-remote-legacy')
     await new IdentityStore({ directory: source }).loadOrCreate('Host')
     await new ServerCredentialStore(source).withRefreshLock(async () => undefined)
     const marker = join(source, 'server-credentials.json.refresh-lock')
@@ -414,14 +430,14 @@ describe('IdentityStore', () => {
     await writeFile(holder, `${process.pid}-00000000-0000-7000-8000-000000000000 1\n`)
     await expect(prepareDefaultIdentityDirectory({ env: { DSH_HOME: home } })).rejects.toMatchObject({ code: 'IDENTITY_LOCKED' })
     await rm(holder)
-    expect(await prepareDefaultIdentityDirectory({ env: { DSH_HOME: home } })).toBe(join(home, 'ds-harness-remote'))
-    expect(await readFile(join(home, 'ds-harness-remote', 'server-credentials.json.refresh-lock'), 'utf8'))
+    expect(await prepareDefaultIdentityDirectory({ env: { DSH_HOME: home } })).toBe(join(home, 'xcodex-remote'))
+    expect(await readFile(join(home, 'xcodex-remote', 'server-credentials.json.refresh-lock'), 'utf8'))
       .toBe('DSH_REFRESH_LOCK_V2\n')
   })
 
   it.skipIf(process.platform !== 'linux')('moves storage after cleaning a dead holder and accepts a queue temp file', async () => {
     const home = await temporaryDirectory()
-    const source = join(home, 'remote')
+    const source = join(home, 'xcodex-remote-legacy')
     await new IdentityStore({ directory: source }).loadOrCreate('Host')
     const lock = join(source, 'server-credentials.json.refresh-lock')
     await writeFile(lock, 'DSH_REFRESH_LOCK_V2\n')
@@ -434,14 +450,14 @@ describe('IdentityStore', () => {
     const temporary = `${lock}.holder-${id}.${pid}.00000000-0000-7000-8000-000000000002.tmp`
     await writeFile(temporary, 'partial')
     const target = await prepareDefaultIdentityDirectory({ env: { DSH_HOME: home } })
-    expect(target).toBe(join(home, 'ds-harness-remote'))
+    expect(target).toBe(join(home, 'xcodex-remote'))
     expect(await readdir(target)).not.toContain(`server-credentials.json.refresh-lock.holder-${id}`)
     expect(await readFile(join(target, temporary.slice(source.length + 1)), 'utf8')).toBe('partial')
   })
 
   it.skipIf(process.platform !== 'linux')('removes verified hardlink remnants from an interrupted refresh lock publication', async () => {
     const home = await temporaryDirectory()
-    const source = join(home, 'remote')
+    const source = join(home, 'xcodex-remote-legacy')
     await new IdentityStore({ directory: source }).loadOrCreate('Host')
     const dead = await deadPid()
     const marker = join(source, 'server-credentials.json.refresh-lock')
@@ -457,7 +473,7 @@ describe('IdentityStore', () => {
     expect((await stat(holder)).nlink).toBe(2)
 
     const target = await prepareDefaultIdentityDirectory({ env: { DSH_HOME: home } })
-    expect(target).toBe(join(home, 'ds-harness-remote'))
+    expect(target).toBe(join(home, 'xcodex-remote'))
     expect(await readdir(target)).not.toContain(markerTemp.slice(source.length + 1))
     expect(await readdir(target)).not.toContain(holderTemp.slice(source.length + 1))
     expect(await readdir(target)).not.toContain(holder.slice(source.length + 1))
@@ -466,7 +482,7 @@ describe('IdentityStore', () => {
 
   it.skipIf(process.platform !== 'linux')('rejects a queue temp that does not link to its matching published file', async () => {
     const home = await temporaryDirectory()
-    const source = join(home, 'remote')
+    const source = join(home, 'xcodex-remote-legacy')
     await new IdentityStore({ directory: source }).loadOrCreate('Host')
     const dead = await deadPid()
     const marker = join(source, 'server-credentials.json.refresh-lock')
@@ -482,7 +498,7 @@ describe('IdentityStore', () => {
 
   it('waits for an active refresh before it moves the storage directory', async () => {
     const home = await temporaryDirectory()
-    const source = join(home, 'remote')
+    const source = join(home, 'xcodex-remote-legacy')
     await new IdentityStore({ directory: source }).loadOrCreate('Host')
     let entered!: () => void
     let release!: () => void
@@ -495,15 +511,15 @@ describe('IdentityStore', () => {
     await started
     const moving = prepareDefaultIdentityDirectory({ env: { DSH_HOME: home } })
     await new Promise(resolve => setTimeout(resolve, 100))
-    await expect(stat(join(home, 'ds-harness-remote'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(stat(join(home, 'xcodex-remote'))).rejects.toMatchObject({ code: 'ENOENT' })
     release()
     await refresh
-    expect(await moving).toBe(join(home, 'ds-harness-remote'))
+    expect(await moving).toBe(join(home, 'xcodex-remote'))
   })
 
   it('holds the migration gate while a default identity reset clears credentials', async () => {
     const home = await temporaryDirectory()
-    const target = join(home, 'ds-harness-remote')
+    const target = join(home, 'xcodex-remote')
     await new IdentityStore({ directory: target }).loadOrCreate('Host')
     let enteredClear!: () => void
     let releaseClear!: () => void
@@ -536,14 +552,14 @@ describe('IdentityStore', () => {
   it('keeps using verified legacy identities, trust and authorization when the directory move fails', async () => {
     for (const code of ['EACCES', 'EPERM', 'EBUSY', 'EXDEV', 'EROFS', 'ENOSPC', 'EDQUOT']) {
       const home = await temporaryDirectory()
-      const source = join(home, 'remote')
+      const source = join(home, 'xcodex-remote-legacy')
       const env = { DSH_HOME: home }
       const store = new IdentityStore({ directory: source })
       const original = await store.loadOrCreate('Host')
       await store.trustPeer({ deviceId: original.deviceId, name: 'Peer', platform: 'linux', publicKey: original.publicKey })
       const credentials = await new ServerCredentialStore(source).save({ serverUrl: 'https://first.example.com', deviceId: original.deviceId, authorizationMethod: 'owned_device', accessToken: 'fixture-access-token', accessTokenExpiresAt: 1, refreshToken: 'fixture-refresh-token', refreshTokenExpiresAt: 2 })
       const bytes = await readFile(join(source, 'server-credentials.json'))
-      await mockMoveFailure(source, join(home, 'ds-harness-remote'), code)
+      await mockMoveFailure(source, join(home, 'xcodex-remote'), code)
       expect(await prepareDefaultIdentityDirectory({ env }), code).toBe(source)
       // A subsequent default-store load must adopt the fallback, without retrying
       // the move or creating a replacement identity at the canonical path.
@@ -553,18 +569,18 @@ describe('IdentityStore', () => {
       expect(fallback.listTrustedPeers()).toEqual(store.listTrustedPeers())
       expect(await new ServerCredentialStore(fallback.directory).load(credentials.serverUrl, original.deviceId)).toEqual(credentials)
       expect(await readFile(join(source, 'server-credentials.json'))).toEqual(bytes)
-      await expect(stat(join(home, 'ds-harness-remote'))).rejects.toMatchObject({ code: 'ENOENT' })
+      await expect(stat(join(home, 'xcodex-remote'))).rejects.toMatchObject({ code: 'ENOENT' })
     }
   })
 
   it('refuses to replace missing or changed storage after a persisted legacy fallback and preserves 64-bit NTFS inode precision', async () => {
     for (const scenario of ['missing', 'replaced', 'float-pin', 'high-bit-ino']) {
       const home = await temporaryDirectory()
-      const source = join(home, 'remote')
+      const source = join(home, 'xcodex-remote-legacy')
       const original = await new IdentityStore({ directory: source }).loadOrCreate('Host')
-      await mockMoveFailure(source, join(home, 'ds-harness-remote'), 'EACCES')
+      await mockMoveFailure(source, join(home, 'xcodex-remote'), 'EACCES')
       await prepareDefaultIdentityDirectory({ env: { DSH_HOME: home } })
-      const pinPath = join(home, '.ds-harness-remote-migration', 'legacy-root.json')
+      const pinPath = join(home, '.xcodex-remote-migration', 'legacy-root.json')
       if (scenario === 'float-pin') {
         await writeFile(pinPath, JSON.stringify({ schemaVersion: 1, dev: 1.5, ino: 2.5 }), { mode: 0o600 })
         await expect(prepareDefaultIdentityDirectory({ env: { DSH_HOME: home } }), scenario).rejects.toBeInstanceOf(IdentityInvalidError)
@@ -582,14 +598,14 @@ describe('IdentityStore', () => {
       if (scenario === 'replaced') await new IdentityStore({ directory: source }).loadOrCreate('Other Host')
       await expect(prepareDefaultIdentityDirectory({ env: { DSH_HOME: home } }), scenario).rejects.toBeInstanceOf(IdentityInvalidError)
       expect((await readFile(join(backup, 'device.key'), 'utf8')).trim()).toBe(original.privateKey)
-      await expect(stat(join(home, 'ds-harness-remote'))).rejects.toMatchObject({ code: 'ENOENT' })
+      await expect(stat(join(home, 'xcodex-remote'))).rejects.toMatchObject({ code: 'ENOENT' })
     }
   })
 
   it('leaves foreign, mixed and inconsistent legacy contents untouched instead of claiming ownership', async () => {
     for (const scenario of ['foreign', 'empty', 'mixed', 'wrong-key', 'bad-peers', 'wrong-device', 'wrong-scope', 'unknown-role']) {
       const home = await temporaryDirectory()
-      const source = join(home, 'remote')
+      const source = join(home, 'xcodex-remote-legacy')
       await mkdir(source)
       const env = { DSH_HOME: home }
       if (scenario === 'foreign') await writeFile(join(source, 'settings.json'), '{"owner":"other-plugin"}')
@@ -618,7 +634,7 @@ describe('IdentityStore', () => {
       const before = await snapshot(source)
       await expect(prepareDefaultIdentityDirectory({ env }), scenario).rejects.toThrow('ownership could not be verified')
       expect(await snapshot(source), scenario).toEqual(before)
-      await expect(stat(join(home, 'ds-harness-remote'))).rejects.toMatchObject({ code: 'ENOENT' })
+      await expect(stat(join(home, 'xcodex-remote'))).rejects.toMatchObject({ code: 'ENOENT' })
     }
   })
 
@@ -763,7 +779,7 @@ describe('IdentityStore', () => {
     for (const scenario of ['mismatched', 'device-only', 'key-only', 'legacy-upgrade', 'legacy-client-only'] as const) {
       if (scenario === 'legacy-client-only') {
         const home = await temporaryDirectory()
-        const legacyRoot = join(home, 'remote')
+        const legacyRoot = join(home, 'xcodex-remote-legacy')
         const serverUrl = 'https://dsh.r2049.cn'
         const legacyClientDir = serverStorageDirectory(legacyRoot, serverUrl, 'client')
         await mkdir(legacyClientDir, { recursive: true })
@@ -776,7 +792,7 @@ describe('IdentityStore', () => {
         await writeFile(join(legacyClientDir, 'device.key'), `${second.privateKey}\n`, { mode: 0o600 })
 
         const migratedRoot = await prepareDefaultIdentityDirectory({ env: { DSH_HOME: home } })
-        expect(migratedRoot).toBe(join(home, 'ds-harness-remote'))
+        expect(migratedRoot).toBe(join(home, 'xcodex-remote'))
         const migratedClientDir = serverStorageDirectory(migratedRoot, serverUrl, 'client')
         const healedClient = await new IdentityStore({ directory: migratedClientDir, role: 'client' }).loadOrCreate('Client')
         expect(healedClient.deviceId).not.toBe(first.deviceId)
@@ -785,7 +801,7 @@ describe('IdentityStore', () => {
       }
       if (scenario === 'legacy-upgrade') {
         const home = await temporaryDirectory()
-        const legacyRoot = join(home, 'remote')
+        const legacyRoot = join(home, 'xcodex-remote-legacy')
         const serverUrl = 'https://dsh.r2049.cn'
         const legacyHostDir = serverStorageDirectory(legacyRoot, serverUrl, 'host')
         const legacyClientDir = serverStorageDirectory(legacyRoot, serverUrl, 'client')
@@ -811,7 +827,7 @@ describe('IdentityStore', () => {
         await writeFile(join(legacyClientDir, 'device.key'), `${second.privateKey}\n`, { mode: 0o600 })
 
         const migratedRoot = await prepareDefaultIdentityDirectory({ env: { DSH_HOME: home } })
-        expect(migratedRoot).toBe(join(home, 'ds-harness-remote'))
+        expect(migratedRoot).toBe(join(home, 'xcodex-remote'))
         const migratedHostDir = serverStorageDirectory(migratedRoot, serverUrl, 'host')
         const migratedClientDir = serverStorageDirectory(migratedRoot, serverUrl, 'client')
         expect(await new IdentityStore({ directory: migratedHostDir, role: 'host' }).loadOrCreate('Host')).toEqual(hostIdentity)
@@ -912,7 +928,7 @@ describe('IdentityStore', () => {
     'keeps plain OS metadata %s at every level and migrates identities unchanged',
     async name => {
       const home = await temporaryDirectory()
-      const source = join(home, 'remote')
+      const source = join(home, 'xcodex-remote-legacy')
       const host = serverStorageDirectory(source, 'https://example.com', 'host')
       const client = serverStorageDirectory(source, 'https://example.com', 'client')
       const first = await new IdentityStore({ directory: host }).loadOrCreate('Host')
@@ -921,7 +937,7 @@ describe('IdentityStore', () => {
       for (const level of levels) await writeFile(join(level, name), 'metadata')
 
       const target = await prepareDefaultIdentityDirectory({ env: { DSH_HOME: home } })
-      expect(target).toBe(join(home, 'ds-harness-remote'))
+      expect(target).toBe(join(home, 'xcodex-remote'))
       for (const level of levels) {
         expect(await readFile(join(level.replace(source, target), name), 'utf8')).toBe('metadata')
       }
@@ -933,7 +949,7 @@ describe('IdentityStore', () => {
   it('keeps plain OS metadata compatible with a flat legacy identity and client self-heal', async () => {
     for (const role of ['flat', 'client'] as const) {
       const home = await temporaryDirectory()
-      const source = join(home, 'remote')
+      const source = join(home, 'xcodex-remote-legacy')
       const directory = role === 'flat' ? source : serverStorageDirectory(source, 'https://example.com', role)
       await new IdentityStore({ directory, role: role === 'flat' ? 'host' : role }).loadOrCreate('Device')
       await writeFile(join(directory, '.DS_Store'), 'metadata')
@@ -973,7 +989,7 @@ describe('IdentityStore', () => {
     for (const level of ['root', 'servers', 'scope', 'role'] as const) {
       for (const kind of ['directory', 'symlink', 'hardlink', 'oversized', 'unknown', 'appledouble'] as const) {
         const home = await temporaryDirectory()
-        const source = join(home, 'remote')
+        const source = join(home, 'xcodex-remote-legacy')
         const host = serverStorageDirectory(source, 'https://example.com', 'host')
         await new IdentityStore({ directory: host }).loadOrCreate('Host')
         const directory = { root: source, servers: join(source, 'servers'), scope: dirname(host), role: host }[level]
@@ -1001,7 +1017,7 @@ describe('IdentityStore', () => {
     'server-credentials.json.swp',
   ])('preserves known credential backups during migration: %s', async name => {
     const home = await temporaryDirectory()
-    const source = join(home, 'remote')
+    const source = join(home, 'xcodex-remote-legacy')
     const directory = serverStorageDirectory(source, 'https://example.com', 'host')
     const identity = await new IdentityStore({ directory }).loadOrCreate('Host')
     await writeFile(join(directory, name), 'backup-bytes')
@@ -1015,7 +1031,7 @@ describe('IdentityStore', () => {
   it('rejects unsafe known backup artifacts during migration', async () => {
     for (const kind of ['directory', 'symlink', 'hardlink', 'oversized'] as const) {
       const home = await temporaryDirectory()
-      const source = join(home, 'remote')
+      const source = join(home, 'xcodex-remote-legacy')
       const directory = serverStorageDirectory(source, 'https://example.com', 'host')
       await new IdentityStore({ directory }).loadOrCreate('Host')
       const artifact = join(directory, 'server-credentials.json.bak')

@@ -117,6 +117,7 @@ export interface HostConnectionHandle {
 }
 
 export interface HostAuthorizationControl {
+  browserLogin?(action: 'start' | 'poll' | 'cancel', requestId?: string): Promise<unknown>
   setAgentBackends?(config: ResolvedConfig): Promise<void>
   setTerminalEnabled?(enabled: boolean): void
   setLoopbackPorts?(ports: readonly number[]): void

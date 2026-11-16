@@ -155,7 +155,7 @@ export function installRemoteDiscoveryTools(ctx: Context, resolve: () => ClientM
   ctx.inject(['tools'], toolContext => {
     const tools = toolContext.get('tools') as { register(definition: RemoteToolDefinition): () => void }
     for (const definition of [...remoteDiscoveryTools(resolve), ...remoteSessionTools(resolve)]) {
-      toolContext.effect(() => tools.register(definition))
+      toolContext.effect(() => tools.register({ ...definition, name: 'xcodex_' + definition.name, description: definition.description.replaceAll('remote_', 'xcodex_remote_') }))
     }
   })
 }

@@ -6408,7 +6408,7 @@ __export(lib_exports, {
 });
 import { randomUUID as randomUUID3 } from "crypto";
 import { EventEmitter } from "node:events";
-import { randomBytes as randomBytes8 } from "crypto";
+import { randomBytes as randomBytes9 } from "crypto";
 import { createSocket } from "dgram";
 import * as net from "node:net";
 import { connect } from "node:net";
@@ -6420,7 +6420,7 @@ import { randomBytes as randomBytes22 } from "crypto";
 import { setTimeout as setTimeout2 } from "timers/promises";
 import { createCipheriv, createDecipheriv } from "crypto";
 import {
-  createHash as createHash2,
+  createHash as createHash3,
   createHmac,
   createPrivateKey,
   createPublicKey,
@@ -6462,7 +6462,7 @@ import { connect as connect3, createServer as createServer2 } from "node:net";
 import { isIP as isIP3 } from "node:net";
 import * as tls2 from "node:tls";
 import { setTimeout as setTimeout42 } from "timers/promises";
-import { createHash as createHash3 } from "crypto";
+import { createHash as createHash32 } from "crypto";
 import * as os from "node:os";
 import { createHmac as createHmac5, randomBytes as randomBytes82 } from "crypto";
 import { randomBytes as randomBytes10 } from "crypto";
@@ -6474,7 +6474,7 @@ import { createSocket as createSocket3 } from "dgram";
 import { performance as performance2 } from "perf_hooks";
 import { randomUUID as randomUUID4 } from "crypto";
 import { randomUUID as randomUUID5 } from "crypto";
-import { randomBytes as randomBytes9, randomUUID as randomUUID7 } from "crypto";
+import { randomBytes as randomBytes92, randomUUID as randomUUID7 } from "crypto";
 import { isIPv4 as isIPv45, isIPv6 as isIPv62 } from "net";
 import { randomUUID as randomUUID8 } from "crypto";
 import { randomUUID as randomUUID9 } from "crypto";
@@ -6491,10 +6491,10 @@ function divide(from2, split3) {
   return [arr[0], arr.slice(1).join(split3)];
 }
 function random16() {
-  return randomBytes8(2).readUInt16BE(0);
+  return randomBytes9(2).readUInt16BE(0);
 }
 function random32() {
-  return randomBytes8(4).readUInt32BE(0);
+  return randomBytes9(4).readUInt32BE(0);
 }
 function bufferXor(a, b) {
   if (a.length !== b.length) {
@@ -7206,7 +7206,7 @@ function exportKeyingMaterial(label, length, masterSecret, localRandom, remoteRa
   return prfPHash(masterSecret, seed, length);
 }
 function hash2(algorithm, data2) {
-  return createHash2(algorithm).update(data2).digest();
+  return createHash3(algorithm).update(data2).digest();
 }
 function prfVerifyData(masterSecret, handshakes, label, size2 = 12) {
   const bytes = hash2("sha256", handshakes);
@@ -8791,7 +8791,7 @@ async function waitForListening(server, host, port) {
   });
 }
 function makeTurnIntegrityKey(username, realm, password) {
-  return createHash3("md5").update(Buffer.from([username, realm, password].join(":"))).digest();
+  return createHash32("md5").update(Buffer.from([username, realm, password].join(":"))).digest();
 }
 function isChannelData(data2) {
   return data2.length >= 4 && (data2[0] & 192) === 64;
@@ -25419,8 +25419,8 @@ var init_lib = __esm({
           return;
         }
         this.unselectLocalRestart();
-        const usernameFragment = randomBytes9(6).toString("base64url");
-        const random = randomBytes9(24).toString("base64url");
+        const usernameFragment = randomBytes92(6).toString("base64url");
+        const random = randomBytes92(24).toString("base64url");
         const prefix = this.connection.options.localPasswordPrefix ?? "";
         const password = prefix + random.slice(prefix.length);
         const candidates = this.iceGather.localCandidates.map((candidate) => {
@@ -82304,7 +82304,7 @@ function awaitWithAbort(promise2, signal) {
 }
 
 // packages/plugin/src/control-route.ts
-var CONTROL_RPC_PREFIX = "/ds-harness-remote";
+var CONTROL_RPC_PREFIX = "/xcodex-remote";
 var STATUS_STREAM_ENDPOINT = "status.events";
 var STATUS_STREAM_PATH = `${CONTROL_RPC_PREFIX}/${STATUS_STREAM_ENDPOINT}`;
 var ENDPOINT_SEGMENT_PATTERN = /^[A-Za-z0-9_$.-]+$/;
@@ -83908,6 +83908,7 @@ var ObservedState = class {
 };
 
 // packages/plugin/src/server-api.ts
+import { createHash as createHash2, randomBytes as randomBytes8 } from "node:crypto";
 import { platform } from "node:os";
 
 // packages/plugin/src/server-credentials.ts
@@ -83972,7 +83973,7 @@ function defaultMigrationGate(directory) {
   const parts = directory.split(sep);
   let rootIndex = -1;
   for (let index = parts.length - 1; index >= 0; index--) {
-    if ((parts[index] === "remote" || parts[index] === "ds-harness-remote") && (index === parts.length - 1 || parts[index + 1] === "servers")) {
+    if ((parts[index] === "xcodex-remote-legacy" || parts[index] === "xcodex-remote") && (index === parts.length - 1 || parts[index + 1] === "servers")) {
       rootIndex = index;
       break;
     }
@@ -83980,10 +83981,10 @@ function defaultMigrationGate(directory) {
   if (rootIndex < 1) return void 0;
   const suffix = parts.slice(rootIndex + 1);
   if (suffix.length !== 0 && (suffix.length !== 3 || suffix[0] !== "servers" || !/^[a-f0-9]{24}$/.test(suffix[1]) || !["host", "client"].includes(suffix[2]))) return void 0;
-  return join3(parts.slice(0, rootIndex).join(sep) || sep, ".ds-harness-remote-migration", "credential-refresh-gate");
+  return join3(parts.slice(0, rootIndex).join(sep) || sep, ".xcodex-remote-migration", "credential-refresh-gate");
 }
 function withDefaultCredentialMigrationGate(home, operation) {
-  return withQueueLock(join3(home, ".ds-harness-remote-migration", "credential-refresh-gate"), operation);
+  return withQueueLock(join3(home, ".xcodex-remote-migration", "credential-refresh-gate"), operation);
 }
 async function assertRefreshQueueIdle(directory) {
   const lock = join3(directory, "server-credentials.json.refresh-lock");
@@ -85024,7 +85025,7 @@ defineMethod("transform", [
 ], ({ inner }, isInner) => inner.toString(isInner));
 
 // packages/plugin/src/config.ts
-var DEFAULT_REMOTE_SERVER_URL = "https://dsh.r2049.cn";
+var DEFAULT_REMOTE_SERVER_URL = "https://agent.xcodex.vip";
 var entryConfigSchema = Schema.object({
   enabled: Schema.boolean(),
   role: Schema.union(["host", "client", "both"]),
@@ -85104,9 +85105,9 @@ function resolveConfig(input4 = {}, env = process.env) {
   const codexEnabled = codexBackend?.enabled ?? parsed.codex?.enabled ?? true;
   const acpEnabled = parsed.acp?.enabled ?? true;
   const reconnect = typeof parsed.reconnect === "object" ? parsed.reconnect : {};
-  const configuredServerUrl = parsed.serverUrl ?? env.DSH_REMOTE_SERVER;
+  const configuredServerUrl = parsed.serverUrl ?? env.XCODEX_REMOTE_SERVER;
   const httpServerAllowlist = normalizeHttpServerAllowlist(
-    parsed.httpServerAllowlist ?? parseHttpServerAllowlistEnv(env.DSH_REMOTE_HTTP_SERVER_ALLOWLIST)
+    parsed.httpServerAllowlist ?? parseHttpServerAllowlistEnv(env.XCODEX_REMOTE_HTTP_SERVER_ALLOWLIST)
   );
   const serverUrl = configuredServerUrl === void 0 ? void 0 : normalizeServerUrl(configuredServerUrl, httpServerAllowlist);
   const initialDelayMs = reconnect.initialDelayMs ?? 4e3;
@@ -85119,9 +85120,9 @@ function resolveConfig(input4 = {}, env = process.env) {
     role: parsed.role ?? "host",
     ...serverUrl === void 0 ? {} : { serverUrl },
     httpServerAllowlist,
-    deviceName: parsed.deviceName ?? env.DSH_REMOTE_DEVICE_NAME ?? hostname3(),
+    deviceName: parsed.deviceName ?? env.XCODEX_REMOTE_DEVICE_NAME ?? hostname3(),
     hostControl: { enabled: parsed.hostControl?.enabled ?? true },
-    terminal: { enabled: parsed.terminal?.enabled ?? (env.DSH_REMOTE_TERMINAL_ENABLED === void 0 || env.DSH_REMOTE_TERMINAL_ENABLED === "true") },
+    terminal: { enabled: parsed.terminal?.enabled ?? (env.XCODEX_REMOTE_TERMINAL_ENABLED === void 0 || env.XCODEX_REMOTE_TERMINAL_ENABLED === "true") },
     remoteTools: { enabled: parsed.remoteTools?.enabled ?? true },
     sidebar: { entry: parsed.sidebar?.entry === "compact" ? "compact" : "standard" },
     loopback: { ports: [...new Set(parsed.loopback?.ports ?? [])] },
@@ -85140,7 +85141,7 @@ function resolveConfig(input4 = {}, env = process.env) {
     },
     cursor: {
       enabled: cursorEnabled,
-      binary: configuredCursorBackend?.command ?? parsed.cursor?.binary ?? env.DSH_REMOTE_CURSOR_BINARY ?? env.DSH_REMOTE_ACP_BINARY ?? "agent"
+      binary: configuredCursorBackend?.command ?? parsed.cursor?.binary ?? env.XCODEX_REMOTE_CURSOR_BINARY ?? env.XCODEX_REMOTE_ACP_BINARY ?? "agent"
     },
     acp: {
       enabled: acpEnabled,
@@ -85148,7 +85149,7 @@ function resolveConfig(input4 = {}, env = process.env) {
         const configured = parsed.acp?.backends?.find((item) => item.id === id6);
         const legacy = parsed.acp?.backend === id6 ? parsed.acp : void 0;
         const defaults = { codex: "codex", cursor: "agent", antigravity: "agy", pi: "pi-acp", claude: "claude-agent-acp", opencode: "opencode", hermes: "hermes" };
-        const cursorCommand = id6 === "codex" ? parsed.codex?.binary : id6 === "cursor" ? parsed.cursor?.binary ?? env.DSH_REMOTE_CURSOR_BINARY ?? env.DSH_REMOTE_ACP_BINARY : void 0;
+        const cursorCommand = id6 === "codex" ? parsed.codex?.binary : id6 === "cursor" ? parsed.cursor?.binary ?? env.XCODEX_REMOTE_CURSOR_BINARY ?? env.XCODEX_REMOTE_ACP_BINARY : void 0;
         const cwd2 = configured?.cwd ?? legacy?.cwd;
         return {
           id: id6,
@@ -85279,7 +85280,7 @@ function parseIpv6(value) {
 }
 
 // packages/plugin/src/version.ts
-var PLUGIN_VERSION = "0.6.4";
+var PLUGIN_VERSION = "0.6.4-xcodex.2";
 
 // packages/plugin/src/server-api.ts
 var TERMINAL_CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/u;
@@ -85290,6 +85291,9 @@ var HostServerApi = class {
     this.role = role2;
     this.baseUrl = normalizeServerUrl(serverUrl, httpServerAllowlist);
   }
+  browserFlow;
+  browserGeneration = 0;
+  browserPollFlight;
   baseUrl;
   hostOnly = false;
   identity;
@@ -85305,6 +85309,8 @@ var HostServerApi = class {
   }
   /** End this runtime's HTTP requests, including authentication and response bodies. */
   close() {
+    this.browserFlow = void 0;
+    this.browserGeneration++;
     this.lifetime.abort(new ServerApiError("CONNECTION_CLOSED", "The Server API has been closed.", false));
   }
   pairingHostOnly() {
@@ -85352,6 +85358,10 @@ var HostServerApi = class {
     return await this.store.load(this.baseUrl, identity3.deviceId) !== void 0;
   }
   async clearAuthorization() {
+    const pending = this.browserPollFlight;
+    await this.cancelBrowserLogin();
+    await pending?.catch(() => {
+    });
     this.credentials = void 0;
     this.credentialsPromise = void 0;
     await this.store.clear();
@@ -85369,12 +85379,16 @@ var HostServerApi = class {
     }
   }
   async authorizeWithAccount(identity3, email3, password, recoverIdentity) {
+    const pending = this.browserPollFlight;
+    await this.cancelBrowserLogin();
+    await pending?.catch(() => {
+    });
     this.bindIdentity(identity3);
     const account = email3.trim();
     if (account.length === 0 || password.length === 0) {
       throw new ServerApiError("INVALID_MESSAGE", "Email and password are required.", false);
     }
-    const login2 = validateWebLogin(await this.publicRequest("/api/v1/auth/login", {
+    const login2 = validateWebLogin(await this.publicRequest("/api/v1/auth/account/password", {
       method: "POST",
       body: JSON.stringify({ email: account, password })
     }));
@@ -85397,6 +85411,90 @@ var HostServerApi = class {
       expiresAt: login2.expiresAt,
       isAdmin: login2.isAdmin
     };
+  }
+  async startBrowserLogin(identity3) {
+    const cancellation = this.cancelBrowserLogin();
+    const generation = this.browserGeneration;
+    await cancellation;
+    if (generation !== this.browserGeneration) throw new ServerApiError("DEVICE_LOGIN_CANCELLED", "Login cancelled.", false);
+    this.bindIdentity(identity3);
+    const verifier = randomBytes8(32).toString("base64url"), state2 = randomBytes8(32).toString("base64url");
+    const result = await this.publicRequest("/api/v1/auth/device/start", {
+      method: "POST",
+      body: JSON.stringify({
+        device: this.deviceDescriptor(identity3),
+        state: state2,
+        codeChallenge: createHash2("sha256").update(verifier).digest("base64url")
+      })
+    });
+    if (generation !== this.browserGeneration) throw new ServerApiError("DEVICE_LOGIN_CANCELLED", "Login cancelled.", false);
+    if (!/^[A-Za-z0-9_-]{43}$/.test(result.requestId) || !/^[A-Za-z0-9_-]{43}$/.test(result.pickupToken) || !Number.isFinite(result.expiresAt) || !normalizeOAuthScanUrl(result.loginUrl, this.baseUrl)) throw new ServerApiError("INVALID_MESSAGE", "Invalid browser login response.", false);
+    this.browserFlow = { ...result, verifier, state: state2, identity: identity3 };
+    return { requestId: result.requestId, loginUrl: result.loginUrl, expiresAt: result.expiresAt };
+  }
+  async cancelBrowserLogin(requestId) {
+    const flow = this.browserFlow;
+    if (requestId && flow?.requestId !== requestId) return { status: "cancelled" };
+    this.browserGeneration++;
+    this.browserFlow = void 0;
+    this.browserPollFlight = void 0;
+    if (flow && !flow.complete) {
+      try {
+        await this.publicRequest("/api/v1/auth/device/cancel", { method: "POST", body: JSON.stringify({ requestId: flow.requestId, pickupToken: flow.pickupToken }) });
+      } catch {
+      }
+    }
+    return { status: "cancelled" };
+  }
+  pollBrowserLogin(requestId) {
+    const flow = this.browserFlow;
+    if (!flow || flow.requestId !== requestId) return Promise.reject(new ServerApiError("DEVICE_LOGIN_EXPIRED", "Start browser login again.", false));
+    if (flow.complete) return Promise.resolve({ status: "complete" });
+    if (this.browserPollFlight) return this.browserPollFlight;
+    const active2 = () => {
+      if (this.browserFlow !== flow || this.identity?.deviceId !== flow.identity.deviceId) throw new ServerApiError("DEVICE_LOGIN_CANCELLED", "Login cancelled.", false);
+      this.lifetime.signal.throwIfAborted();
+    };
+    const task = async () => {
+      active2();
+      const proof = { requestId, pickupToken: flow.pickupToken };
+      const result = await this.publicRequest("/api/v1/auth/device/poll", { method: "POST", body: JSON.stringify(proof) });
+      active2();
+      if (result.status !== "ready") {
+        if (!["pending", "expired", "cancelled"].includes(result.status)) throw new ServerApiError("INVALID_MESSAGE", "Invalid login status.", false);
+        return { status: result.status };
+      }
+      if (result.state !== flow.state || typeof result.code !== "string") throw new ServerApiError("AUTH_INVALID", "Login state mismatch.", false);
+      await this.store.withRefreshLock(async () => {
+        active2();
+        const response = await this.publicRequest("/api/v1/auth/device/exchange", {
+          method: "POST",
+          body: JSON.stringify({ ...proof, code: result.code, codeVerifier: flow.verifier })
+        });
+        active2();
+        if (response.deviceId !== flow.identity.deviceId || typeof response.account !== "string" || !response.account) throw new ServerApiError("AUTH_INVALID", "Device identity mismatch.", false);
+        const previous = await this.store.load(this.baseUrl, flow.identity.deviceId);
+        active2();
+        if (previous?.account && previous.account !== response.account) throw new ServerApiError("AUTH_INVALID", "Sign out before switching accounts.", false);
+        this.credentials = await this.saveTokens(flow.identity, validateTokens({ accessToken: response.accessToken, accessTokenExpiresAt: response.accessTokenExpiresAt, refreshToken: response.refreshToken, refreshTokenExpiresAt: response.refreshTokenExpiresAt }), { authorizationMethod: "account", account: response.account });
+        try {
+          active2();
+        } catch (error62) {
+          await this.store.clear();
+          this.credentials = void 0;
+          throw error62;
+        }
+        flow.complete = true;
+        flow.verifier = "";
+        flow.pickupToken = "";
+      });
+      return { status: "complete" };
+    };
+    const flight = task().finally(() => {
+      if (this.browserPollFlight === flight) this.browserPollFlight = void 0;
+    });
+    this.browserPollFlight = flight;
+    return flight;
   }
   async oauthProviders() {
     let body;
@@ -86428,7 +86526,7 @@ function nodeBinaryCandidates() {
     if (value === void 0 || value.trim() === "") return;
     if (!candidates.includes(value)) candidates.push(value);
   };
-  add3(process.env.DSH_REMOTE_NODE);
+  add3(process.env.XCODEX_REMOTE_NODE);
   addBundledPrimaryRuntimeNode(candidates, process.env.DSH_PRIMARY_RUNTIME);
   addBundledPrimaryRuntimeNode(candidates, process.env.DSH_BUNDLED_PRIMARY_RUNTIME);
   add3(process.env.NODE);
@@ -86462,14 +86560,14 @@ function nvmNodeCandidates() {
 }
 function isUsableExternalNode(candidate, requireFrom) {
   if (!isExecutableFile(candidate)) return false;
-  const env = { ...process.env, DSH_REMOTE_RTC_HELPER_REQUIRE_FROM: requireFrom };
+  const env = { ...process.env, XCODEX_REMOTE_RTC_HELPER_REQUIRE_FROM: requireFrom };
   env.ELECTRON_RUN_AS_NODE = "1";
   const probe = spawnSync(candidate, [
     "--input-type=module",
     "--eval",
     [
       "import { createRequire } from 'node:module';",
-      "const require = createRequire(process.env.DSH_REMOTE_RTC_HELPER_REQUIRE_FROM);",
+      "const require = createRequire(process.env.XCODEX_REMOTE_RTC_HELPER_REQUIRE_FROM);",
       "if (process.versions.electron) throw new Error('electron-node');",
       "const wrtc = require('@roamhq/wrtc');",
       "const RTCPeerConnection = wrtc.RTCPeerConnection ?? wrtc.default?.RTCPeerConnection;",
@@ -86500,7 +86598,7 @@ var ExternalNativePeerConnection = class {
     this.requireFrom = requireFrom;
     this.child = spawn(this.nodeBinary, ["--input-type=module", "--eval", HELPER_SOURCE], {
       cwd: dirname3(this.requireFrom),
-      env: { ...process.env, DSH_REMOTE_RTC_HELPER_REQUIRE_FROM: this.requireFrom },
+      env: { ...process.env, XCODEX_REMOTE_RTC_HELPER_REQUIRE_FROM: this.requireFrom },
       stdio: ["pipe", "pipe", "pipe"]
     });
     this.child.stdout.setEncoding("utf8");
@@ -86713,7 +86811,7 @@ var HELPER_SOURCE = String.raw`
 import { createRequire } from 'node:module'
 import { createInterface } from 'node:readline'
 
-const require = createRequire(process.env.DSH_REMOTE_RTC_HELPER_REQUIRE_FROM || (process.cwd() + '/package.json'))
+const require = createRequire(process.env.XCODEX_REMOTE_RTC_HELPER_REQUIRE_FROM || (process.cwd() + '/package.json'))
 const wrtc = require('@roamhq/wrtc')
 const RTCPeerConnection = wrtc.RTCPeerConnection ?? wrtc.default?.RTCPeerConnection
 if (typeof RTCPeerConnection !== 'function') throw new Error('missing RTCPeerConnection')
@@ -87761,6 +87859,25 @@ var ClientModeRuntime = class {
     const message = status2.error === "DEVICE_REVOKED" ? "The local Host was revoked on the Server. Sign out and authorize this Host again." : "The local Host authorization is no longer valid. Sign out and authorize this Host again.";
     throw new ClientModeError(status2.error, message);
   }
+  async browserLogin(action, requestId) {
+    if (action === "start") return this.server.startBrowserLogin(this.requireIdentity());
+    if (action === "cancel") return this.server.cancelBrowserLogin(requestId);
+    try {
+      const result = await this.server.pollBrowserLogin(requestId ?? "");
+      if (result.status === "complete") {
+        this.clientAuthRequired = false;
+        await this.authorizeHostByDefault();
+      }
+      return result;
+    } catch (error62) {
+      if (error62 instanceof ServerApiError && error62.code === "DEVICE_REVOKED") {
+        await this.server.cancelBrowserLogin();
+        this.identity = await this.identities.reset(this.config.deviceName);
+        this.server.bindIdentity(this.identity);
+      }
+      throw error62;
+    }
+  }
   async authorizeClientWithAccount(email3, password) {
     let authorization;
     try {
@@ -88554,7 +88671,7 @@ var IdentityStore = class {
   constructor(options = {}) {
     const env = options.env ?? process.env;
     const dshHome = env.DSH_HOME || join5(options.homeDirectory ?? homedir2(), ".dsh");
-    this.storageDirectory = options.directory ?? join5(dshHome, "ds-harness-remote");
+    this.storageDirectory = options.directory ?? join5(dshHome, "xcodex-remote");
     this.defaultOptions = options.directory === void 0 ? options : void 0;
     this.role = options.role;
   }
@@ -88745,10 +88862,10 @@ async function prepareDefaultIdentityDirectory(options = {}) {
 async function withDefaultStorageTransaction(options, operation) {
   const env = options.env ?? process.env;
   const home = env.DSH_HOME || join5(options.homeDirectory ?? homedir2(), ".dsh");
-  const source = join5(home, "remote");
-  const target3 = join5(home, "ds-harness-remote");
+  const source = join5(home, "xcodex-remote-legacy");
+  const target3 = join5(home, "xcodex-remote");
   await mkdir3(home, { recursive: true, mode: 448 });
-  const lockDirectory = join5(home, ".ds-harness-remote-migration");
+  const lockDirectory = join5(home, ".xcodex-remote-migration");
   await storageDirectoryStat(lockDirectory);
   await ensureDirectory(lockDirectory);
   return withIdentityLock(lockDirectory, () => withDefaultCredentialMigrationGate(
@@ -96280,7 +96397,7 @@ var AcpRemoteGateway = class {
         const defaultCandidates = /* @__PURE__ */ new Set();
         const cwd3 = process.cwd();
         if (cwd3) defaultCandidates.add(cwd3);
-        for (const candidate of ["/var/lib/dsh/workspace/ds-harness-remote", "/srv/dsh-workspace", "/var/lib/dsh/local"]) {
+        for (const candidate of ["/var/lib/dsh/workspace/xcodex-remote", "/srv/dsh-workspace", "/var/lib/dsh/local"]) {
           try {
             const s = await stat5(candidate);
             if (s.isDirectory()) defaultCandidates.add(candidate);
@@ -96292,7 +96409,7 @@ var AcpRemoteGateway = class {
       const candidates = /* @__PURE__ */ new Set();
       const cwd2 = process.cwd();
       if (cwd2) candidates.add(cwd2);
-      for (const candidate of ["/var/lib/dsh/workspace/ds-harness-remote", "/var/lib/dsh/local"]) {
+      for (const candidate of ["/var/lib/dsh/workspace/xcodex-remote", "/var/lib/dsh/local"]) {
         try {
           const s = await stat5(candidate);
           if (s.isDirectory()) candidates.add(candidate);
@@ -97852,6 +97969,15 @@ var PluginControlRuntime = class {
         const base = this.client !== void 0 ? await this.client.handleControl(endpoint, payload, signal) : ok3(this.hostOnlyStatus());
         return withUpdate(base, this.updates?.snapshot());
       }
+      if (["account.browser.start", "account.browser.poll", "account.browser.cancel", "host.browser.start", "host.browser.poll", "host.browser.cancel"].includes(endpoint)) {
+        if (this.logoutFlight || this.serverSwitchFlight) throw new ClientModeError("CONNECTION_FAILED", "Wait for the current settings change.", true);
+        const target3 = endpoint.startsWith("host.") ? this.host : this.client ?? this.host;
+        if (!target3?.browserLogin) throw new ClientModeError("METHOD_NOT_ALLOWED", "Browser login is unavailable.");
+        const action = endpoint.split(".").at(-1);
+        const value = record9(payload);
+        if (action !== "start" && typeof value.requestId !== "string") throw new ClientModeError("INVALID_MESSAGE", "Login request ID required.");
+        return ok3(await target3.browserLogin(action, value.requestId));
+      }
       if (this.client !== void 0) return this.client.handleControl(endpoint, payload, signal);
       if (endpoint === "devices") return ok3([]);
       if (endpoint === "host.account.login") {
@@ -98422,7 +98548,7 @@ var SafeLogger = class {
     const threshold = typeof this.threshold === "function" ? this.threshold() : this.threshold;
     if (levels.indexOf(level) < levels.indexOf(threshold)) return;
     const safeFields = fields === void 0 ? "" : ` ${JSON.stringify(redact(fields))}`;
-    this.sink[level](`[ds-harness-remote] ${message}${safeFields}`);
+    this.sink[level](`[xcodex-remote] ${message}${safeFields}`);
   }
 };
 function redact(value, key = "") {
@@ -101091,7 +101217,7 @@ var HarnessRemoteBridge = class {
     if (TERMINAL_STREAMS.has(params.endpoint)) throw new RpcError("METHOD_NOT_ALLOWED", "Use a stream for this terminal endpoint.");
     if (["settings/update", "settings/replace", "settings/mutate"].includes(params.endpoint)) {
       const args = requestArgs(params.payload);
-      if (args.ns === "ds-harness-remote" || args.ns === "dsh-remote") {
+      if (args.ns === "xcodex-remote" || args.ns === "dsh-remote") {
         throw new RpcError("PERMISSION_DENIED", "Remote access settings can only be changed locally on the Host.");
       }
     }
@@ -102033,7 +102159,7 @@ function filterSessionListProjections(resultOrEndpoint, maybeResult) {
 }
 function filterRemotePluginInventory(endpoint, result) {
   if (!result.ok) return result;
-  const isRemote = (value) => typeof value === "string" && /^(?:ds-harness-remote|dsh-remote)(?:\/|$)/.test(value);
+  const isRemote = (value) => typeof value === "string" && /^(?:xcodex-remote|dsh-remote)(?:\/|$)/.test(value);
   const filterEntries = (entries) => entries.filter((entry) => !isRecord22(entry) || !isRemote(entry.moduleName));
   if (endpoint === "pluginManager/listPlugins" && Array.isArray(result.value)) {
     return { ...result, value: filterEntries(result.value) };
@@ -102061,7 +102187,7 @@ function isCompactSnapshot(value) {
   return value !== null && typeof value === "object" && value.type === "snapshot";
 }
 function remoteOwnedBundleRow(row, plugin) {
-  const remoteModule = (value) => typeof value === "string" && /^(?:ds-harness-remote|dsh-remote)(?:\/|$)/.test(value);
+  const remoteModule = (value) => typeof value === "string" && /^(?:xcodex-remote|dsh-remote)(?:\/|$)/.test(value);
   if (remoteModule(plugin ? row.moduleName : row.name)) return true;
   return !plugin && (!Array.isArray(row.rows) || row.rows.some((value) => !isRecord22(value) || remoteModule(value.moduleName)) || Array.isArray(row.overrides) && row.overrides.some((value) => remoteModule(value)));
 }
@@ -102301,6 +102427,28 @@ var HostPluginRuntime = class {
       throw new ServerApiError("SERVER_NOT_CONFIGURED", "Configure serverUrl before reconnecting.", false);
     }
     this.serverConnection.reconnect();
+  }
+  async browserLogin(action, requestId) {
+    if (!this.serverApi) throw new ServerApiError("SERVER_NOT_CONFIGURED", "Configure the Server before signing in.", false);
+    if (action === "start") return this.serverApi.startBrowserLogin(this.currentIdentity());
+    if (action === "cancel") return this.serverApi.cancelBrowserLogin(requestId);
+    try {
+      const result = await this.serverApi.pollBrowserLogin(requestId ?? "");
+      if (result.status === "complete") this.serverConnection?.resume();
+      return result;
+    } catch (error62) {
+      if (error62 instanceof ServerApiError && error62.code === "DEVICE_REVOKED") {
+        await this.serverApi.cancelBrowserLogin();
+        await this.serverConnection?.stop();
+        await this.pairing?.discard();
+        this.pairing = void 0;
+        this.identity = await this.identities.reset(this.config.deviceName);
+        this.serverApi.bindIdentity(this.identity);
+        this.serverConnection = this.createServerConnection(this.identity);
+        this.initializePairing();
+      }
+      throw error62;
+    }
   }
   async hostOAuthProviders() {
     if (this.serverApi === void 0) {
@@ -102801,13 +102949,13 @@ function installRemoteDiscoveryTools(ctx, resolve10) {
   ctx.inject(["tools"], (toolContext) => {
     const tools = toolContext.get("tools");
     for (const definition of [...remoteDiscoveryTools(resolve10), ...remoteSessionTools(resolve10)]) {
-      toolContext.effect(() => tools.register(definition));
+      toolContext.effect(() => tools.register({ ...definition, name: "xcodex_" + definition.name, description: definition.description.replaceAll("remote_", "xcodex_remote_") }));
     }
   });
 }
 
 // packages/plugin/src/hmr-safe-settings.ts
-var PUMP_KEY = Symbol.for("ds-harness-remote.hmr-safe-settings-pump");
+var PUMP_KEY = Symbol.for("xcodex-remote.hmr-safe-settings-pump");
 function createPump() {
   const queue = [];
   let wake;
@@ -102851,8 +102999,8 @@ function runHmrSafe(run, hmr) {
 
 // packages/plugin/src/update-check.ts
 var DIST_TAG_URLS = [
-  "https://registry.npmjs.org/-/package/ds-harness-remote/dist-tags",
-  "https://registry.npmmirror.com/-/package/ds-harness-remote/dist-tags"
+  "https://registry.npmjs.org/-/package/xcodex-remote/dist-tags",
+  "https://registry.npmmirror.com/-/package/xcodex-remote/dist-tags"
 ];
 var FETCH_TIMEOUT_MS = 1e4;
 var RECHECK_INTERVAL_MS = 24 * 60 * 60 * 1e3;
@@ -103004,7 +103152,7 @@ var REMOTE_FILE_SAVE_AS_MAX_BYTES = 100 * 1024 * 1024;
 var REMOTE_FILE_FAST_SAVE_AS_MAX_BYTES = 1024 * 1024 * 1024;
 function createRemoteFileContentProvider(call, options = {}) {
   return {
-    id: "dsh-remote-files",
+    id: "xcodex-remote-files",
     priority: 1e4,
     supports: () => true,
     saveAsAllowed: () => ({
@@ -103102,7 +103250,7 @@ ${helpText()}`);
 }
 async function register(args, runtime) {
   if (args.length !== 1 || args[0] === void 0 || args[0].trim() === "") {
-    throw new CliUsageError("Usage: ds-harness-remote register <server-token>");
+    throw new CliUsageError("Usage: xcodex-remote register <server-token>");
   }
   const context = await hostContext(runtime);
   await context.api.authorizeHostWithCode(context.identity, args[0]);
@@ -103110,20 +103258,46 @@ async function register(args, runtime) {
   return 0;
 }
 async function login(args, runtime) {
-  if (args.length > 1) throw new CliUsageError("Usage: ds-harness-remote login [provider|list]");
+  if (args.length > 1) throw new CliUsageError("Usage: xcodex-remote login [browser|provider|list]");
   const context = await hostContext(runtime);
+  if (args[0] === void 0 || args[0] === "browser") {
+    if (!context.api.startBrowserLogin || !context.api.pollBrowserLogin) throw new CliUsageError("Browser login is unavailable in this version.");
+    const flow = await context.api.startBrowserLogin(context.identity);
+    write2(runtime.stdout, `Open this link in your browser and sign in with your xcodex account:
+${terminalLink(flow.loginUrl, runtime.stdout)}
+Waiting for login...
+`);
+    try {
+      while (runtime.now() < flow.expiresAt) {
+        try {
+          const result = await context.api.pollBrowserLogin(flow.requestId);
+          if (result.status === "complete") {
+            write2(runtime.stdout, "Host authorized. Start or restart Harness to bring this computer online.\n");
+            return 0;
+          }
+          if (result.status !== "pending") throw new CliUsageError("Login expired or cancelled. Start again.");
+        } catch (error62) {
+          if (!(error62 instanceof ServerApiError) || !error62.retryable) throw error62;
+        }
+        await runtime.wait(QR_POLL_INTERVAL_MS);
+      }
+      throw new CliUsageError("Login expired. Start again.");
+    } finally {
+      await context.api.cancelBrowserLogin?.(flow.requestId);
+    }
+  }
   const providers = (await context.api.oauthProviders()).filter((item) => item.qrStartUrl != null);
   if (args[0] === "list") {
-    write2(runtime.stdout, providers.length === 0 ? "No QR sign-in providers are available.\n" : providers.map((item) => `${item.displayName}: ds-harness-remote login ${item.id}
+    write2(runtime.stdout, providers.length === 0 ? "No QR sign-in providers are available.\n" : providers.map((item) => `${item.displayName}: xcodex-remote login ${item.id}
 `).join(""));
     return 0;
   }
   const selected = args[0] === void 0 ? providers.find((item) => item.id === "zhihu") ?? providers[0] : providers.find((item) => item.id === args[0]);
-  if (selected === void 0) throw new CliUsageError('OAuth provider unavailable. Run "ds-harness-remote login list" to see available providers.');
+  if (selected === void 0) throw new CliUsageError('OAuth provider unavailable. Run "xcodex-remote login list" to see available providers.');
   const provider = selected.id;
   const session2 = await context.api.startOAuthQrLogin(provider);
   const qr = await runtime.renderQr(session2.scanUrl);
-  write2(runtime.stdout, `Using ${selected.displayName} QR login. Run "ds-harness-remote login list" for available providers.
+  write2(runtime.stdout, `Using ${selected.displayName} QR login. Run "xcodex-remote login list" for available providers.
 `);
   write2(runtime.stdout, "Scan this QR code to authorize this Host:\n\n");
   write2(runtime.stdout, `${qr.trimEnd()}
@@ -103158,7 +103332,7 @@ Waiting for authorization...
   return 1;
 }
 async function status(args, runtime) {
-  if (args.length !== 0) throw new CliUsageError("Usage: ds-harness-remote status");
+  if (args.length !== 0) throw new CliUsageError("Usage: xcodex-remote status");
   const serverUrl = selectedServer();
   const root2 = await prepareDefaultIdentityDirectory({ env: runtime.env });
   const directory = serverStorageDirectory(root2, serverUrl, "host");
@@ -103171,12 +103345,12 @@ async function status(args, runtime) {
     lines.push("Device: not initialized", "Authorization: logged out", "Credential: unavailable");
     write2(runtime.stdout, `${lines.join("\n")}
 
-Run "ds-harness-remote login" to authorize this Host.
+Run "xcodex-remote login" to authorize this Host.
 `);
     return 0;
   }
   const identities = runtime.createIdentityStore({ directory, env: runtime.env, role: "host" });
-  const deviceName = runtime.env.DSH_REMOTE_DEVICE_NAME ?? hostname5();
+  const deviceName = runtime.env.XCODEX_REMOTE_DEVICE_NAME ?? hostname5();
   const identity3 = await identities.loadOrCreate(deviceName);
   const store = new ServerCredentialStore(directory);
   const stored = await store.load(serverUrl, identity3.deviceId);
@@ -103185,7 +103359,7 @@ Run "ds-harness-remote login" to authorize this Host.
     lines.push("Authorization: logged out", "Credential: unavailable");
     write2(runtime.stdout, `${lines.join("\n")}
 
-Run "ds-harness-remote login" to authorize this Host.
+Run "xcodex-remote login" to authorize this Host.
 `);
     return 0;
   }
@@ -103208,9 +103382,9 @@ Run "ds-harness-remote login" to authorize this Host.
   }
 }
 async function logout(args, runtime) {
-  if (args.length !== 0) throw new CliUsageError("Usage: ds-harness-remote logout");
+  if (args.length !== 0) throw new CliUsageError("Usage: xcodex-remote logout");
   const serverUrl = selectedServer();
-  const deviceName = runtime.env.DSH_REMOTE_DEVICE_NAME ?? hostname5();
+  const deviceName = runtime.env.XCODEX_REMOTE_DEVICE_NAME ?? hostname5();
   let root2;
   try {
     root2 = await prepareDefaultIdentityDirectory({ env: runtime.env });
@@ -103256,14 +103430,14 @@ async function logout(args, runtime) {
 }
 async function resetIdentity(args, runtime) {
   if (args.length > 1) {
-    throw new CliUsageError("Usage: ds-harness-remote reset-identity [host|client|all]");
+    throw new CliUsageError("Usage: xcodex-remote reset-identity [host|client|all]");
   }
   const roleArg = args[0];
   if (roleArg !== void 0 && roleArg !== "host" && roleArg !== "client" && roleArg !== "all") {
-    throw new CliUsageError("Usage: ds-harness-remote reset-identity [host|client|all]");
+    throw new CliUsageError("Usage: xcodex-remote reset-identity [host|client|all]");
   }
   const serverUrl = selectedServer();
-  const deviceName = runtime.env.DSH_REMOTE_DEVICE_NAME ?? hostname5();
+  const deviceName = runtime.env.XCODEX_REMOTE_DEVICE_NAME ?? hostname5();
   const roles = roleArg === "client" ? ["client"] : roleArg === "host" ? ["host"] : ["host", "client"];
   await resetDefaultIdentityRoles(roles, serverUrl, deviceName, {
     env: runtime.env,
@@ -103280,7 +103454,7 @@ async function hostContext(runtime) {
   const serverUrl = selectedServer();
   const root2 = await prepareDefaultIdentityDirectory({ env: runtime.env });
   const directory = serverStorageDirectory(root2, serverUrl, "host");
-  const deviceName = runtime.env.DSH_REMOTE_DEVICE_NAME ?? hostname5();
+  const deviceName = runtime.env.XCODEX_REMOTE_DEVICE_NAME ?? hostname5();
   const identities = runtime.createIdentityStore({ directory, env: runtime.env, role: "host" });
   const identity3 = await identities.loadOrCreate(deviceName);
   const api = runtime.createHostApi(serverUrl, new ServerCredentialStore(directory));
@@ -103337,13 +103511,13 @@ function cliErrorMessage(error62) {
 function helpText() {
   return [
     "Usage:",
-    "  ds-harness-remote login [provider|list]",
-    "  ds-harness-remote register <server-token>",
-    "  ds-harness-remote status",
-    "  ds-harness-remote logout",
-    "  ds-harness-remote reset-identity [host|client|all]",
+    "  xcodex-remote login [browser|provider|list]",
+    "  xcodex-remote register <server-token>",
+    "  xcodex-remote status",
+    "  xcodex-remote logout",
+    "  xcodex-remote reset-identity [host|client|all]",
     "",
-    "login uses an available QR provider (preferring Zhihu). Use login list to see available providers.",
+    "login opens xcodex browser sign-in by default. Use login list for legacy providers.",
     `The Server is ${DEFAULT_REMOTE_SERVER_URL}.`,
     "Host configuration is not exposed by this CLI yet. Restart the Harness instance after login or logout.",
     ""
@@ -103411,10 +103585,10 @@ var AcpGateway = class {
 };
 
 // packages/plugin/src/index.ts
-var name = "ds-harness-remote";
-var legacyLoaderModuleNames = /* @__PURE__ */ new Set(["@dsh-remote/plugin"]);
-var pluginSettingsNamespace = "ds-harness-remote";
-var DEFAULT_ENTRY_ID = "ds-harness-remote";
+var name = "xcodex-remote";
+var legacyLoaderModuleNames = /* @__PURE__ */ new Set();
+var pluginSettingsNamespace = "xcodex-remote";
+var DEFAULT_ENTRY_ID = "xcodex-remote";
 var INCLUDE_ENTRY_PREFIX = "include:";
 function apply(ctx, entry = void 0) {
   const readConfig = () => readEntryConfig(entry);
@@ -103453,7 +103627,7 @@ function apply(ctx, entry = void 0) {
           control.setStartupFailure(storageError, { storageAvailable: false });
         }
         return control.register(connection, webServer);
-      }, "ds-harness-remote pending control");
+      }, "xcodex-remote pending control");
     };
     const startActiveRuntime = async (activeContext) => {
       await disposePendingControl?.();
@@ -103506,7 +103680,7 @@ async function activate(ctx, readConfig, entryId, requireRemoteEvents = false) {
       if (initialStorageError !== void 0) {
         controlRuntime2.setStartupFailure(initialStorageError, { storageAvailable: false });
       }
-      ctx.effect(() => controlRuntime2.register(connection, webServer), "ds-harness-remote disabled control");
+      ctx.effect(() => controlRuntime2.register(connection, webServer), "xcodex-remote disabled control");
     }
     return;
   }
@@ -103543,7 +103717,7 @@ async function activate(ctx, readConfig, entryId, requireRemoteEvents = false) {
     const peer = fallbackPeer;
     fallbackPeer = void 0;
     return peer?.dispose?.();
-  }, "ds-harness-remote fallback owner peer");
+  }, "xcodex-remote fallback owner peer");
   const hostGateway = new TypertGatewaySwitch(nativeTypertGateway, () => fallbackPeer);
   const localTypertGateway = hostGateway.local();
   localTypertGateway.createPeer = () => {
@@ -103609,13 +103783,13 @@ async function activate(ctx, readConfig, entryId, requireRemoteEvents = false) {
   let replacement;
   const syncOptionalService = (serviceName, value, owned) => {
     try {
-      if (serviceName === "dshRemote") {
-        if (owned) ctx.dshRemote = value;
-        else ctx.provide("dshRemote", value);
+      if (serviceName === "xcodexRemote") {
+        if (owned) ctx.xcodexRemote = value;
+        else ctx.provide("xcodexRemote", value);
       } else if (owned) {
-        ctx.dshRemoteClient = value;
+        ctx.xcodexRemoteClient = value;
       } else {
-        ctx.provide("dshRemoteClient", value);
+        ctx.provide("xcodexRemoteClient", value);
       }
       return true;
     } catch {
@@ -103652,11 +103826,10 @@ async function activate(ctx, readConfig, entryId, requireRemoteEvents = false) {
       clientRuntime = fresh.clientRuntime;
       clientActive = clientRuntime !== void 0;
       controlRuntime?.clearStartupFailure();
-      hostServiceProvided = syncOptionalService("dshRemote", runtime, hostServiceProvided);
+      hostServiceProvided = syncOptionalService("xcodexRemote", runtime, hostServiceProvided);
       if (clientRuntime !== void 0) {
-        clientServiceProvided = syncOptionalService("dshRemoteClient", clientRuntime, clientServiceProvided);
+        clientServiceProvided = syncOptionalService("xcodexRemoteClient", clientRuntime, clientServiceProvided);
       }
-      if (connection !== void 0) updateChecker.start();
       return { client: clientRuntime, host: runtime };
     };
     replacement = operation();
@@ -103676,10 +103849,10 @@ async function activate(ctx, readConfig, entryId, requireRemoteEvents = false) {
     controlRuntime?.setStartupFailure(initialStorageError, { storageAvailable: false });
   }
   if (runtime !== void 0) {
-    hostServiceProvided = syncOptionalService("dshRemote", runtime, hostServiceProvided);
+    hostServiceProvided = syncOptionalService("xcodexRemote", runtime, hostServiceProvided);
   }
   if (clientRuntime !== void 0) {
-    clientServiceProvided = syncOptionalService("dshRemoteClient", clientRuntime, clientServiceProvided);
+    clientServiceProvided = syncOptionalService("xcodexRemoteClient", clientRuntime, clientServiceProvided);
   }
   await disableLegacyLoaderEntries(ctx, logger2);
   await ctx.effect(async () => {
@@ -103702,7 +103875,6 @@ async function activate(ctx, readConfig, entryId, requireRemoteEvents = false) {
           }
         })();
         await startup;
-        if (connection !== void 0) updateChecker.start();
       } catch (error62) {
         clientActive = false;
         logger2.error("Remote plugin startup failed", safeStartupError(error62));
@@ -103719,7 +103891,7 @@ async function activate(ctx, readConfig, entryId, requireRemoteEvents = false) {
       await clientRuntime?.close();
       await runtime?.close();
     };
-  }, "ds-harness-remote lifecycle");
+  }, "xcodex-remote lifecycle");
   if (config2.remoteTools?.enabled) installRemoteDiscoveryTools(ctx, () => closed || !clientActive ? void 0 : clientRuntime);
 }
 function readEntryConfig(entry) {

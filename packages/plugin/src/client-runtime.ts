@@ -378,6 +378,26 @@ export class ClientModeRuntime {
     throw new ClientModeError(status.error, message)
   }
 
+  async browserLogin(action: 'start' | 'poll' | 'cancel', requestId?: string) {
+    if (action === 'start') return this.server.startBrowserLogin(this.requireIdentity())
+    if (action === 'cancel') return this.server.cancelBrowserLogin(requestId)
+    try {
+      const result = await this.server.pollBrowserLogin(requestId ?? '')
+      if (result.status === 'complete') {
+        this.clientAuthRequired = false
+        await this.authorizeHostByDefault()
+      }
+      return result
+    } catch (error) {
+      if (error instanceof ServerApiError && error.code === 'DEVICE_REVOKED') {
+        await this.server.cancelBrowserLogin()
+        this.identity = await this.identities.reset(this.config.deviceName)
+        this.server.bindIdentity(this.identity)
+      }
+      throw error
+    }
+  }
+
   async authorizeClientWithAccount(email: string, password: string): Promise<unknown> {
     let authorization
     try {

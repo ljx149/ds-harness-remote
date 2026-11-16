@@ -1,23 +1,15 @@
-# DS Harness Remote
+# Xcodex Remote
 
-[公式サイト](https://dsh.r2049.cn/) · [Web クライアント](https://dsh.r2049.cn/app) · [iOS ベータ](https://github.com/liguobao/ds-harness-remote/issues/20) · [Android ダウンロード](https://github.com/liguobao/ds-harness-remote/releases/latest)
+使用 Xcodex 账号在手机和电脑之间建立加密远程连接。默认服务为 https://agent.xcodex.vip 。
 
-**P2P ネットワークで直接接続**し、別のパソコン、ブラウザー、スマートフォンから、作業用パソコン上の DeepSeek Harness を引き続き使えます。ワークスペース、セッション、ツール、プロジェクト設定は元のパソコンに保持されます。
+安装下载的插件包：
 
-## 主な機能
+```sh
+dsh plugin --profile web add -w /path/to/xcodex-remote-0.6.4-xcodex.2.tgz
+```
 
-- Harness のワークスペースとセッションを開き、メッセージ送信、モデル切り替え、タスク中断、承認操作ができます。
-- 設定済みの CodeX、Claude Code、Pi、OpenCode などのワークスペースに接続できます。
-- ワークスペースのファイル閲覧、プレビュー、有効化済みのリモートターミナルを利用できます。
-- **P2P 直接接続を優先**：端末間で直接データを転送し、接続後のセッションデータは中継サーバーを経由しません。ホストのパブリック IP や公開ポートは不要です。
-- **通信は常にエンドツーエンド暗号化**：直接接続できない場合は TURN または Relay に自動で切り替えます。中継サーバーはセッションの内容を復号できません。
+打开插件设置，选择「使用 Xcodex 账号登录」，填写邮箱、密码，或使用 Google 登录。Google 会打开系统浏览器，完成后自动授权本机。手机使用同一账号即可发现上线的电脑。
 
-## 使い始めるには
+此插件使用独立包名、Component ID、设置、控制接口和 `~/.dsh/xcodex-remote/` 数据目录（设置 DSH_HOME 时位于该目录下）。不迁移或覆盖官方 ds-harness-remote 插件的数据；首次使用新版需要重新登录。若以前安装过同名的 Xcodex 测试包，可先在插件管理器中停用旧测试包，再安装新版。
 
-1. 作業用パソコンにプラグインをインストールして有効化し、サイドバーの **Remote** からログインします。
-2. 別のパソコンの Remote、[ブラウザー](https://dsh.r2049.cn/app)、[iOS アプリ（ベータ）](https://github.com/liguobao/ds-harness-remote/issues/20)、[Android アプリ](https://github.com/liguobao/ds-harness-remote/releases/latest)、または [DSH Go](https://github.com/ccch1mneyyy/dsh-go) で同じアカウントにログインします。
-3. オンラインのホストとワークスペースを選択します。作業用パソコンは起動し、インターネットに接続したままにしてください。
-
-[DSH Go](https://github.com/ccch1mneyyy/dsh-go) はサードパーティー製の DeepSeek Harness Android クライアントです。スマートフォン上で DSH を実行するほか、本プラグイン経由でパソコン上の DSH にリモート接続できます。
-
-[詳しい使い方](https://github.com/liguobao/ds-harness-remote/blob/main/README.ja.md) · [セルフホスティング](https://github.com/liguobao/ds-harness-remote/blob/main/apps/server/README.md) · [問題を報告](https://github.com/liguobao/ds-harness-remote/issues)
+源自 [liguobao/ds-harness-remote](https://github.com/liguobao/ds-harness-remote)，保留 MIT 许可证与上游贡献者归属。此分支不从上游 npm 自动更新。

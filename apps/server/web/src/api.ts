@@ -14,13 +14,26 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
       method: body === undefined ? 'GET' : 'POST',
       credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(25000),
     })
   } catch { throw new RequestError('连接失败，请重试。', 0) }
   const data = await response.json()
   if (!response.ok) {
-    const messages: Record<string, string> = { AUTH_INVALID: '账号或密码错误，请重试。', ACCOUNT_AUTH_REQUIRED: '登录已过期，请重新登录。', RATE_LIMITED: '请求频繁，请稍后重试。' }
-    throw new RequestError(messages[data.error?.code] ?? '请求失败，请稍后重试。', response.status)
+    throw new RequestError(authMessage(data.error?.code), response.status)
   }
   return data as T
+}
+
+export function authMessage(code: string): string {
+  const messages: Record<string, string> = {
+    AUTH_INVALID: '登录信息无效，请检查密码或验证码后重试。',
+    ACCOUNT_AUTH_REQUIRED: '登录已过期，请重新登录。', REAUTH_REQUIRED: '登录已过期，请重新登录。',
+    RATE_LIMITED: '请求频繁，请稍后重试。', ACCOUNT_DISABLED: '账号已停用，请联系 xcodex 支持。',
+    EMAIL_NOT_VERIFIED: '请先完成邮箱验证。', AUTH_ACCESS_DENIED: '当前账号暂时无法使用服务。',
+    ACCOUNT_IDENTITY_CONFLICT: '账号身份校验失败，请联系支持。',
+    AUTH_SERVICE_UNAVAILABLE: '登录服务暂时不可用，请稍后重试。',
+    AUTH_FLOW_EXPIRED: '登录请求已过期或不是从当前浏览器发起，请重新点击登录。',
+    AUTH_CANCELLED: '登录未完成，请重新尝试。', INVALID_MESSAGE: '请检查填写的信息。',
+  }
+  return messages[code] ?? '请求失败，请稍后重试。'
 }

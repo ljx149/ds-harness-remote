@@ -1,5 +1,7 @@
 # Host 插件接入指南
 
+> 本分支可选 xcodex 账号模式的新增 `userId`、HTTP 错误与凭证生命周期见 [账号直连契约](xcodex-account-auth.md)；现有设备与 WS 线协议保持兼容。该服务端改造已部署到 agent.xcodex.vip 供联调。
+
 状态：最新 Server 账号授权契约；Plugin 已实现账号密码、主机匹配码、device token 隔离与账号派生 membership。
 
 本文面向 DeepSeek Harness Host 插件开发者，描述插件如何登录账号、注册本机、保存凭证并连接 Remote Server。
@@ -514,3 +516,7 @@ server changed       → NO_SERVER（切换到该 Server 独立的本地状态�
 ## Device pairing v1
 
 The full Server and Remote plugin implement phone confirmation followed by one local Host code submission. New Hosts accept incoming connections only. See [the protocol](device-pairing-v1.md) and [DSH-Go integration](dsh-go-pairing-integration.md). This capability is not available in the bundled minimal `apps/server`; unsupported Servers fail closed.
+
+## xcodex 设备浏览器登录扩展（2026-11-13）
+
+完整接口、字段、PKCE/领取密钥边界与验收进度见 [设备浏览器登录契约](device-browser-login-plan.md)。网页登录自动交接到最初绑定的设备；手机和电脑使用相同用户身份，无需扫码或额外批准。设备访问凭证与既有刷新、归属、加密连接协议不变。Google/验证码/密码入口均支持该交接；普通网页登录不会自动创建任意设备。

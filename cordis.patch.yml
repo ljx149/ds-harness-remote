@@ -5,14 +5,14 @@
 # This release ships the browser/Desktop Host surface only. dsh-TUI integration
 # is deferred to a later release, so no terminal-specific entry is inserted.
 - insert:
-    - id: ds-harness-remote
-      name: ds-harness-remote
+    - id: xcodex-remote
+      name: xcodex-remote
       inject:
         - webServer
       config:
         enabled: true
         role: host
-        serverUrl: https://dsh.r2049.cn
+        serverUrl: https://agent.xcodex.vip
         codex:
           enabled: true
           binary: codex

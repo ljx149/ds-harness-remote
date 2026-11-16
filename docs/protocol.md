@@ -1,5 +1,7 @@
 # DSH Remote Protocol v1
 
+> 本分支可选 xcodex 账号模式的新增 `userId`、HTTP 错误与凭证生命周期见 [账号直连契约](xcodex-account-auth.md)；现有设备与 WS 线协议保持兼容。该服务端改造已部署到 agent.xcodex.vip 供联调。
+
 2026-10-25 实现边界：Host 插件、随包 Remote 客户端和 Android 已移除 Harness `0.1.1-rc.2` ApiProxy 兼容。请使用提供官方 Typert Remote carrier 的 Host；仅提供 ApiProxy 或不支持能力发现的旧 Host 会被拒绝，不再降级。CodeX/ACP 保留独立数据面，Desktop 内存投影统一使用 Typert。本轮不改独立 VS Code Client 或独立 Remote Web 仓库。
 `harness.api.*` 方法/事件/capability 的以下定义仅保留为历史线协议与旧 Client 类型契约；当前 Host 不注册这些方法，调用返回 `METHOD_NOT_FOUND`。
 
@@ -2158,3 +2160,7 @@ legacy control lifetimes remain unchanged unless all three parties negotiate it.
 ## Device pairing v1
 
 The full Server and Remote plugin implement phone confirmation followed by one local Host code submission. New Hosts accept incoming connections only. See [the protocol](device-pairing-v1.md) and [DSH-Go integration](dsh-go-pairing-integration.md). This capability is not available in the bundled minimal `apps/server`; unsupported Servers fail closed.
+
+## xcodex 设备浏览器登录扩展（2026-11-13）
+
+完整接口、字段、PKCE/领取密钥边界与验收进度见 [设备浏览器登录契约](device-browser-login-plan.md)。网页登录自动交接到最初绑定的设备；手机和电脑使用相同用户身份，无需扫码或额外批准。设备访问凭证与既有刷新、归属、加密连接协议不变。Google/验证码/密码入口均支持该交接；普通网页登录不会自动创建任意设备。

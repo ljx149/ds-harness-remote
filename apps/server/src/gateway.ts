@@ -161,6 +161,7 @@ export class Gateway {
     this.heartbeat = setInterval(() => {
       if (this.closed) return
       for (const peer of this.peers.values()) {
+        try { this.store.checkDevice(peer.id) } catch (e) { this.disconnect(peer.id, e instanceof ApiError && e.status >= 500 ? 'CONNECTION_FAILED' : 'AUTH_INVALID'); continue }
         if (Date.now() - peer.lastPong > this.heartbeatDisconnectMs) {
           this.logger.warn('ws_heartbeat_timeout', {
             peerId: peer.id,
@@ -416,6 +417,7 @@ export class Gateway {
           if (frame.type !== 'hello') throw new ApiError('AUTH_REQUIRED')
           const p = frame.payload as HelloPayload
           const device = this.store.authenticate(p.accessToken).descriptor
+          this.store.checkDevice(device.deviceId)
           if (device.deviceId !== p.deviceId || device.role !== p.role) throw new ApiError('AUTH_INVALID')
           if (!p.protocols.includes(1)) throw new ApiError('UNSUPPORTED_VERSION')
           // Re-assert the state: if the deadline fired while credentials were
@@ -451,7 +453,7 @@ export class Gateway {
         }
         if (frame.type === 'hello') throw new ApiError('INVALID_MESSAGE')
         if (!peer || this.peers.get(peer.id) !== peer) throw new ApiError('AUTH_INVALID')
-        this.store.get(peer.id)
+        this.store.checkDevice(peer.id)
         if (this.isDroppedLinkFrame(peer, frame)) {
           if (++droppedFrames > maxDroppedFrames || (droppedBytes += frameBytes) > maxDroppedBytes) {
             throw new ApiError('RATE_LIMITED')
@@ -463,7 +465,9 @@ export class Gateway {
         }
         this.handle(peer, frame)
       } catch (error) {
-        const code = error instanceof ApiError ? error.code : 'INVALID_MESSAGE'
+        const rawCode = error instanceof ApiError ? error.code : 'INVALID_MESSAGE'
+        // Keep existing wire errors compatible; detailed identity errors are returned by HTTP refresh/login.
+        const code = rawCode === 'AUTH_SERVICE_UNAVAILABLE' ? 'CONNECTION_FAILED' : ['REAUTH_REQUIRED', 'ACCOUNT_DISABLED', 'EMAIL_NOT_VERIFIED', 'AUTH_ACCESS_DENIED', 'ACCOUNT_IDENTITY_CONFLICT'].includes(rawCode) ? 'AUTH_INVALID' : rawCode
         this.logger.warn('ws_message_error', {
           code,
           peerId: peer?.id,
@@ -501,6 +505,7 @@ export class Gateway {
     if (frame.type === 'connect.request') {
       const request = frame.payload as ConnectRequestPayload
       if (peer.role !== 'client') throw new ApiError('MEMBERSHIP_REQUIRED')
+      this.store.owned(request.hostDeviceId, this.store.get(peer.id).ownerId)
       const candidateHost = this.peers.get(request.hostDeviceId)
       if (candidateHost && Date.now() - candidateHost.lastPong > this.heartbeatDisconnectMs) {
         this.logger.warn('ws_heartbeat_timeout', {
@@ -514,7 +519,7 @@ export class Gateway {
       }
       const host = this.peers.get(request.hostDeviceId)
       if (!host || host.role !== 'host') { this.send(peer, createControlFrame('error', { code: 'HOST_OFFLINE', message: 'Host is offline.', retryable: true })); return }
-      this.store.get(host.id)
+      this.store.sameOwner(peer.id, host.id)
       if (!request.preferredTransports.includes('relay') || !peer.capabilities.includes('transport.relay') || !host.capabilities.includes('transport.relay')) throw new ApiError('CAPABILITY_NOT_SUPPORTED')
       // The link coordinates only transports both peers actually advertised;
       // the Host receives the same intersection so it never sees a transport
@@ -549,7 +554,7 @@ export class Gateway {
     if (!link || (peer.id !== link.host && peer.id !== link.client)) throw new ApiError('CONNECTION_NOT_FOUND')
     const otherId = peer.id === link.host ? link.client : link.host
     const other = this.peers.get(otherId)
-    this.store.get(otherId)
+    this.store.sameOwner(peer.id, otherId)
     if (!other) throw new ApiError('CONNECTION_FAILED')
     if (frame.type === 'connect.accepted' || frame.type === 'connect.rejected') {
       if (peer.id !== link.host || link.stage !== 'pending') throw new ApiError('INVALID_MESSAGE')

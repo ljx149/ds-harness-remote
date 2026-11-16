@@ -1,23 +1,15 @@
-# DS Harness Remote
+# Xcodex Remote
 
-[Website](https://dsh.r2049.cn/) · [Web client](https://dsh.r2049.cn/app) · [iOS beta](https://github.com/liguobao/ds-harness-remote/issues/20) · [Android download](https://github.com/liguobao/ds-harness-remote/releases/latest)
+使用 Xcodex 账号在手机和电脑之间建立加密远程连接。默认服务为 https://agent.xcodex.vip 。
 
-Use **direct P2P connections** to continue using DeepSeek Harness on your work computer from another computer, browser, or phone. Your workspaces, sessions, tools, and project settings stay on the original computer.
+安装下载的插件包：
 
-## Features
+```sh
+dsh plugin --profile web add -w /path/to/xcodex-remote-0.6.4-xcodex.2.tgz
+```
 
-- Open Harness workspaces and sessions remotely, send messages, switch models, interrupt tasks, and handle approvals.
-- Connect to configured CodeX, Claude Code, Pi, OpenCode, and other workspaces.
-- Browse workspace files, preview content, and use the remote terminal when enabled.
-- **Direct P2P connections first**: devices exchange data directly, with no relay server carrying session data once connected; no public IP or inbound port required on the host.
-- **End-to-end encryption throughout**: automatically fall back to TURN or Relay when a direct connection is unavailable. Relay servers cannot decrypt session content.
+打开插件设置，选择「使用 Xcodex 账号登录」，填写邮箱、密码，或使用 Google 登录。Google 会打开系统浏览器，完成后自动授权本机。手机使用同一账号即可发现上线的电脑。
 
-## Get started
+此插件使用独立包名、Component ID、设置、控制接口和 `~/.dsh/xcodex-remote/` 数据目录（设置 DSH_HOME 时位于该目录下）。不迁移或覆盖官方 ds-harness-remote 插件的数据；首次使用新版需要重新登录。若以前安装过同名的 Xcodex 测试包，可先在插件管理器中停用旧测试包，再安装新版。
 
-1. Install and enable the plugin on your work computer, then open **Remote** in the sidebar and sign in.
-2. Sign in to the same account through Remote on another computer, the [browser client](https://dsh.r2049.cn/app), the [iOS app (beta)](https://github.com/liguobao/ds-harness-remote/issues/20), the [Android app](https://github.com/liguobao/ds-harness-remote/releases/latest), or [DSH Go](https://github.com/ccch1mneyyy/dsh-go).
-3. Select an online host and workspace to continue. Keep your work computer running and connected to the internet.
-
-[DSH Go](https://github.com/ccch1mneyyy/dsh-go) is a third-party DeepSeek Harness Android client. It can run DSH locally on your phone or connect to DSH on your computer through this plugin.
-
-[Full guide](https://github.com/liguobao/ds-harness-remote/blob/main/README.md) · [Self-hosting](https://github.com/liguobao/ds-harness-remote/blob/main/apps/server/README.md) · [Report an issue](https://github.com/liguobao/ds-harness-remote/issues)
+源自 [liguobao/ds-harness-remote](https://github.com/liguobao/ds-harness-remote)，保留 MIT 许可证与上游贡献者归属。此分支不从上游 npm 自动更新。

@@ -237,7 +237,7 @@ describe('HostServerApi', () => {
     let registerCalls = 0
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const url = String(input)
-      if (url.endsWith('/auth/login')) return json({
+      if (url.endsWith('/auth/account/password')) return json({
         token: 'web-account-token-value',
         expiresAt: Date.now() + 600_000,
         account: 'host@example.com',
@@ -280,7 +280,7 @@ describe('HostServerApi', () => {
             const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
               const url = String(input)
               calls.push({ url, init })
-              if (url.endsWith('/auth/login'))
+              if (url.endsWith('/auth/account/password'))
                 return json({
                   token: 'web-account-token-value',
                   expiresAt: Date.now() + 600_000,
@@ -308,7 +308,7 @@ describe('HostServerApi', () => {
             await api.authorizeWithAccount(identity, 'host@example.com', 'correct horse battery staple')
             await api.deviceFor('client-1')
 
-            expect(calls[0]?.url).toBe('https://dsh.r2049.cn/api/v1/auth/login')
+            expect(calls[0]?.url).toBe('https://dsh.r2049.cn/api/v1/auth/account/password')
             expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({
               email: 'host@example.com',
               password: 'correct horse battery staple',
@@ -775,7 +775,7 @@ describe('HostServerApi', () => {
     directories.push(directory)
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const url = String(input)
-      if (url.endsWith('/auth/login')) return json({
+      if (url.endsWith('/auth/account/password')) return json({
         token: 'web-account-token-value',
         expiresAt: Date.now() + 600_000,
         account: 'client@example.com',

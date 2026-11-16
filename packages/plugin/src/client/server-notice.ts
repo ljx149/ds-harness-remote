@@ -45,8 +45,8 @@ export function createServerNotice(React: ClientReact) {
       : restored ? t('serverRestored') : undefined
     return text === undefined ? null : React.createElement('span', {
       className: props.compact && !offline && !lost
-        ? 'dshRemoteEncrypted'
-        : `dshRemoteServerNotice${lost ? ' isError' : offline ? ' isWarning' : ' isRestored'}`,
+        ? 'xcodexRemoteEncrypted'
+        : `xcodexRemoteServerNotice${lost ? ' isError' : offline ? ' isWarning' : ' isRestored'}`,
       role: 'status', 'aria-live': 'polite',
     }, text, lost && props.onReconnect ? React.createElement('button', {
       type: 'button', onClick: props.onReconnect,

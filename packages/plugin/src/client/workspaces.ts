@@ -1,3 +1,4 @@
+import { createBrowserLogin } from './browser-login.js'
 import { createHostPairingPanel } from './pairing.js'
 import { createServerNotice } from './server-notice.js'
 import { renderBodyPortal } from './portal.js'
@@ -30,6 +31,7 @@ import type {
 } from './types.js'
 
 export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalRenderer) {
+  const BrowserLogin = createBrowserLogin(React)
   const ServerNotice = createServerNotice(React)
   const HostPairingPanel = createHostPairingPanel(React)
   const RemoteProgressView = createRemoteProgressView(React)
@@ -146,28 +148,28 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
     const [showAllOpencodeWorkspaces, setShowAllOpencodeWorkspaces] = React.useState(false)
     const [showAllClaudeWorkspaces, setShowAllClaudeWorkspaces] = React.useState(false)
     const [showAllHermesWorkspaces, setShowAllHermesWorkspaces] = React.useState(false)
-    const workspaceListId = 'dsh-remote-workspace-list'
-    const codexWorkspaceHeadingId = 'dsh-remote-codex-workspace-heading'
-    const codexWorkspaceListId = 'dsh-remote-codex-workspace-list'
-    const cursorWorkspaceHeadingId = 'dsh-remote-cursor-workspace-heading'
-    const cursorWorkspaceListId = 'dsh-remote-cursor-workspace-list'
-    const antigravityWorkspaceHeadingId = 'dsh-remote-antigravity-workspace-heading'
-    const piWorkspaceHeadingId = 'dsh-remote-pi-workspace-heading'
-    const opencodeWorkspaceHeadingId = 'dsh-remote-opencode-workspace-heading'
-    const claudeWorkspaceHeadingId = 'dsh-remote-claude-workspace-heading'
-    const hermesWorkspaceHeadingId = 'dsh-remote-hermes-workspace-heading'
-    const antigravityWorkspaceListId = 'dsh-remote-antigravity-workspace-list'
-    const piWorkspaceListId = 'dsh-remote-pi-workspace-list'
-    const opencodeWorkspaceListId = 'dsh-remote-opencode-workspace-list'
-    const claudeWorkspaceListId = 'dsh-remote-claude-workspace-list'
-    const hermesWorkspaceListId = 'dsh-remote-hermes-workspace-list'
+    const workspaceListId = 'xcodex-remote-workspace-list'
+    const codexWorkspaceHeadingId = 'xcodex-remote-codex-workspace-heading'
+    const codexWorkspaceListId = 'xcodex-remote-codex-workspace-list'
+    const cursorWorkspaceHeadingId = 'xcodex-remote-cursor-workspace-heading'
+    const cursorWorkspaceListId = 'xcodex-remote-cursor-workspace-list'
+    const antigravityWorkspaceHeadingId = 'xcodex-remote-antigravity-workspace-heading'
+    const piWorkspaceHeadingId = 'xcodex-remote-pi-workspace-heading'
+    const opencodeWorkspaceHeadingId = 'xcodex-remote-opencode-workspace-heading'
+    const claudeWorkspaceHeadingId = 'xcodex-remote-claude-workspace-heading'
+    const hermesWorkspaceHeadingId = 'xcodex-remote-hermes-workspace-heading'
+    const antigravityWorkspaceListId = 'xcodex-remote-antigravity-workspace-list'
+    const piWorkspaceListId = 'xcodex-remote-pi-workspace-list'
+    const opencodeWorkspaceListId = 'xcodex-remote-opencode-workspace-list'
+    const claudeWorkspaceListId = 'xcodex-remote-claude-workspace-list'
+    const hermesWorkspaceListId = 'xcodex-remote-hermes-workspace-list'
     const [busy, setBusy] = React.useState(false)
     // Remain undecided until local credentials or an explicit auth rejection
     // establish that login is required. Network failures are not sign-outs.
     const [needsAuthorization, setNeedsAuthorization] = React.useState<boolean | undefined>(undefined)
     const [email, setEmail] = React.useState('')
     const [password, setPassword] = React.useState('')
-    const [loginServerUrl, setLoginServerUrl] = React.useState('https://dsh.r2049.cn')
+    const [loginServerUrl, setLoginServerUrl] = React.useState('https://agent.xcodex.vip')
     const [editingServer, setEditingServer] = React.useState(false)
     const [savingServer, setSavingServer] = React.useState(false)
     const serverDirty = loginServerUrl.trim() !== (status?.serverUrl ?? '')
@@ -240,7 +242,7 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
       const closeOnPointer = (event: MouseEvent): void => {
         const target = event.target
         if (!(target instanceof Element)) return
-        if (target.closest('.dshRemoteConnectedMenu') !== null) return
+        if (target.closest('.xcodexRemoteConnectedMenu') !== null) return
         setDevicesOpen(false)
       }
       window.addEventListener('mousedown', closeOnPointer)
@@ -265,9 +267,9 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
 
     React.useEffect(() => {
       const remoteActive = status?.mode === 'remote'
-      document.documentElement.classList.toggle('dshRemoteTargetActive', remoteActive)
+      document.documentElement.classList.toggle('xcodexRemoteTargetActive', remoteActive)
       return () => {
-        if (remoteActive) document.documentElement.classList.remove('dshRemoteTargetActive')
+        if (remoteActive) document.documentElement.classList.remove('xcodexRemoteTargetActive')
       }
     }, [status?.mode])
 
@@ -293,39 +295,7 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
       }
     }
 
-    React.useEffect(() => {
-      if (!open || !needsAuthorization || savingServer || serverDirty) return
-      let active = true
-      const run = ++providerRequestRun.current
-      qrFlowRun.current += 1
-      setBusy(false)
-      setQrSession(undefined)
-      setQrImage(undefined)
-      setQrExpired(false)
-      setOAuthProviders([])
-      setProvidersLoading(true)
-      setProvidersFailed(false)
-      void props.control<OAuthProviderInfo[]>('client.account.providers').then(items => {
-        if (!active || run !== providerRequestRun.current) return
-        const pairingSupported = items.some(item => item.devicePairing === true)
-        setPairingServerUrl(pairingSupported ? status?.serverUrl : undefined)
-        const available = items.filter(item => item.qrStartUrl != null)
-        setOAuthProviders(available)
-        setLoginMethod(current => {
-          if (loginMethodManuallySelected.current && (current === 'password' || current === 'device_pairing' && pairingSupported
-            || available.some(item => `oauth:${item.id}` === current))) return current
-          const preferred = available.find(item => item.id === props.preferredQrProvider) ?? available[0]
-          return preferred === undefined ? 'password' : `oauth:${preferred.id}`
-        })
-      }).catch(() => {
-        if (!active || run !== providerRequestRun.current) return
-        setProvidersFailed(true)
-        setLoginMethod(current => loginMethodManuallySelected.current && current === 'device_pairing' ? current : 'password')
-      }).finally(() => {
-        if (active && run === providerRequestRun.current) setProvidersLoading(false)
-      })
-      return () => { active = false }
-    }, [open, needsAuthorization, status?.serverUrl, props.preferredQrProvider, providerReload, savingServer, serverDirty])
+
 
     React.useEffect(() => {
       if (!open || !needsAuthorization || savingServer || serverDirty || providersLoading || loginMethod === 'password'
@@ -411,8 +381,8 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
     )
 
     const qrLoginTab = (provider: OAuthProviderInfo): unknown => React.createElement('button', {
-      key: provider.id, type: 'button', role: 'tab', id: `dsh-remote-oauth:${provider.id}-tab`,
-      'aria-selected': loginMethod === `oauth:${provider.id}`, 'aria-controls': `dsh-remote-oauth:${provider.id}-panel`,
+      key: provider.id, type: 'button', role: 'tab', id: `xcodex-remote-oauth:${provider.id}-tab`,
+      'aria-selected': loginMethod === `oauth:${provider.id}`, 'aria-controls': `xcodex-remote-oauth:${provider.id}-panel`,
       className: loginMethod === `oauth:${provider.id}` ? 'isActive' : '', disabled: busy,
       onClick: () => selectLoginMethod(`oauth:${provider.id}`),
     }, t('providerLogin', { provider: provider.displayName }))
@@ -1117,11 +1087,11 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
     const connectedCountLabel = t('connectedClientCount', { count: connectedCount })
     const connectedMenu = !needsAuthorization && status?.hostAuthorizationAvailable === true
       ? React.createElement('div', {
-        className: `dshRemoteConnectedMenu${devicesOpen ? ' isOpen' : ''}`,
+        className: `xcodexRemoteConnectedMenu${devicesOpen ? ' isOpen' : ''}`,
       },
         React.createElement('a', {
           href: connectedCount > 0 ? '#connected-devices' : undefined,
-          className: `dshRemoteConnectedCount${connectedCount > 0 ? ' isOnline isInteractive' : ''}`,
+          className: `xcodexRemoteConnectedCount${connectedCount > 0 ? ' isOnline isInteractive' : ''}`,
           'aria-expanded': connectedCount > 0 ? devicesOpen : undefined,
           'aria-haspopup': connectedCount > 0 ? 'dialog' : undefined,
           title: connectedCountLabel,
@@ -1134,13 +1104,13 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
         }, connectedCountLabel),
         devicesOpen && connectedCount > 0
           ? React.createElement('div', {
-            className: 'dshRemoteConnectedPanel',
+            className: 'xcodexRemoteConnectedPanel',
             id: 'connected-devices',
             role: 'dialog',
             'aria-label': t('currentConnectedDevices'),
           },
-            React.createElement('div', { className: 'dshRemoteConnectedPanelHeader' },
-              React.createElement('strong', { className: 'dshRemoteConnectedPanelTitle' }, t('currentConnectedDevices')),
+            React.createElement('div', { className: 'xcodexRemoteConnectedPanelHeader' },
+              React.createElement('strong', { className: 'xcodexRemoteConnectedPanelTitle' }, t('currentConnectedDevices')),
               React.createElement(ServerNotice, {
                 countdownOnly: true,
                 offline: status?.host?.online === false && status.host.reconnecting,
@@ -1148,20 +1118,20 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
               })),
             React.createElement(
               'div',
-              { className: 'dshRemoteClientList', 'aria-label': t('currentConnectedDevices') },
+              { className: 'xcodexRemoteClientList', 'aria-label': t('currentConnectedDevices') },
               ...connectedClients.map(client => React.createElement('div', {
                 key: client.deviceId,
-                className: 'dshRemoteClientRow',
+                className: 'xcodexRemoteClientRow',
               },
                 React.createElement('span', null,
-                  React.createElement('span', { className: 'dshRemoteHostNameLine' },
+                  React.createElement('span', { className: 'xcodexRemoteHostNameLine' },
                     React.createElement('strong', null, client.name.trim() === '' ? t('unknownDevice') : client.name),
                     null),
                   React.createElement('small', null, [
                     client.platform === undefined ? undefined : formatPlatform(client.platform),
                     connectedClientModeLabel(client.mode, t),
                   ].filter(Boolean).join(' · '))),
-                React.createElement('small', { className: 'dshRemoteClientOnline' }, t('connected')))),
+                React.createElement('small', { className: 'xcodexRemoteClientOnline' }, t('connected')))),
             ))
           : null)
       : null
@@ -1173,7 +1143,7 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
     const listedHosts = status?.host?.pairingHostOnly ? [] : connectingHost === undefined ? devices : [connectingHost]
 
     const computerIcon = React.createElement('svg', {
-      className: 'dshRemoteComputerIcon',
+      className: 'xcodexRemoteComputerIcon',
       viewBox: '0 0 24 24',
       fill: 'none',
       stroke: 'currentColor',
@@ -1190,38 +1160,38 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
     // icon-only, so they get the official 6px brand dot instead.
     const updateSuffix = localUpdateAvailable && props.wide
       ? React.createElement('span', {
-        className: 'dshRemoteUpdateSuffix',
+        className: 'xcodexRemoteUpdateSuffix',
         title: updateNotice, 'aria-hidden': true,
       }, t('updateShort', { version: updateInfo?.latestVersion ?? '' }))
       : null
     const updateDot = localUpdateAvailable
-      ? React.createElement('span', { className: 'dshRemoteUpdateDot', title: t('updateBadge'), 'aria-hidden': true })
+      ? React.createElement('span', { className: 'xcodexRemoteUpdateDot', title: t('updateBadge'), 'aria-hidden': true })
       : null
-    const entry = React.createElement('div', { className: `dshRemoteSidebarEntry${remoteActive ? ' isActive' : ''}${props.wide ? ' isWide' : ' isRail'}${localUpdateAvailable ? ' hasUpdate' : ''}` },
+    const entry = React.createElement('div', { className: `xcodexRemoteSidebarEntry${remoteActive ? ' isActive' : ''}${props.wide ? ' isWide' : ' isRail'}${localUpdateAvailable ? ' hasUpdate' : ''}` },
       React.createElement(remoteActive && props.wide && !reauth ? 'div' : 'button', {
         ...(remoteActive && props.wide && !reauth ? {} : {
           type: 'button',
           disabled: remoteActive && busy,
           onClick: () => void (remoteActive && !reauth ? openLocalWorkspaces() : show()),
         }),
-        className: 'dshRemoteModeButton',
+        className: 'xcodexRemoteModeButton',
         title: props.wide ? remoteLabel : remoteActionLabel,
         'aria-label': props.wide ? remoteLabel : remoteActionLabel,
       }, computerIcon, props.wide
-        ? React.createElement('span', { className: 'dshRemoteSidebarLabel' }, remoteLabel)
+        ? React.createElement('span', { className: 'xcodexRemoteSidebarLabel' }, remoteLabel)
         : null, props.wide ? updateSuffix : updateDot),
       remoteActive && props.wide ? React.createElement('button', {
         type: 'button',
-        className: 'dshRemoteExitLink',
+        className: 'xcodexRemoteExitLink',
         disabled: busy,
         onClick: () => void openLocalWorkspaces(),
       }, t('exitRemote')) : null)
     // The Compact style drops the label and lives in the account row, so it is
     // always a plain icon button regardless of the current Remote mode.
-    const accountEntry = React.createElement('div', { className: `dshRemoteAccountEntry${remoteActive ? ' isActive' : ''}` },
+    const accountEntry = React.createElement('div', { className: `xcodexRemoteAccountEntry${remoteActive ? ' isActive' : ''}` },
       React.createElement('button', {
         type: 'button',
-        className: 'dshRemoteAccountEntryButton',
+        className: 'xcodexRemoteAccountEntryButton',
         disabled: remoteActive && busy,
         title: remoteActionLabel,
         'aria-label': remoteActionLabel,
@@ -1234,142 +1204,66 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
         ? React.createElement(RemoteAccountEntry, { portal: props.portal, fallback: entry }, accountEntry)
         : entry,
       !open ? null : renderBodyPortal(portal, React.createElement('div', {
-        className: 'dshRemoteBackdrop',
+        className: 'xcodexRemoteBackdrop',
         role: 'presentation',
         onMouseDown: (event: MouseEvent) => { if (event.target === event.currentTarget) setOpen(false) },
       }, React.createElement('section', {
-        className: `dshRemotePage${selectedHost === undefined ? '' : ' hasSelectedHost'}`,
+        className: `xcodexRemotePage${selectedHost === undefined ? '' : ' hasSelectedHost'}`,
         role: 'dialog',
         'aria-modal': true,
         'aria-label': selectedHost?.name ?? t('remoteTitle'),
         tabIndex: -1,
         ref: pageRef,
       },
-        React.createElement('header', { className: 'dshRemotePageHeader' },
-          React.createElement('div', { className: 'dshRemotePageIntro' },
-            React.createElement('div', { className: 'dshRemotePageTitleRow' },
+        React.createElement('header', { className: 'xcodexRemotePageHeader' },
+          React.createElement('div', { className: 'xcodexRemotePageIntro' },
+            React.createElement('div', { className: 'xcodexRemotePageTitleRow' },
               React.createElement('strong', null, selectedHost?.name ?? t('remoteTitle')),
               selectedHost === undefined ? React.createElement('a', {
-                className: 'dshRemoteStarLink',
-                href: 'https://github.com/liguobao/ds-harness-remote',
+                className: 'xcodexRemoteStarLink',
+                href: 'https://xcodex.vip',
                 target: '_blank',
                 rel: 'noreferrer',
               }, t('starProject')) : null),
             React.createElement('p', null, selectedHostDetails ?? t(status?.host?.pairingHostOnly ? 'pairingHostOnly' : 'remoteDescription'))),
-          React.createElement('div', { className: 'dshRemotePageActions' },
+          React.createElement('div', { className: 'xcodexRemotePageActions' },
             selectedHost === undefined ? null : React.createElement('button', {
               type: 'button',
-              className: 'dshRemotePageBack',
+              className: 'xcodexRemotePageBack',
               disabled: busy,
               title: t('backToHosts'),
               onClick: chooseAnotherHost,
             }, t('backToHosts')),
             React.createElement('button', {
               type: 'button',
-              className: 'dshRemotePageRefresh',
+              className: 'xcodexRemotePageRefresh',
               disabled: busy,
               title: t('refreshRemote'),
               'aria-label': t('refreshRemote'),
               onClick: () => void refreshRemote(),
             }, t('refreshRemoteShort')),
-            React.createElement('button', { type: 'button', className: 'dshRemotePageClose', onClick: () => setOpen(false), 'aria-label': t('close') }, '×'))),
-        React.createElement('main', { className: 'dshRemotePageBody' },
+            React.createElement('button', { type: 'button', className: 'xcodexRemotePageClose', onClick: () => setOpen(false), 'aria-label': t('close') }, '×'))),
+        React.createElement('main', { className: 'xcodexRemotePageBody' },
           status?.mode === 'remote' ? React.createElement('button', {
             type: 'button',
-            className: 'dshRemoteLocalLink',
+            className: 'xcodexRemoteLocalLink',
             disabled: busy,
             onClick: () => void openLocalWorkspaces(),
           }, t('openLocalWorkspaces')) : null,
           React.createElement(React.Fragment, null,
             needsAuthorization === undefined && busy
               ? React.createElement('p', null, t('checkingConnection')) : null,
-            needsAuthorization ? React.createElement('section', { className: 'dshRemoteEnable' },
-              React.createElement('div', { className: 'dshRemoteLoginHeading' },
-                React.createElement('a', {
-                  href: 'https://github.com/liguobao/ds-harness-remote',
-                  target: '_blank', rel: 'noopener noreferrer',
-                },
-                  React.createElement('strong', { className: 'dshRemoteLoginTitle' }, t('signInClient')),
-                  React.createElement('span', null, t('signInClientDescription')))),
-              React.createElement('div', { className: 'dshRemoteLoginTabs', role: 'tablist' },
-                pairingAvailable && status?.hostAuthorizationAvailable ? React.createElement('button', {
-                  type: 'button', role: 'tab', id: 'dsh-remote-pairing-tab',
-                  'aria-selected': loginMethod === 'device_pairing', 'aria-controls': 'dsh-remote-pairing-panel',
-                  className: loginMethod === 'device_pairing' ? 'isActive' : '', disabled: busy || savingServer,
-                  onClick: () => selectLoginMethod('device_pairing'),
-                }, t('pairingLoginTab')) : null,
-                ...orderedQrProviders.map(qrLoginTab),
-                React.createElement('button', {
-                  type: 'button', role: 'tab', id: 'dsh-remote-password-tab',
-                  'aria-selected': passwordVisible, 'aria-controls': 'dsh-remote-password-panel',
-                  className: passwordVisible ? 'isActive' : '', disabled: busy || savingServer || serverDirty,
-                  onClick: () => selectLoginMethod('password'),
-                }, t('accountPasswordLogin'))),
-              React.createElement('div', { className: 'dshRemoteLoginContent' },
-              providersLoading && loginMethod !== 'device_pairing' ? React.createElement('p', { role: 'status' }, t('loadingLoginProviders')) : null,
-              providersFailed ? React.createElement('p', { role: 'status' },
-                t('noLoginProviders'), ' ', React.createElement('button', {
-                  type: 'button', disabled: busy || savingServer || serverDirty,
-                  onClick: () => setProviderReload(value => value + 1),
-                }, t('retryLoginProviders'))) : null,
-              !savingServer && !serverDirty && !providersLoading && !providersFailed && oauthProviders.length === 0 && loginMethod !== 'device_pairing'
-                ? React.createElement('p', { role: 'status' }, t('noLoginProviders')) : null,
-              loginMethod === 'device_pairing' && pairingAvailable && status?.hostAuthorizationAvailable
-                ? React.createElement('div', { role: 'tabpanel', id: 'dsh-remote-pairing-panel', 'aria-labelledby': 'dsh-remote-pairing-tab', className: 'dshRemotePanelPairing' },
-                  React.createElement(HostPairingPanel, { key: status.serverUrl ?? '', control: props.control,
-                    serverUrl: status.serverUrl ?? '', disabled: busy || savingServer || serverDirty, t,
-                    onComplete: () => { void refreshRemote() } }))
-                : passwordVisible
-                ? React.createElement('div', {
-                  className: 'dshRemoteClientLogin', role: 'tabpanel', id: 'dsh-remote-password-panel',
-                  'aria-labelledby': 'dsh-remote-password-tab',
-                },
-                  React.createElement('input', {
-                    type: 'email', value: email, disabled: busy, autoComplete: 'username', placeholder: t('account'),
-                    'aria-label': t('account'), onChange: (event: Event) => setEmail((event.target as HTMLInputElement).value),
-                  }),
-                  React.createElement('input', {
-                    type: 'password', value: password, disabled: busy, autoComplete: 'current-password', placeholder: t('password'),
-                    'aria-label': t('password'), onChange: (event: Event) => setPassword((event.target as HTMLInputElement).value),
-                  }),
-                  React.createElement('button', { type: 'button', disabled: busy || savingServer || serverDirty || loginServerUrl.trim() === '' || email.trim() === '' || password === '', onClick: () => void signInClient() }, t(busy ? 'signingIn' : 'startSignIn')),
-                  React.createElement('p', { className: 'dshRemotePasswordHint' }, t('passwordHint')))
-                : selectedProvider !== undefined
-                  ? React.createElement('div', {
-                    className: 'dshRemoteQrLogin', role: 'tabpanel', id: `dsh-remote-${loginMethod}-panel`,
-                    'aria-labelledby': `dsh-remote-${loginMethod}-tab`,
-                  },
-                    qrImage === undefined
-                      ? React.createElement('div', { className: 'dshRemoteQrPlaceholder', 'aria-busy': busy },
-                        qrExpired ? React.createElement('p', null, t('qrLoginExpired')) : React.createElement('span', null, t('checkingConnection')))
-                      : qrSession !== undefined
-                        ? React.createElement('a', {
-                          className: 'dshRemoteQrOpen', href: qrSession.scanUrl,
-                          target: '_blank', rel: 'noopener noreferrer',
-                          'aria-label': t('openInBrowser'),
-                        },
-                          React.createElement('img', {
-                            src: qrImage, width: 184, height: 184,
-                            alt: scanLabel,
-                          }),
-                          React.createElement('span', null, t('openInBrowser'), ' ↗'))
-                        : null,
-                    React.createElement('strong', null, scanLabel),
-                    React.createElement('p', null, t('scanLoginHint')),
-                    qrExpired ? React.createElement('button', {
-                      type: 'button', disabled: busy, onClick: () => setQrExpired(false),
-                    }, t('refreshQrCode')) : null)
-                  : null,
-              ),
-              React.createElement('div', { className: 'dshRemoteServiceAddress' },
+            needsAuthorization ? React.createElement('section', { className: 'xcodexRemoteEnable' },
+              React.createElement(BrowserLogin, { control: props.control, t, serverUrl: status?.serverUrl, disabled: serverDirty || savingServer, onComplete: async () => { setDevices(await props.control<RemoteDevice[]>('devices')); setStatus(await props.control<RemoteStatus>('status')); setNeedsAuthorization(false) } }),
+              React.createElement('div', { className: 'xcodexRemoteServiceAddress' },
                 React.createElement('span', null, t('currentServiceAddress')),
                 editingServer
                   ? React.createElement('form', {
-                    className: 'dshRemoteLoginServer',
+                    className: 'xcodexRemoteLoginServer',
                     onSubmit: (event: Event) => { event.preventDefault(); void saveLoginServer() },
                   },
                     React.createElement('input', {
-                      id: 'dsh-remote-login-server', type: 'url', required: true,
+                      id: 'xcodex-remote-login-server', type: 'url', required: true,
                       'aria-label': t('serverUrl'), value: loginServerUrl,
                       disabled: busy || savingServer, autoComplete: 'url',
                       placeholder: t('serverUrl'), onChange: (event: Event) => {
@@ -1382,12 +1276,12 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
                     }, t(savingServer ? 'saving' : 'save')),
                     React.createElement('button', {
                       type: 'button', disabled: busy || savingServer,
-                      onClick: () => { resetLoginFlow(); setLoginServerUrl('https://dsh.r2049.cn'); void saveLoginServer('https://dsh.r2049.cn') },
+                      onClick: () => { resetLoginFlow(); setLoginServerUrl('https://agent.xcodex.vip'); void saveLoginServer('https://agent.xcodex.vip') },
                     }, t('restoreDefaultServiceAddress')),
                     React.createElement('button', {
                       type: 'button', disabled: busy || savingServer,
                       onClick: () => {
-                        setLoginServerUrl(status?.serverUrl ?? 'https://dsh.r2049.cn')
+                        setLoginServerUrl(status?.serverUrl ?? 'https://agent.xcodex.vip')
                         setEditingServer(false)
                       },
                     }, t('cancelServiceAddressEdit')))
@@ -1396,7 +1290,7 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
                       href: status?.serverUrl ?? loginServerUrl, target: '_blank', rel: 'noreferrer',
                     }, status?.serverUrl ?? loginServerUrl),
                     React.createElement('button', {
-                      type: 'button', className: 'dshRemoteServiceAddressEdit',
+                      type: 'button', className: 'xcodexRemoteServiceAddressEdit',
                       disabled: busy || savingServer,
                       title: t('editServiceAddress'), 'aria-label': t('editServiceAddress'),
                       onClick: () => setEditingServer(true),
@@ -1406,29 +1300,24 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
                       'aria-hidden': true,
                     }, React.createElement('path', { d: 'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4L16.5 3.5Z' })))))) : null,
             needsAuthorization !== false ? null : React.createElement(React.Fragment, null,
-              selectedHost === undefined ? React.createElement('section', { className: 'dshRemoteHosts', 'aria-label': t('chooseHost') },
+              selectedHost === undefined ? React.createElement('section', { className: 'xcodexRemoteHosts', 'aria-label': t('chooseHost') },
                 status?.hostAuthorizationAvailable && status.host?.accountRequired
-                  ? React.createElement('section', { className: 'dshRemoteHostAccount' },
+                  ? React.createElement('section', { className: 'xcodexRemoteHostAccount' },
                     React.createElement('strong', null, t('thisMachineHost')),
                     React.createElement('p', null, t('hostSignInHint')),
-                    React.createElement('div', { className: 'dshRemoteLogin' },
-                      React.createElement('input', { type: 'email', value: hostEmail, disabled: busy, autoComplete: 'username', placeholder: t('serverAccountEmail'), 'aria-label': t('serverAccountEmail'), onChange: (event: Event) => setHostEmail((event.target as HTMLInputElement).value) }),
-                      React.createElement('input', { type: 'password', value: hostPassword, disabled: busy, autoComplete: 'current-password', placeholder: t('serverAccountPassword'), 'aria-label': t('serverAccountPassword'), onChange: (event: Event) => setHostPassword((event.target as HTMLInputElement).value) }),
-                      React.createElement('button', { type: 'button', disabled: busy || hostEmail.trim() === '' || hostPassword === '', onClick: () => void authorizeHost('account') }, t(busy ? 'signingIn' : 'signInRegisterHost')),
-                      React.createElement('input', { value: hostRegistrationCode, disabled: busy, autoComplete: 'one-time-code', placeholder: t('hostRegistrationCode'), 'aria-label': t('hostRegistrationCode'), onChange: (event: Event) => setHostRegistrationCode((event.target as HTMLInputElement).value) }),
-                      React.createElement('button', { type: 'button', disabled: busy || hostRegistrationCode.trim() === '', onClick: () => void authorizeHost('code') }, t(busy ? 'registering' : 'useRegistrationCode'))))
+                    React.createElement(BrowserLogin, { control: props.control, t, hostOnly: true, serverUrl: status?.serverUrl, onComplete: async () => { setStatus(await props.control<RemoteStatus>('status')) } }))
                   : null,
-                React.createElement('div', { className: 'dshRemoteSectionHeading' },
-                  React.createElement('div', { className: 'dshRemoteSectionTitle' },
+                React.createElement('div', { className: 'xcodexRemoteSectionHeading' },
+                  React.createElement('div', { className: 'xcodexRemoteSectionTitle' },
                     React.createElement('strong', null, t(status?.host?.pairingHostOnly ? 'thisMachineHost' : 'chooseHost')),
                     status?.serverUrl !== undefined && !status.host?.pairingHostOnly ? React.createElement('a', {
-                      className: 'dshRemoteManageHosts',
+                      className: 'xcodexRemoteManageHosts',
                       href: `${status.serverUrl}/app/hosts`,
                       target: '_blank',
                       rel: 'noreferrer',
                       title: t('manageHosts'),
                     }, t('manageHosts')) : null,
-                    status?.hostAuthorizationAvailable ? React.createElement('div', { className: 'dshRemoteHostControlToggle' },
+                    status?.hostAuthorizationAvailable ? React.createElement('div', { className: 'xcodexRemoteHostControlToggle' },
                       React.createElement('span', null, t('allowControlDevice')),
                       React.createElement('input', {
                         type: 'checkbox', role: 'switch', disabled: busy,
@@ -1438,7 +1327,7 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
                       })) : null,
                     connectedMenu)),
                 React.createElement('div', {
-                  className: `dshRemoteHostList${connectingHost === undefined ? '' : ' isCollapsed'}`,
+                  className: `xcodexRemoteHostList${connectingHost === undefined ? '' : ' isCollapsed'}`,
                   'aria-busy': connectingHost === undefined ? undefined : true,
                 }, listedHosts.length === 0
                   ? (error !== undefined ? null : React.createElement('p', null, busy ? t('checkingConnection') : t(status?.host?.pairingHostOnly ? 'pairingHostOnly' : 'noRemoteHosts')))
@@ -1460,9 +1349,9 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
               React.createElement(RemoteProgressView, { progress, t }),
               selectedHost === undefined
                 ? (connectingHost === undefined ? React.createElement(React.Fragment, null,
-                  status?.host?.pairingHostOnly ? null : React.createElement('p', { className: 'dshRemoteHint' }, t('selectHostHint')),
-                  React.createElement('footer', { className: 'dshRemoteAccountFooter' },
-                    React.createElement('span', { className: 'dshRemoteHostNameLine' },
+                  status?.host?.pairingHostOnly ? null : React.createElement('p', { className: 'xcodexRemoteHint' }, t('selectHostHint')),
+                  React.createElement('footer', { className: 'xcodexRemoteAccountFooter' },
+                    React.createElement('span', { className: 'xcodexRemoteHostNameLine' },
                       React.createElement('span', null, status?.target?.name ?? status?.deviceName ?? (status?.host?.account === undefined ? t('account') : displayRemoteAccount(status.host.account))),
                       React.createElement(ServerNotice, {
                         offline: discoveryUnavailable || (status?.host?.online === false && status.host.reconnecting),
@@ -1470,23 +1359,23 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
                         expiresAt: status?.host?.recoveryExpiresAt ?? status?.network?.recoveryExpiresAt, t,
                       })),
                     updateNotice === undefined ? null : React.createElement('a', {
-                      className: 'dshRemoteAccountUpdate',
+                      className: 'xcodexRemoteAccountUpdate',
                       href: 'https://github.com/liguobao/ds-harness-remote/releases',
                       target: '_blank',
                       rel: 'noreferrer',
                       title: updateNotice,
                     }, t('updateAvailableShort', { version: updateInfo?.latestVersion ?? '' })),
                     props.openSettings === undefined ? null : React.createElement('button', {
-                      type: 'button', className: 'dshRemoteAccountSettings',
+                      type: 'button', className: 'xcodexRemoteAccountSettings',
                       onClick: props.openSettings,
                       'aria-label': t('settings'), title: t('settings'),
                     }, t('settings')),
                     React.createElement('button', {
-                      type: 'button', className: 'dshRemoteAccountExit', disabled: busy,
+                      type: 'button', className: 'xcodexRemoteAccountExit', disabled: busy,
                       onClick: () => void logoutRemote(),
                     }, t('exitRemoteAccount')))) : null)
-                : React.createElement('section', { className: 'dshRemoteBrowser', 'aria-label': t('chooseDirectory') },
-                  React.createElement('div', { className: 'dshRemoteSectionHeading dshRemoteWorkspaceHeading' },
+                : React.createElement('section', { className: 'xcodexRemoteBrowser', 'aria-label': t('chooseDirectory') },
+                  React.createElement('div', { className: 'xcodexRemoteSectionHeading xcodexRemoteWorkspaceHeading' },
                     React.createElement('strong', null, t(addingWorkspace
                       ? workspaceBackend === 'codex'
                         ? 'addCodexWorkspace'
@@ -1504,39 +1393,39 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
                     addingWorkspace
                       ? React.createElement('button', {
                         type: 'button',
-                        className: 'dshRemoteCancelWorkspace',
+                        className: 'xcodexRemoteCancelWorkspace',
                         disabled: busy,
                         onClick: cancelAddingWorkspace,
                       }, t('cancelAddWorkspace'))
                       : React.createElement('button', {
                         type: 'button',
-                        className: 'dshRemoteAddWorkspace',
+                        className: 'xcodexRemoteAddWorkspace',
                         disabled: busy,
                         title: t('addRemoteWorkspace'),
                         'aria-label': t('addRemoteWorkspace'),
                         onClick: () => startAddingWorkspace('harness'),
                       }, React.createElement('svg', {
-                        className: 'dshRemoteAddWorkspaceIcon', viewBox: '0 0 16 16', 'aria-hidden': true, focusable: false,
+                        className: 'xcodexRemoteAddWorkspaceIcon', viewBox: '0 0 16 16', 'aria-hidden': true, focusable: false,
                       }, React.createElement('path', { d: 'M8 3v10M3 8h10', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' })))),
                   addingWorkspace
-                    ? React.createElement('div', { className: 'dshRemoteFolderBrowser' },
+                    ? React.createElement('div', { className: 'xcodexRemoteFolderBrowser' },
                       directory === undefined
                         ? React.createElement('p', null, t('loadingDirectory'))
                         : React.createElement(React.Fragment, null,
-                          React.createElement('nav', { className: 'dshRemoteCrumbs', 'aria-label': t('currentDirectory') },
+                          React.createElement('nav', { className: 'xcodexRemoteCrumbs', 'aria-label': t('currentDirectory') },
                             directory.crumbs.map(crumb => React.createElement('button', {
                               type: 'button', key: crumb.path, disabled: busy || crumb.path === directory.path,
                               onClick: () => void browseDirectory(crumb.path),
                             }, crumb.path === directory.home ? '⌂' : crumb.name))),
-                          React.createElement('div', { className: 'dshRemoteFolderList' }, directory.entries.filter(entry => !entry.hidden).length === 0
+                          React.createElement('div', { className: 'xcodexRemoteFolderList' }, directory.entries.filter(entry => !entry.hidden).length === 0
                             ? React.createElement('p', null, t('emptyDirectory'))
                             : directory.entries.filter(entry => !entry.hidden).map(entry => React.createElement('button', {
                               type: 'button', key: entry.path, disabled: busy, onClick: () => void browseDirectory(entry.path),
                             }, React.createElement('span', { 'aria-hidden': true }, '▱'), React.createElement('span', null, entry.name)))),
                           directory.truncated ? React.createElement('small', null, t('directoryTruncated')) : null))
-                    : React.createElement('div', { className: 'dshRemoteWorkspaceLists' },
+                    : React.createElement('div', { className: 'xcodexRemoteWorkspaceLists' },
                       React.createElement(React.Fragment, null,
-                        React.createElement('div', { id: workspaceListId, className: 'dshRemoteDirectoryList' }, workspaces.length === 0
+                        React.createElement('div', { id: workspaceListId, className: 'xcodexRemoteDirectoryList' }, workspaces.length === 0
                           ? React.createElement('p', null, t('noRemoteWorkspaces'))
                           : visibleWorkspaces.map(workspace => React.createElement('button', {
                             type: 'button', key: workspace.workspaceId, disabled: busy,
@@ -1544,35 +1433,35 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
                             'aria-pressed': workspaceBackend === 'harness' && path === workspace.path,
                             onClick: () => { setWorkspaceBackend('harness'); setCodexWorkspaceId(undefined); setCursorWorkspaceId(undefined); setPath(workspace.path) },
                             onDoubleClick: () => void openWorkspace({ backend: 'harness', path: workspace.path }),
-                          }, React.createElement('img', { className: 'dshRemoteWorkspaceIcon', src: deepSeekWorkspaceIcon, alt: '', 'aria-hidden': true }),
+                          }, React.createElement('img', { className: 'xcodexRemoteWorkspaceIcon', src: deepSeekWorkspaceIcon, alt: '', 'aria-hidden': true }),
                             React.createElement('span', null, workspace.title), React.createElement('small', null, workspace.path))),
                           workspaces.length <= 3 || showAllWorkspaces ? null : React.createElement('button', {
                             type: 'button',
-                            className: 'dshRemoteWorkspaceMore',
+                            className: 'xcodexRemoteWorkspaceMore',
                             disabled: busy,
                             'aria-controls': workspaceListId,
                             'aria-label': t('showAllWorkspaces'),
                             onClick: () => setShowAllWorkspaces(true),
                           }, React.createElement('span', { 'aria-hidden': true }, '…')))),
-                      !codexAvailable ? null : React.createElement('section', { className: 'dshRemoteCodexWorkspaceGroup' },
+                      !codexAvailable ? null : React.createElement('section', { className: 'xcodexRemoteCodexWorkspaceGroup' },
                         React.createElement('div', {
                           id: codexWorkspaceHeadingId,
-                          className: 'dshRemoteWorkspaceSourceHeading',
-                        }, React.createElement('span', { className: 'dshRemoteWorkspaceSourceText' },
+                          className: 'xcodexRemoteWorkspaceSourceHeading',
+                        }, React.createElement('span', { className: 'xcodexRemoteWorkspaceSourceText' },
                           React.createElement('strong', null, t('codexVirtualWorkspace'))),
                           !codexAvailable ? null : React.createElement('button', {
                             type: 'button',
-                            className: 'dshRemoteAddWorkspace',
+                            className: 'xcodexRemoteAddWorkspace',
                             disabled: busy,
                             title: t('addCodexWorkspace'),
                             'aria-label': t('addCodexWorkspace'),
                             onClick: () => startAddingWorkspace('codex'),
                           }, React.createElement('svg', {
-                            className: 'dshRemoteAddWorkspaceIcon', viewBox: '0 0 16 16', 'aria-hidden': true, focusable: false,
+                            className: 'xcodexRemoteAddWorkspaceIcon', viewBox: '0 0 16 16', 'aria-hidden': true, focusable: false,
                           }, React.createElement('path', { d: 'M8 3v10M3 8h10', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' })))),
                         React.createElement('div', {
                           id: codexWorkspaceListId,
-                          className: 'dshRemoteDirectoryList dshRemoteCodexWorkspaceList',
+                          className: 'xcodexRemoteDirectoryList xcodexRemoteCodexWorkspaceList',
                           'aria-labelledby': codexWorkspaceHeadingId,
                         }, visibleCodexWorkspaces.length === 0
                           ? React.createElement('p', null, t('noCodexWorkspaces'))
@@ -1593,36 +1482,36 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
                               path: workspace.path,
                               workspaceId: workspace.workspaceId,
                             }),
-                          }, React.createElement('img', { className: 'dshRemoteWorkspaceIcon isGpt', src: gptWorkspaceIcon, alt: '', 'aria-hidden': true }),
+                          }, React.createElement('img', { className: 'xcodexRemoteWorkspaceIcon isGpt', src: gptWorkspaceIcon, alt: '', 'aria-hidden': true }),
                             React.createElement('span', null, workspace.title),
                             React.createElement('small', null, `${workspace.path} · ${workspace.sessionCount}`)))),
                         codexWorkspaces.length <= 3 || showAllCodexWorkspaces ? null : React.createElement('button', {
                           type: 'button',
-                          className: 'dshRemoteWorkspaceMore',
+                          className: 'xcodexRemoteWorkspaceMore',
                           disabled: busy,
                           'aria-controls': codexWorkspaceListId,
                           'aria-label': t('showAllCodexWorkspaces'),
                           onClick: () => setShowAllCodexWorkspaces(true),
                         }, React.createElement('span', { 'aria-hidden': true }, '…'))),
-                      !cursorAvailable ? null : React.createElement('section', { className: 'dshRemoteCodexWorkspaceGroup' },
+                      !cursorAvailable ? null : React.createElement('section', { className: 'xcodexRemoteCodexWorkspaceGroup' },
                         React.createElement('div', {
                           id: cursorWorkspaceHeadingId,
-                          className: 'dshRemoteWorkspaceSourceHeading',
-                        }, React.createElement('span', { className: 'dshRemoteWorkspaceSourceText' },
+                          className: 'xcodexRemoteWorkspaceSourceHeading',
+                        }, React.createElement('span', { className: 'xcodexRemoteWorkspaceSourceText' },
                           React.createElement('strong', null, t('cursorVirtualWorkspace'))),
                           !cursorAvailable ? null : React.createElement('button', {
                             type: 'button',
-                            className: 'dshRemoteAddWorkspace',
+                            className: 'xcodexRemoteAddWorkspace',
                             disabled: busy,
                             title: t('addCursorWorkspace'),
                             'aria-label': t('addCursorWorkspace'),
                             onClick: () => startAddingWorkspace('cursor'),
                           }, React.createElement('svg', {
-                            className: 'dshRemoteAddWorkspaceIcon', viewBox: '0 0 16 16', 'aria-hidden': true, focusable: false,
+                            className: 'xcodexRemoteAddWorkspaceIcon', viewBox: '0 0 16 16', 'aria-hidden': true, focusable: false,
                           }, React.createElement('path', { d: 'M8 3v10M3 8h10', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' })))),
                         React.createElement('div', {
                           id: cursorWorkspaceListId,
-                          className: 'dshRemoteDirectoryList dshRemoteCodexWorkspaceList',
+                          className: 'xcodexRemoteDirectoryList xcodexRemoteCodexWorkspaceList',
                           'aria-labelledby': cursorWorkspaceHeadingId,
                         }, visibleCursorWorkspaces.length === 0
                           ? React.createElement('p', null, t('noCursorWorkspaces'))
@@ -1648,36 +1537,36 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
                               path: workspace.path,
                               workspaceId: workspace.workspaceId,
                             }),
-                          }, React.createElement('img', { className: 'dshRemoteWorkspaceIcon', src: deepSeekWorkspaceIcon, alt: '', 'aria-hidden': true }),
+                          }, React.createElement('img', { className: 'xcodexRemoteWorkspaceIcon', src: deepSeekWorkspaceIcon, alt: '', 'aria-hidden': true }),
                             React.createElement('span', null, workspace.title),
                             React.createElement('small', null, `${workspace.path} · ${workspace.sessionCount}`)))),
                         cursorWorkspaces.length <= 3 || showAllCursorWorkspaces ? null : React.createElement('button', {
                           type: 'button',
-                          className: 'dshRemoteWorkspaceMore',
+                          className: 'xcodexRemoteWorkspaceMore',
                           disabled: busy,
                           'aria-controls': cursorWorkspaceListId,
                           'aria-label': t('showAllCursorWorkspaces'),
                           onClick: () => setShowAllCursorWorkspaces(true),
                         }, React.createElement('span', { 'aria-hidden': true }, '…'))),
-                      !antigravityAvailable ? null : React.createElement('section', { className: 'dshRemoteCodexWorkspaceGroup' },
+                      !antigravityAvailable ? null : React.createElement('section', { className: 'xcodexRemoteCodexWorkspaceGroup' },
                         React.createElement('div', {
                           id: antigravityWorkspaceHeadingId,
-                          className: 'dshRemoteWorkspaceSourceHeading',
-                        }, React.createElement('span', { className: 'dshRemoteWorkspaceSourceText' },
+                          className: 'xcodexRemoteWorkspaceSourceHeading',
+                        }, React.createElement('span', { className: 'xcodexRemoteWorkspaceSourceText' },
                           React.createElement('strong', null, t('antigravityVirtualWorkspace'))),
                           !antigravityAvailable ? null : React.createElement('button', {
                             type: 'button',
-                            className: 'dshRemoteAddWorkspace',
+                            className: 'xcodexRemoteAddWorkspace',
                             disabled: busy,
                             title: t('addAntigravityWorkspace'),
                             'aria-label': t('addAntigravityWorkspace'),
                             onClick: () => startAddingWorkspace('antigravity'),
                           }, React.createElement('svg', {
-                            className: 'dshRemoteAddWorkspaceIcon', viewBox: '0 0 16 16', 'aria-hidden': true, focusable: false,
+                            className: 'xcodexRemoteAddWorkspaceIcon', viewBox: '0 0 16 16', 'aria-hidden': true, focusable: false,
                           }, React.createElement('path', { d: 'M8 3v10M3 8h10', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' })))),
                         React.createElement('div', {
                           id: antigravityWorkspaceListId,
-                          className: 'dshRemoteDirectoryList dshRemoteCodexWorkspaceList',
+                          className: 'xcodexRemoteDirectoryList xcodexRemoteCodexWorkspaceList',
                           'aria-labelledby': antigravityWorkspaceHeadingId,
                         }, visibleAntigravityWorkspaces.length === 0
                           ? React.createElement('p', null, t('noAntigravityWorkspaces'))
@@ -1703,36 +1592,36 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
                               path: workspace.path,
                               workspaceId: workspace.workspaceId,
                             }),
-                          }, React.createElement('img', { className: 'dshRemoteWorkspaceIcon', src: deepSeekWorkspaceIcon, alt: '', 'aria-hidden': true }),
+                          }, React.createElement('img', { className: 'xcodexRemoteWorkspaceIcon', src: deepSeekWorkspaceIcon, alt: '', 'aria-hidden': true }),
                             React.createElement('span', null, workspace.title),
                             React.createElement('small', null, `${workspace.path} · ${workspace.sessionCount}`)))),
                         antigravityWorkspaces.length <= 3 || showAllAntigravityWorkspaces ? null : React.createElement('button', {
                           type: 'button',
-                          className: 'dshRemoteWorkspaceMore',
+                          className: 'xcodexRemoteWorkspaceMore',
                           disabled: busy,
                           'aria-controls': antigravityWorkspaceListId,
                           'aria-label': t('showAllAntigravityWorkspaces'),
                           onClick: () => setShowAllAntigravityWorkspaces(true),
                         }, React.createElement('span', { 'aria-hidden': true }, '…'))),
-                      !piAvailable ? null : React.createElement('section', { className: 'dshRemoteCodexWorkspaceGroup' },
+                      !piAvailable ? null : React.createElement('section', { className: 'xcodexRemoteCodexWorkspaceGroup' },
                         React.createElement('div', {
                           id: piWorkspaceHeadingId,
-                          className: 'dshRemoteWorkspaceSourceHeading',
-                        }, React.createElement('span', { className: 'dshRemoteWorkspaceSourceText' },
+                          className: 'xcodexRemoteWorkspaceSourceHeading',
+                        }, React.createElement('span', { className: 'xcodexRemoteWorkspaceSourceText' },
                           React.createElement('strong', null, t('piVirtualWorkspace'))),
                           !piAvailable ? null : React.createElement('button', {
                             type: 'button',
-                            className: 'dshRemoteAddWorkspace',
+                            className: 'xcodexRemoteAddWorkspace',
                             disabled: busy,
                             title: t('addPiWorkspace'),
                             'aria-label': t('addPiWorkspace'),
                             onClick: () => startAddingWorkspace('pi'),
                           }, React.createElement('svg', {
-                            className: 'dshRemoteAddWorkspaceIcon', viewBox: '0 0 16 16', 'aria-hidden': true, focusable: false,
+                            className: 'xcodexRemoteAddWorkspaceIcon', viewBox: '0 0 16 16', 'aria-hidden': true, focusable: false,
                           }, React.createElement('path', { d: 'M8 3v10M3 8h10', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' })))),
                         React.createElement('div', {
                           id: piWorkspaceListId,
-                          className: 'dshRemoteDirectoryList dshRemoteCodexWorkspaceList',
+                          className: 'xcodexRemoteDirectoryList xcodexRemoteCodexWorkspaceList',
                           'aria-labelledby': piWorkspaceHeadingId,
                         }, visiblePiWorkspaces.length === 0
                           ? React.createElement('p', null, t('noPiWorkspaces'))
@@ -1755,36 +1644,36 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
                               path: workspace.path,
                               workspaceId: workspace.workspaceId,
                             }),
-                          }, React.createElement('img', { className: 'dshRemoteWorkspaceIcon', src: deepSeekWorkspaceIcon, alt: '', 'aria-hidden': true }),
+                          }, React.createElement('img', { className: 'xcodexRemoteWorkspaceIcon', src: deepSeekWorkspaceIcon, alt: '', 'aria-hidden': true }),
                             React.createElement('span', null, workspace.title),
                             React.createElement('small', null, `${workspace.path} · ${workspace.sessionCount}`)))),
                         piWorkspaces.length <= 3 || showAllPiWorkspaces ? null : React.createElement('button', {
                           type: 'button',
-                          className: 'dshRemoteWorkspaceMore',
+                          className: 'xcodexRemoteWorkspaceMore',
                           disabled: busy,
                           'aria-controls': piWorkspaceListId,
                           'aria-label': t('showAllPiWorkspaces'),
                           onClick: () => setShowAllPiWorkspaces(true),
                         }, React.createElement('span', { 'aria-hidden': true }, '…'))),
-                      !opencodeAvailable ? null : React.createElement('section', { className: 'dshRemoteCodexWorkspaceGroup' },
+                      !opencodeAvailable ? null : React.createElement('section', { className: 'xcodexRemoteCodexWorkspaceGroup' },
                         React.createElement('div', {
                           id: opencodeWorkspaceHeadingId,
-                          className: 'dshRemoteWorkspaceSourceHeading',
+                          className: 'xcodexRemoteWorkspaceSourceHeading',
                         },
-                          React.createElement('span', { className: 'dshRemoteWorkspaceSourceText' }, React.createElement('strong', null, t('opencodeVirtualWorkspace'))),
+                          React.createElement('span', { className: 'xcodexRemoteWorkspaceSourceText' }, React.createElement('strong', null, t('opencodeVirtualWorkspace'))),
                           React.createElement('button', {
                             type: 'button',
-                            className: 'dshRemoteAddWorkspace',
+                            className: 'xcodexRemoteAddWorkspace',
                             disabled: busy,
                             title: t('addOpencodeWorkspace'),
                             'aria-label': t('addOpencodeWorkspace'),
                             onClick: () => startAddingWorkspace('opencode'),
                           }, React.createElement('svg', {
-                            className: 'dshRemoteAddWorkspaceIcon', viewBox: '0 0 16 16', 'aria-hidden': true, focusable: false,
+                            className: 'xcodexRemoteAddWorkspaceIcon', viewBox: '0 0 16 16', 'aria-hidden': true, focusable: false,
                           }, React.createElement('path', { d: 'M8 3v10M3 8h10', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' })))),
                         React.createElement('div', {
                           id: opencodeWorkspaceListId,
-                          className: 'dshRemoteDirectoryList dshRemoteCodexWorkspaceList',
+                          className: 'xcodexRemoteDirectoryList xcodexRemoteCodexWorkspaceList',
                           'aria-labelledby': opencodeWorkspaceHeadingId,
                         }, visibleOpencodeWorkspaces.length === 0
                           ? React.createElement('p', null, t('noOpencodeWorkspaces'))
@@ -1810,36 +1699,36 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
                               path: workspace.path,
                               workspaceId: workspace.workspaceId,
                             }),
-                          }, React.createElement('img', { className: 'dshRemoteWorkspaceIcon', src: deepSeekWorkspaceIcon, alt: '', 'aria-hidden': true }),
+                          }, React.createElement('img', { className: 'xcodexRemoteWorkspaceIcon', src: deepSeekWorkspaceIcon, alt: '', 'aria-hidden': true }),
                             React.createElement('span', null, workspace.title),
                             React.createElement('small', null, `${workspace.path} · ${workspace.sessionCount}`)))),
                         opencodeWorkspaces.length <= 3 || showAllOpencodeWorkspaces ? null : React.createElement('button', {
                           type: 'button',
-                          className: 'dshRemoteWorkspaceMore',
+                          className: 'xcodexRemoteWorkspaceMore',
                           disabled: busy,
                           'aria-controls': opencodeWorkspaceListId,
                           'aria-label': t('showAllOpencodeWorkspaces'),
                           onClick: () => setShowAllOpencodeWorkspaces(true),
                         }, React.createElement('span', { 'aria-hidden': true }, '…'))),
-                      !hermesAvailable ? null : React.createElement('section', { className: 'dshRemoteCodexWorkspaceGroup' },
+                      !hermesAvailable ? null : React.createElement('section', { className: 'xcodexRemoteCodexWorkspaceGroup' },
                         React.createElement('div', {
                           id: hermesWorkspaceHeadingId,
-                          className: 'dshRemoteWorkspaceSourceHeading',
+                          className: 'xcodexRemoteWorkspaceSourceHeading',
                         },
-                          React.createElement('span', { className: 'dshRemoteWorkspaceSourceText' }, React.createElement('strong', null, t('hermesVirtualWorkspace'))),
+                          React.createElement('span', { className: 'xcodexRemoteWorkspaceSourceText' }, React.createElement('strong', null, t('hermesVirtualWorkspace'))),
                           React.createElement('button', {
                             type: 'button',
-                            className: 'dshRemoteAddWorkspace',
+                            className: 'xcodexRemoteAddWorkspace',
                             disabled: busy,
                             title: t('addHermesWorkspace'),
                             'aria-label': t('addHermesWorkspace'),
                             onClick: () => startAddingWorkspace('hermes'),
                           }, React.createElement('svg', {
-                            className: 'dshRemoteAddWorkspaceIcon', viewBox: '0 0 16 16', 'aria-hidden': true, focusable: false,
+                            className: 'xcodexRemoteAddWorkspaceIcon', viewBox: '0 0 16 16', 'aria-hidden': true, focusable: false,
                           }, React.createElement('path', { d: 'M8 3v10M3 8h10', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' })))),
                         React.createElement('div', {
                           id: hermesWorkspaceListId,
-                          className: 'dshRemoteDirectoryList dshRemoteCodexWorkspaceList',
+                          className: 'xcodexRemoteDirectoryList xcodexRemoteCodexWorkspaceList',
                           'aria-labelledby': hermesWorkspaceHeadingId,
                         }, visibleHermesWorkspaces.length === 0
                           ? React.createElement('p', null, t('noHermesWorkspaces'))
@@ -1865,36 +1754,36 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
                               path: workspace.path,
                               workspaceId: workspace.workspaceId,
                             }),
-                          }, React.createElement('img', { className: 'dshRemoteWorkspaceIcon', src: deepSeekWorkspaceIcon, alt: '', 'aria-hidden': true }),
+                          }, React.createElement('img', { className: 'xcodexRemoteWorkspaceIcon', src: deepSeekWorkspaceIcon, alt: '', 'aria-hidden': true }),
                             React.createElement('span', null, workspace.title),
                             React.createElement('small', null, `${workspace.path} · ${workspace.sessionCount}`)))),
                         hermesWorkspaces.length <= 3 || showAllHermesWorkspaces ? null : React.createElement('button', {
                           type: 'button',
-                          className: 'dshRemoteWorkspaceMore',
+                          className: 'xcodexRemoteWorkspaceMore',
                           disabled: busy,
                           'aria-controls': hermesWorkspaceListId,
                           'aria-label': t('showAllHermesWorkspaces'),
                           onClick: () => setShowAllHermesWorkspaces(true),
                         }, React.createElement('span', { 'aria-hidden': true }, '…'))),
-                      !claudeAvailable ? null : React.createElement('section', { className: 'dshRemoteCodexWorkspaceGroup' },
+                      !claudeAvailable ? null : React.createElement('section', { className: 'xcodexRemoteCodexWorkspaceGroup' },
                         React.createElement('div', {
                           id: claudeWorkspaceHeadingId,
-                          className: 'dshRemoteWorkspaceSourceHeading',
+                          className: 'xcodexRemoteWorkspaceSourceHeading',
                         },
-                          React.createElement('span', { className: 'dshRemoteWorkspaceSourceText' }, React.createElement('strong', null, t('claudeVirtualWorkspace'))),
+                          React.createElement('span', { className: 'xcodexRemoteWorkspaceSourceText' }, React.createElement('strong', null, t('claudeVirtualWorkspace'))),
                           React.createElement('button', {
                             type: 'button',
-                            className: 'dshRemoteAddWorkspace',
+                            className: 'xcodexRemoteAddWorkspace',
                             disabled: busy,
                             title: t('addClaudeWorkspace'),
                             'aria-label': t('addClaudeWorkspace'),
                             onClick: () => startAddingWorkspace('claude'),
                           }, React.createElement('svg', {
-                            className: 'dshRemoteAddWorkspaceIcon', viewBox: '0 0 16 16', 'aria-hidden': true, focusable: false,
+                            className: 'xcodexRemoteAddWorkspaceIcon', viewBox: '0 0 16 16', 'aria-hidden': true, focusable: false,
                           }, React.createElement('path', { d: 'M8 3v10M3 8h10', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' })))),
                         React.createElement('div', {
                           id: claudeWorkspaceListId,
-                          className: 'dshRemoteDirectoryList dshRemoteCodexWorkspaceList',
+                          className: 'xcodexRemoteDirectoryList xcodexRemoteCodexWorkspaceList',
                           'aria-labelledby': claudeWorkspaceHeadingId,
                         }, visibleClaudeWorkspaces.length === 0
                           ? React.createElement('p', null, t('noClaudeWorkspaces'))
@@ -1920,18 +1809,18 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
                               path: workspace.path,
                               workspaceId: workspace.workspaceId,
                             }),
-                          }, React.createElement('img', { className: 'dshRemoteWorkspaceIcon', src: deepSeekWorkspaceIcon, alt: '', 'aria-hidden': true }),
+                          }, React.createElement('img', { className: 'xcodexRemoteWorkspaceIcon', src: deepSeekWorkspaceIcon, alt: '', 'aria-hidden': true }),
                             React.createElement('span', null, workspace.title),
                             React.createElement('small', null, `${workspace.path} · ${workspace.sessionCount}`)))),
                         claudeWorkspaces.length <= 3 || showAllClaudeWorkspaces ? null : React.createElement('button', {
                           type: 'button',
-                          className: 'dshRemoteWorkspaceMore',
+                          className: 'xcodexRemoteWorkspaceMore',
                           disabled: busy,
                           'aria-controls': claudeWorkspaceListId,
                           'aria-label': t('showAllClaudeWorkspaces'),
                           onClick: () => setShowAllClaudeWorkspaces(true),
                         }, React.createElement('span', { 'aria-hidden': true }, '…')))),
-                      React.createElement('footer', { className: 'dshRemoteOpenBar' },
+                      React.createElement('footer', { className: 'xcodexRemoteOpenBar' },
                     React.createElement('div', null, React.createElement('span', null, t('currentDirectory')), React.createElement('strong', null, path || '—')),
                     React.createElement('button', {
                       type: 'button',
@@ -1945,8 +1834,8 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
                         || !addingWorkspace && workspaceBackend === 'hermes' && hermesWorkspaceId === undefined && path === '',
                       onClick: () => void openWorkspace(),
                     }, t(busy ? 'openingWorkspace' : addingWorkspace ? 'confirmAddWorkspace' : 'openWorkspace')))))),
-          notice === undefined ? null : React.createElement('p', { className: 'dshRemoteNotice', role: 'status' }, notice),
-              error === undefined || (serverUnavailable && error === t('serverUnavailableError')) ? null : React.createElement('p', { className: 'dshRemoteError', role: 'alert' }, error))))))
+          notice === undefined ? null : React.createElement('p', { className: 'xcodexRemoteNotice', role: 'status' }, notice),
+              error === undefined || (serverUnavailable && error === t('serverUnavailableError')) ? null : React.createElement('p', { className: 'xcodexRemoteError', role: 'alert' }, error))))))
   }
 
   return RemoteWorkspaceAction

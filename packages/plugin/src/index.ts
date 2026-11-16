@@ -44,24 +44,24 @@ import {
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    dshRemote: HostPluginRuntime
-    dshRemoteClient: ClientModeRuntime
+    xcodexRemote: HostPluginRuntime
+    xcodexRemoteClient: ClientModeRuntime
     typertGateway: TypertGatewayLike
   }
 }
 
-export const name = 'ds-harness-remote'
+export const name = 'xcodex-remote'
 export { Config }
 
 // The unscoped dsh-remote package belongs to another publisher. A bare name
 // cannot establish ownership of a legacy local alias, so leave it unchanged.
-const legacyLoaderModuleNames = new Set(['@dsh-remote/plugin'])
+const legacyLoaderModuleNames = new Set<string>()
 // Settings-registry generation (≤0.1.6). The branded `SettingsNamespace` type
 // was removed with the registry in rc.1, so the literals stay plain strings.
-const pluginSettingsNamespace = 'ds-harness-remote'
+const pluginSettingsNamespace = 'xcodex-remote'
 
 /** Fallback entry id when the Loader cannot locate this plugin's entry. */
-const DEFAULT_ENTRY_ID = 'ds-harness-remote'
+const DEFAULT_ENTRY_ID = 'xcodex-remote'
 /** Root include entry id prefixing every profile row's Loader path id. */
 const INCLUDE_ENTRY_PREFIX = 'include:'
 
@@ -154,7 +154,7 @@ export function apply(ctx: Context, entry: EntryConfig | ConfigShape | undefined
           control.setStartupFailure(storageError, { storageAvailable: false })
         }
         return control.register(connection, webServer)
-      }, 'ds-harness-remote pending control')
+      }, 'xcodex-remote pending control')
     }
     const startActiveRuntime = async (activeContext: Context): Promise<void> => {
       await disposePendingControl?.()
@@ -221,7 +221,7 @@ async function activate(
       if (initialStorageError !== undefined) {
         controlRuntime.setStartupFailure(initialStorageError, { storageAvailable: false })
       }
-      ctx.effect(() => controlRuntime.register(connection, webServer), 'ds-harness-remote disabled control')
+      ctx.effect(() => controlRuntime.register(connection, webServer), 'xcodex-remote disabled control')
     }
     return
   }
@@ -262,7 +262,7 @@ async function activate(
     const peer = fallbackPeer
     fallbackPeer = undefined
     return peer?.dispose?.()
-  }, 'ds-harness-remote fallback owner peer')
+  }, 'xcodex-remote fallback owner peer')
   const hostGateway = new TypertGatewaySwitch(nativeTypertGateway, () => fallbackPeer)
   const localTypertGateway = hostGateway.local()
   localTypertGateway.createPeer = () => {
@@ -340,18 +340,18 @@ async function activate(
   let startup: Promise<void> | undefined
   let replacement: Promise<{ client: ClientModeRuntime | undefined; host: HostPluginRuntime }> | undefined
   const syncOptionalService = (
-    serviceName: 'dshRemote' | 'dshRemoteClient',
+    serviceName: 'xcodexRemote' | 'xcodexRemoteClient',
     value: HostPluginRuntime | ClientModeRuntime,
     owned: boolean,
   ) => {
     try {
-      if (serviceName === 'dshRemote') {
-        if (owned) ctx.dshRemote = value as HostPluginRuntime
-        else ctx.provide('dshRemote', value as HostPluginRuntime)
+      if (serviceName === 'xcodexRemote') {
+        if (owned) ctx.xcodexRemote = value as HostPluginRuntime
+        else ctx.provide('xcodexRemote', value as HostPluginRuntime)
       } else if (owned) {
-        ctx.dshRemoteClient = value as ClientModeRuntime
+        ctx.xcodexRemoteClient = value as ClientModeRuntime
       } else {
-        ctx.provide('dshRemoteClient', value as ClientModeRuntime)
+        ctx.provide('xcodexRemoteClient', value as ClientModeRuntime)
       }
       return true
     } catch {
@@ -389,11 +389,11 @@ async function activate(
       clientRuntime = fresh.clientRuntime
       clientActive = clientRuntime !== undefined
       controlRuntime?.clearStartupFailure()
-      hostServiceProvided = syncOptionalService('dshRemote', runtime, hostServiceProvided)
+      hostServiceProvided = syncOptionalService('xcodexRemote', runtime, hostServiceProvided)
       if (clientRuntime !== undefined) {
-        clientServiceProvided = syncOptionalService('dshRemoteClient', clientRuntime, clientServiceProvided)
+        clientServiceProvided = syncOptionalService('xcodexRemoteClient', clientRuntime, clientServiceProvided)
       }
-      if (connection !== undefined) updateChecker.start()
+      // URL release: automatic npm update checks disabled until a trusted registry exists.
       return { client: clientRuntime, host: runtime }
     }
     replacement = operation()
@@ -417,10 +417,10 @@ async function activate(
   }
 
   if (runtime !== undefined) {
-    hostServiceProvided = syncOptionalService('dshRemote', runtime, hostServiceProvided)
+    hostServiceProvided = syncOptionalService('xcodexRemote', runtime, hostServiceProvided)
   }
   if (clientRuntime !== undefined) {
-    clientServiceProvided = syncOptionalService('dshRemoteClient', clientRuntime, clientServiceProvided)
+    clientServiceProvided = syncOptionalService('xcodexRemoteClient', clientRuntime, clientServiceProvided)
   }
   await disableLegacyLoaderEntries(ctx, logger)
   await ctx.effect(async () => {
@@ -445,7 +445,7 @@ async function activate(
         await startup
         // Only the browser/Desktop connection surfaces the update notice, so a
         // Host composition without it skips the registry calls.
-        if (connection !== undefined) updateChecker.start()
+        // URL release: automatic npm update checks disabled until a trusted registry exists.
       } catch (error) {
         clientActive = false
         logger.error('Remote plugin startup failed', safeStartupError(error))
@@ -462,7 +462,7 @@ async function activate(
       await clientRuntime?.close()
       await runtime?.close()
     }
-  }, 'ds-harness-remote lifecycle')
+  }, 'xcodex-remote lifecycle')
   if (config.remoteTools?.enabled) installRemoteDiscoveryTools(ctx, () => closed || !clientActive ? undefined : clientRuntime)
 }
 

@@ -282,7 +282,7 @@ describe('PluginControlRuntime settings setup', () => {
     vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input)
       calls.push({ url, init })
-      if (url.endsWith('/auth/login')) return json({
+      if (url.endsWith('/auth/account/password')) return json({
         token: 'web-account-token-value',
         expiresAt: Date.now() + 600_000,
         account: 'host@example.com',
@@ -360,7 +360,7 @@ describe('PluginControlRuntime settings setup', () => {
     vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input)
       calls.push({ url, init })
-      if (url.endsWith('/auth/login')) return json({
+      if (url.endsWith('/auth/account/password')) return json({
         token: 'web-account-token-value',
         expiresAt: Date.now() + 600_000,
         account: 'client@example.com',

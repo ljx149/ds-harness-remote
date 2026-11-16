@@ -11,11 +11,13 @@
 - `protocol`、`crypto`、`webrtc`、`client-core` 等共享包
 - 已冻结的 Mock Host 互操作工具
 
-本仓库另提供 [最小自部署 Server](../apps/server/README.zh.md)：单账号环境变量鉴权、设备注册与凭据、Control/Relay，以及登录和设备状态页。
+本仓库另提供 [最小自部署 Server](../apps/server/README.zh.md)：默认单账号环境变量鉴权（本分支新增可选 xcodex 多账号模式）、设备注册与凭据、Control/Relay，以及登录和设备状态页。
 
 完整多账号 Server、Remote Web 会话 UI 和 Admin 仍在独立 Server 项目实现；这里的最小版本复用相同协议子集，保持独立进程，不扩展为完整站点。
 
 ## 权威文档
+
+- [设备浏览器登录计划与接口契约](device-browser-login-plan.md)：手机/电脑同账号自动注册，实施顺序与验收清单。
 
 - [Server 设计说明](server.md)：定义外部 Server 的职责、API、安全边界、数据模型和部署要求；完整站点设计；最小自部署子集见上述运行文档。
 - [Host Plugin 接入指南](plugin-integration.md)：定义账号登录、Host 授权注册、设备凭证轮换、WebSocket 和本地状态隔离要求。
@@ -23,6 +25,12 @@
 - [产品与功能设计](design/README.md)：当前产品、Plugin、共享能力和界面设计；线协议以 protocol.md 为准。
 
 ## 主题说明
+
+- [xcodex Remote 网页品牌](branding-xcodex.md)：旧 A 标识来源、配色、命名及验证边界。
+
+- [xcodex 账号直连](xcodex-account-auth.md)：本分支多用户服务端、客户端接口契约、迁移与未验收边界（已试运行部署，待真实联调）。
+
+- [agent.xcodex.vip 部署记录](deployment-agent-xcodex-vip.md)：本实例的运行目录、入口、验收边界及回滚方法，不包含凭据。
 
 - [开发任务与路线图](TODO.md)：跟踪未完成的工作和验证边界。
 - [更新记录](CHANGELOG.md)：记录版本变更。
@@ -55,3 +63,8 @@
 文档优先级：`protocol.md` 的线协议约束高于示例代码；Server 设计发生变化时必须同步检查协议兼容性和版本号。
 
 2026-09-20 原生侧栏扩展：官方文件树/只读预览、默认开启且可在详细 Remote 设置中关闭的终端，以及受限 loopback HTTP/WebSocket 预览，配置与边界见根 README，线协议见 `protocol.md`。完整 Server 仍只转发密文，不代理预览 HTTP 明文。
+
+- [Xcodex 插件隔离与统一登录](xcodex-plugin-isolation.md)：独立安装、密码/Google 登录及验证记录。
+- [设备凭据兑换 schema 与安全诊断](device-exchange-diagnostics.md)：给手机客户端对接，400 字段类型/长度/原因，不含凭据。
+
+- [开发与线上分支约定](development-workflow.md)：origin/upstream、production/dev 以及发布流程。

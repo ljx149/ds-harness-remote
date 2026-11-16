@@ -20,7 +20,15 @@ const forceTerminateGraceMs = parseForceTerminateGrace(process.env.DSH_SERVER_FO
 const maxFramesPerSec = parseMaxFramesPerSec(process.env.DSH_SERVER_MAX_FRAMES_PER_SEC)
 const logLevel = parseLogLevel(process.env.DSH_SERVER_LOG_LEVEL)
 
+const authMode = process.env.DSH_SERVER_AUTH_MODE ?? 'local'
+if (authMode !== 'local' && authMode !== 'xcodex') throw new Error('Invalid DSH_SERVER_AUTH_MODE')
 const app = createRemoteServer({
+  authMode,
+  deviceLoginRedirectUris: (process.env.DSH_DEVICE_LOGIN_REDIRECT_URIS ?? '').split(',').map(value => value.trim()).filter(Boolean),
+  xcodexCredentialKey: process.env.DSH_XCODEX_CREDENTIAL_KEY,
+  xcodexOrigin: process.env.DSH_XCODEX_ORIGIN,
+  xcodexSupabaseOrigin: process.env.DSH_XCODEX_SUPABASE_ORIGIN,
+  allowLegacyLogin: process.env.DSH_SERVER_ALLOW_LEGACY_LOGIN === 'true',
   account: process.env.DSH_SERVER_ACCOUNT ?? '',
   password: process.env.DSH_SERVER_PASSWORD ?? '',
   publicUrl: process.env.DSH_SERVER_PUBLIC_URL ?? `http://localhost:${port}`,

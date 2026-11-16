@@ -1,6 +1,6 @@
 // Simplified upstream HostsPage + product AppHeader. No remote/open/admin actions.
 import { Alert, Button, Card, Empty, Input, Layout, Space, Table, Tag, Typography } from 'antd'
-import { EditOutlined, GithubOutlined } from '@ant-design/icons'
+import { EditOutlined, LinkOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import { api, RequestError, type Device, type DeviceList } from './api'
@@ -56,7 +56,7 @@ export function DevicesPage({ account, onSignedOut }: { account: string; onSigne
     { title: 'Harness 版本', dataIndex: 'harnessVersion', key: 'harnessVersion', render: (value?: string) => value || '—' },
   ]
   return <>
-    <Layout.Header className="topbar product-topbar"><div className="topbar-inner"><div className="topbar-brand-group is-product"><a className="topbar-brand" href="/" aria-label="返回首页"><img className="topbar-brand-mark" src="/brand-whale.webp" alt="" width="40" height="40" /><span className="topbar-brand-copy"><Title level={3}>DeepSeek Harness Remote</Title><small>安全远程访问</small></span></a></div><div className="topbar-actions"><a className="topbar-github-link product-github-link" href="https://github.com/liguobao/dsh-harness-remote" target="_blank" rel="noreferrer" aria-label="GitHub"><GithubOutlined /> GitHub</a><ThemeToggle /><Button type="text" loading={loggingOut} onClick={() => void logout()}>退出登录</Button></div></div></Layout.Header>
+    <Layout.Header className="topbar product-topbar"><div className="topbar-inner"><div className="topbar-brand-group is-product"><a className="topbar-brand" href="/" aria-label="返回首页"><img className="topbar-brand-mark" src="/xcodex-mark.svg" alt="" width="40" height="40" /><span className="topbar-brand-copy"><Title level={3}>xcodex Remote</Title><small>安全远程访问</small></span></a></div><div className="topbar-actions"><a className="topbar-github-link product-github-link" href="https://xcodex.vip" target="_blank" rel="noreferrer" aria-label="官网"><LinkOutlined /> 官网</a><ThemeToggle /><Button type="text" loading={loggingOut} onClick={() => void logout()}>退出登录</Button></div></div></Layout.Header>
     <Layout.Content className="product-content selfhost-content" id="main-content">
       <div className="app-area"><div className="workspace-view"><div className="hosts-page">
         <header className="workspace-page-header"><div><Title level={2}>我的设备</Title><Paragraph className="selfhost-account">{account}</Paragraph></div><Space className="workspace-page-actions" wrap><Button onClick={() => void load()} loading={loading}>刷新</Button></Space></header>

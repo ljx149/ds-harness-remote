@@ -286,7 +286,7 @@ describe('account and device authorization', () => {
         const credentials = new ServerCredentialStore(join(dir, `client-${delay}`))
         let loseResponse = true, logins = 0, registrations = 0
         const api = new ClientServerApi(base, credentials, async (url, init) => {
-          if (url.endsWith('/auth/login')) logins++
+          if (url.endsWith('/auth/account/password')) logins++
           if (url.endsWith('/devices/register')) registrations++
           const response = await fetch(url, init)
           if (loseResponse && url.endsWith('/auth/refresh')) {

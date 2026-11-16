@@ -296,6 +296,29 @@ export class HostPluginRuntime {
     this.serverConnection.reconnect()
   }
 
+  async browserLogin(action: 'start' | 'poll' | 'cancel', requestId?: string) {
+    if (!this.serverApi) throw new ServerApiError('SERVER_NOT_CONFIGURED', 'Configure the Server before signing in.', false)
+    if (action === 'start') return this.serverApi.startBrowserLogin(this.currentIdentity())
+    if (action === 'cancel') return this.serverApi.cancelBrowserLogin(requestId)
+    try {
+      const result = await this.serverApi.pollBrowserLogin(requestId ?? '')
+      if (result.status === 'complete') this.serverConnection?.resume()
+      return result
+    } catch (error) {
+      if (error instanceof ServerApiError && error.code === 'DEVICE_REVOKED') {
+        await this.serverApi.cancelBrowserLogin()
+        await this.serverConnection?.stop()
+        await this.pairing?.discard()
+        this.pairing = undefined
+        this.identity = await this.identities.reset(this.config.deviceName)
+        this.serverApi.bindIdentity(this.identity)
+        this.serverConnection = this.createServerConnection(this.identity)
+        this.initializePairing()
+      }
+      throw error
+    }
+  }
+
   async hostOAuthProviders(): Promise<OAuthProviderInfo[]> {
     if (this.serverApi === undefined) {
       throw new ServerApiError('SERVER_NOT_CONFIGURED', 'Remote Host Server is unavailable.', false)

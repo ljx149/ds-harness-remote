@@ -36,6 +36,9 @@ interface CliWriter {
 }
 
 interface CliHostApi {
+  startBrowserLogin?(identity: HostIdentity): Promise<{requestId: string; loginUrl: string; expiresAt: number}>
+  pollBrowserLogin?(requestId: string): Promise<{status: string}>
+  cancelBrowserLogin?(requestId?: string): Promise<unknown>
   oauthProviders(): Promise<OAuthProviderInfo[]>
   startOAuthQrLogin(provider: OAuthProvider): Promise<OAuthQrSession>
   pollOAuthQrLogin(
@@ -98,7 +101,7 @@ export async function runCli(
 
 async function register(args: readonly string[], runtime: CliRuntime): Promise<number> {
   if (args.length !== 1 || args[0] === undefined || args[0].trim() === '') {
-    throw new CliUsageError('Usage: ds-harness-remote register <server-token>')
+    throw new CliUsageError('Usage: xcodex-remote register <server-token>')
   }
   const context = await hostContext(runtime)
   await context.api.authorizeHostWithCode(context.identity, args[0])
@@ -107,22 +110,38 @@ async function register(args: readonly string[], runtime: CliRuntime): Promise<n
 }
 
 async function login(args: readonly string[], runtime: CliRuntime): Promise<number> {
-  if (args.length > 1) throw new CliUsageError('Usage: ds-harness-remote login [provider|list]')
+  if (args.length > 1) throw new CliUsageError('Usage: xcodex-remote login [browser|provider|list]')
   const context = await hostContext(runtime)
+  if (args[0] === undefined || args[0] === 'browser') {
+    if (!context.api.startBrowserLogin || !context.api.pollBrowserLogin) throw new CliUsageError('Browser login is unavailable in this version.')
+    const flow = await context.api.startBrowserLogin(context.identity)
+    write(runtime.stdout, `Open this link in your browser and sign in with your xcodex account:\n${terminalLink(flow.loginUrl, runtime.stdout)}\nWaiting for login...\n`)
+    try {
+      while (runtime.now() < flow.expiresAt) {
+        try {
+          const result = await context.api.pollBrowserLogin(flow.requestId)
+          if (result.status === 'complete') { write(runtime.stdout, 'Host authorized. Start or restart Harness to bring this computer online.\n'); return 0 }
+          if (result.status !== 'pending') throw new CliUsageError('Login expired or cancelled. Start again.')
+        } catch (error) { if (!(error instanceof ServerApiError) || !error.retryable) throw error }
+        await runtime.wait(QR_POLL_INTERVAL_MS)
+      }
+      throw new CliUsageError('Login expired. Start again.')
+    } finally { await context.api.cancelBrowserLogin?.(flow.requestId) }
+  }
   const providers = (await context.api.oauthProviders()).filter(item => item.qrStartUrl != null)
   if (args[0] === 'list') {
     write(runtime.stdout, providers.length === 0 ? 'No QR sign-in providers are available.\n'
-      : providers.map(item => `${item.displayName}: ds-harness-remote login ${item.id}\n`).join(''))
+      : providers.map(item => `${item.displayName}: xcodex-remote login ${item.id}\n`).join(''))
     return 0
   }
   const selected = args[0] === undefined
     ? providers.find(item => item.id === 'zhihu') ?? providers[0]
     : providers.find(item => item.id === args[0])
-  if (selected === undefined) throw new CliUsageError('OAuth provider unavailable. Run "ds-harness-remote login list" to see available providers.')
+  if (selected === undefined) throw new CliUsageError('OAuth provider unavailable. Run "xcodex-remote login list" to see available providers.')
   const provider = selected.id
   const session = await context.api.startOAuthQrLogin(provider)
   const qr = await runtime.renderQr(session.scanUrl)
-  write(runtime.stdout, `Using ${selected.displayName} QR login. Run "ds-harness-remote login list" for available providers.\n`)
+  write(runtime.stdout, `Using ${selected.displayName} QR login. Run "xcodex-remote login list" for available providers.\n`)
   write(runtime.stdout, 'Scan this QR code to authorize this Host:\n\n')
   write(runtime.stdout, `${qr.trimEnd()}\n`)
   write(runtime.stdout, `Authorization URL: ${terminalLink(session.scanUrl, runtime.stdout)}\n\nWaiting for authorization...\n`)
@@ -153,7 +172,7 @@ async function login(args: readonly string[], runtime: CliRuntime): Promise<numb
 }
 
 async function status(args: readonly string[], runtime: CliRuntime): Promise<number> {
-  if (args.length !== 0) throw new CliUsageError('Usage: ds-harness-remote status')
+  if (args.length !== 0) throw new CliUsageError('Usage: xcodex-remote status')
   const serverUrl = selectedServer()
   const root = await prepareDefaultIdentityDirectory({ env: runtime.env })
   const directory = serverStorageDirectory(root, serverUrl, 'host')
@@ -165,19 +184,19 @@ async function status(args: readonly string[], runtime: CliRuntime): Promise<num
 
   if (!await exists(join(directory, 'device.json'))) {
     lines.push('Device: not initialized', 'Authorization: logged out', 'Credential: unavailable')
-    write(runtime.stdout, `${lines.join('\n')}\n\nRun "ds-harness-remote login" to authorize this Host.\n`)
+    write(runtime.stdout, `${lines.join('\n')}\n\nRun "xcodex-remote login" to authorize this Host.\n`)
     return 0
   }
 
   const identities = runtime.createIdentityStore({ directory, env: runtime.env, role: 'host' })
-  const deviceName = runtime.env.DSH_REMOTE_DEVICE_NAME ?? hostname()
+  const deviceName = runtime.env.XCODEX_REMOTE_DEVICE_NAME ?? hostname()
   const identity = await identities.loadOrCreate(deviceName)
   const store = new ServerCredentialStore(directory)
   const stored = await store.load(serverUrl, identity.deviceId)
   lines.push(`Device: ${identity.name} (${identity.deviceId})`)
   if (stored === undefined) {
     lines.push('Authorization: logged out', 'Credential: unavailable')
-    write(runtime.stdout, `${lines.join('\n')}\n\nRun "ds-harness-remote login" to authorize this Host.\n`)
+    write(runtime.stdout, `${lines.join('\n')}\n\nRun "xcodex-remote login" to authorize this Host.\n`)
     return 0
   }
 
@@ -199,9 +218,9 @@ async function status(args: readonly string[], runtime: CliRuntime): Promise<num
 }
 
 async function logout(args: readonly string[], runtime: CliRuntime): Promise<number> {
-  if (args.length !== 0) throw new CliUsageError('Usage: ds-harness-remote logout')
+  if (args.length !== 0) throw new CliUsageError('Usage: xcodex-remote logout')
   const serverUrl = selectedServer()
-  const deviceName = runtime.env.DSH_REMOTE_DEVICE_NAME ?? hostname()
+  const deviceName = runtime.env.XCODEX_REMOTE_DEVICE_NAME ?? hostname()
   let root: string
   try {
     root = await prepareDefaultIdentityDirectory({ env: runtime.env })
@@ -251,14 +270,14 @@ async function logout(args: readonly string[], runtime: CliRuntime): Promise<num
 
 async function resetIdentity(args: readonly string[], runtime: CliRuntime): Promise<number> {
   if (args.length > 1) {
-    throw new CliUsageError('Usage: ds-harness-remote reset-identity [host|client|all]')
+    throw new CliUsageError('Usage: xcodex-remote reset-identity [host|client|all]')
   }
   const roleArg = args[0]
   if (roleArg !== undefined && roleArg !== 'host' && roleArg !== 'client' && roleArg !== 'all') {
-    throw new CliUsageError('Usage: ds-harness-remote reset-identity [host|client|all]')
+    throw new CliUsageError('Usage: xcodex-remote reset-identity [host|client|all]')
   }
   const serverUrl = selectedServer()
-  const deviceName = runtime.env.DSH_REMOTE_DEVICE_NAME ?? hostname()
+  const deviceName = runtime.env.XCODEX_REMOTE_DEVICE_NAME ?? hostname()
   const roles: RemoteDeviceRole[] = roleArg === 'client' ? ['client'] : roleArg === 'host' ? ['host'] : ['host', 'client']
   await resetDefaultIdentityRoles(roles, serverUrl, deviceName, {
     env: runtime.env,
@@ -280,7 +299,7 @@ async function hostContext(runtime: CliRuntime): Promise<{
   const serverUrl = selectedServer()
   const root = await prepareDefaultIdentityDirectory({ env: runtime.env })
   const directory = serverStorageDirectory(root, serverUrl, 'host')
-  const deviceName = runtime.env.DSH_REMOTE_DEVICE_NAME ?? hostname()
+  const deviceName = runtime.env.XCODEX_REMOTE_DEVICE_NAME ?? hostname()
   const identities = runtime.createIdentityStore({ directory, env: runtime.env, role: 'host' })
   const identity = await identities.loadOrCreate(deviceName)
   const api = runtime.createHostApi(serverUrl, new ServerCredentialStore(directory))
@@ -353,13 +372,13 @@ function cliErrorMessage(error: unknown): string {
 function helpText(): string {
   return [
     'Usage:',
-    '  ds-harness-remote login [provider|list]',
-    '  ds-harness-remote register <server-token>',
-    '  ds-harness-remote status',
-    '  ds-harness-remote logout',
-    '  ds-harness-remote reset-identity [host|client|all]',
+    '  xcodex-remote login [browser|provider|list]',
+    '  xcodex-remote register <server-token>',
+    '  xcodex-remote status',
+    '  xcodex-remote logout',
+    '  xcodex-remote reset-identity [host|client|all]',
     '',
-    'login uses an available QR provider (preferring Zhihu). Use login list to see available providers.',
+    'login opens xcodex browser sign-in by default. Use login list for legacy providers.',
     `The Server is ${DEFAULT_REMOTE_SERVER_URL}.`,
     'Host configuration is not exposed by this CLI yet. Restart the Harness instance after login or logout.',
     '',

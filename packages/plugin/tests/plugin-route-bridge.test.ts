@@ -24,7 +24,7 @@ describe('PluginRouteBridge', () => {
     await runScenarios([
       'http://evil/api/bot', '../etc/passwd', '', `api/${'x'.repeat(65)}`,
       'api/bot?x=1', '/api/bot', 'api/unknown', 'api/bot/child',
-      'api/../ds-harness-remote/host.logout', 'api/./bot', 'api/other/../bot',
+      'api/../xcodex-remote/host.logout', 'api/./bot', 'api/other/../bot',
       'api/%62ot', 'api/bot\n',
     ].map(route => ({
       name: JSON.stringify(route),

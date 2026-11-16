@@ -70,7 +70,7 @@ function defaultMigrationGate(directory: string): string | undefined {
   const parts = directory.split(sep)
   let rootIndex = -1
   for (let index = parts.length - 1; index >= 0; index--) {
-    if ((parts[index] === 'remote' || parts[index] === 'ds-harness-remote')
+    if ((parts[index] === 'xcodex-remote-legacy' || parts[index] === 'xcodex-remote')
       && (index === parts.length - 1 || parts[index + 1] === 'servers')) {
       rootIndex = index
       break
@@ -80,11 +80,11 @@ function defaultMigrationGate(directory: string): string | undefined {
   const suffix = parts.slice(rootIndex + 1)
   if (suffix.length !== 0 && (suffix.length !== 3 || suffix[0] !== 'servers'
     || !/^[a-f0-9]{24}$/.test(suffix[1]!) || !['host', 'client'].includes(suffix[2]!))) return undefined
-  return join(parts.slice(0, rootIndex).join(sep) || sep, '.ds-harness-remote-migration', 'credential-refresh-gate')
+  return join(parts.slice(0, rootIndex).join(sep) || sep, '.xcodex-remote-migration', 'credential-refresh-gate')
 }
 
 export function withDefaultCredentialMigrationGate<T>(home: string, operation: () => Promise<T>): Promise<T> {
-  return withQueueLock(join(home, '.ds-harness-remote-migration', 'credential-refresh-gate'), operation)
+  return withQueueLock(join(home, '.xcodex-remote-migration', 'credential-refresh-gate'), operation)
 }
 
 export async function assertRefreshQueueIdle(directory: string): Promise<void> {

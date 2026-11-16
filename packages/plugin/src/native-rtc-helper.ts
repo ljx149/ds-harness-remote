@@ -117,7 +117,7 @@ function nodeBinaryCandidates(): string[] {
     if (value === undefined || value.trim() === '') return
     if (!candidates.includes(value)) candidates.push(value)
   }
-  add(process.env.DSH_REMOTE_NODE)
+  add(process.env.XCODEX_REMOTE_NODE)
   addBundledPrimaryRuntimeNode(candidates, process.env.DSH_PRIMARY_RUNTIME)
   addBundledPrimaryRuntimeNode(candidates, process.env.DSH_BUNDLED_PRIMARY_RUNTIME)
   add(process.env.NODE)
@@ -157,7 +157,7 @@ function nvmNodeCandidates(): string[] {
 
 export function isUsableExternalNode(candidate: string, requireFrom: string): boolean {
   if (!isExecutableFile(candidate)) return false
-  const env: NodeJS.ProcessEnv = { ...process.env, DSH_REMOTE_RTC_HELPER_REQUIRE_FROM: requireFrom }
+  const env: NodeJS.ProcessEnv = { ...process.env, XCODEX_REMOTE_RTC_HELPER_REQUIRE_FROM: requireFrom }
   // A candidate can be the Desktop's Electron executable or a launcher for it.
   // Probe in Node mode so it cannot open a second Desktop and leave its Host
   // writing into the probe's closed stdout pipe. Electron is still rejected below.
@@ -167,7 +167,7 @@ export function isUsableExternalNode(candidate: string, requireFrom: string): bo
     '--eval',
     [
       "import { createRequire } from 'node:module';",
-      "const require = createRequire(process.env.DSH_REMOTE_RTC_HELPER_REQUIRE_FROM);",
+      "const require = createRequire(process.env.XCODEX_REMOTE_RTC_HELPER_REQUIRE_FROM);",
       "if (process.versions.electron) throw new Error('electron-node');",
       "const wrtc = require('@roamhq/wrtc');",
       "const RTCPeerConnection = wrtc.RTCPeerConnection ?? wrtc.default?.RTCPeerConnection;",
@@ -221,7 +221,7 @@ class ExternalNativePeerConnection implements RtcPeerConnection {
   ) {
     this.child = spawn(this.nodeBinary, ['--input-type=module', '--eval', HELPER_SOURCE], {
       cwd: dirname(this.requireFrom),
-      env: { ...process.env, DSH_REMOTE_RTC_HELPER_REQUIRE_FROM: this.requireFrom },
+      env: { ...process.env, XCODEX_REMOTE_RTC_HELPER_REQUIRE_FROM: this.requireFrom },
       stdio: ['pipe', 'pipe', 'pipe'],
     }) as ChildProcessWithoutNullStreams
     this.child.stdout.setEncoding('utf8')
@@ -444,7 +444,7 @@ const HELPER_SOURCE = String.raw`
 import { createRequire } from 'node:module'
 import { createInterface } from 'node:readline'
 
-const require = createRequire(process.env.DSH_REMOTE_RTC_HELPER_REQUIRE_FROM || (process.cwd() + '/package.json'))
+const require = createRequire(process.env.XCODEX_REMOTE_RTC_HELPER_REQUIRE_FROM || (process.cwd() + '/package.json'))
 const wrtc = require('@roamhq/wrtc')
 const RTCPeerConnection = wrtc.RTCPeerConnection ?? wrtc.default?.RTCPeerConnection
 if (typeof RTCPeerConnection !== 'function') throw new Error('missing RTCPeerConnection')

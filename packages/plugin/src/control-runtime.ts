@@ -197,6 +197,15 @@ export class PluginControlRuntime {
           : ok(this.hostOnlyStatus())
         return withUpdate(base, this.updates?.snapshot())
       }
+      if (['account.browser.start', 'account.browser.poll', 'account.browser.cancel', 'host.browser.start', 'host.browser.poll', 'host.browser.cancel'].includes(endpoint)) {
+        if (this.logoutFlight || this.serverSwitchFlight) throw new ClientModeError('CONNECTION_FAILED', 'Wait for the current settings change.', true)
+        const target = endpoint.startsWith('host.') ? this.host : this.client ?? this.host
+        if (!target?.browserLogin) throw new ClientModeError('METHOD_NOT_ALLOWED', 'Browser login is unavailable.')
+        const action = endpoint.split('.').at(-1) as 'start' | 'poll' | 'cancel'
+        const value = record(payload)
+        if (action !== 'start' && typeof value.requestId !== 'string') throw new ClientModeError('INVALID_MESSAGE', 'Login request ID required.')
+        return ok(await target.browserLogin(action, value.requestId as string | undefined))
+      }
       if (this.client !== undefined) return this.client.handleControl(endpoint, payload, signal)
 
       if (endpoint === 'devices') return ok([])

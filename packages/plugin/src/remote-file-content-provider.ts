@@ -91,7 +91,7 @@ interface RemoteListWire {
 /** Browser-side provider registered into dsh-file-viewer's `fileViewer` service. */
 export function createRemoteFileContentProvider(call: RemoteFileControlCall, options: { saveAsAllowed?: boolean | (() => boolean); saveAsMaxBytes?: number | (() => number) } = {}): RemoteFileContentProvider {
   return {
-    id: 'dsh-remote-files',
+    id: 'xcodex-remote-files',
     priority: 10_000,
     supports: () => true,
     saveAsAllowed: () => ({

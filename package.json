@@ -1,6 +1,6 @@
 {
-  "name": "ds-harness-remote",
-  "version": "0.6.4",
+  "name": "xcodex-remote",
+  "version": "0.6.4-xcodex.2",
   "description": "P2P-based, end-to-end encrypted remote access to DeepSeek Harness, CodeX, Claude Code, Pi, and other workspaces from web and mobile clients.",
   "keywords": [
     "deepseek",
@@ -12,20 +12,20 @@
     "end-to-end-encryption",
     "webrtc"
   ],
-  "homepage": "https://github.com/liguobao/ds-harness-remote#readme",
+  "homepage": "https://xcodex.vip",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/liguobao/ds-harness-remote.git"
   },
   "bugs": {
-    "url": "https://github.com/liguobao/ds-harness-remote/issues"
+    "url": "https://xcodex.vip"
   },
   "author": "liguobao <lgb835485368@gmail.com>",
   "license": "MIT",
   "type": "module",
   "main": "./index.js",
   "bin": {
-    "ds-harness-remote": "./packages/plugin/bin/ds-harness-remote.js"
+    "xcodex-remote": "./packages/plugin/bin/ds-harness-remote.js"
   },
   "types": "./packages/plugin/public.d.ts",
   "exports": {
