@@ -1,3 +1,5 @@
+> 本文为 0.7 差距基线。本轮 0.8 已实现项与剩余验收以 [最新记录](orca-management-0.8-validation.md) 为准。
+
 # Orca Agent 管理层接入差距
 
 核对日期：2026-11-19。Orca 源码基线 `81c1f25fe98647365d226aed0254e888d2aa2a98`；插件基线 `528462c5` / `0.7.0-xcodex.3`，分支 `feat/orca-agent-management`。本记录是源码对照，不代表真机验收。

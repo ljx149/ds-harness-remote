@@ -178,6 +178,46 @@ export class ManagedSessionStore {
     if (row.session.providerSessionId && row.session.providerSessionId !== providerSessionId) throw new Error('MANAGED_PROVIDER_SESSION_CONFLICT');
     row.session.providerSessionId = providerSessionId; row.session.updatedAt = Date.now(); this.persist(next);
   }
+  /** Compare-and-swap provider identity and receipt in ONE durable snapshot.
+   * A successful provider fork must never resume the old transcript on restart. */
+  commitProviderReplacement(scope: ManagedSessionScope, id: string, operationId: string, expected: string, replacement: string, result: JsonValue, journalEntry?: { eventId: string; payload: JsonValue }): void {
+    identifier.parse(replacement); fingerprint(result);
+    const next = structuredClone(this.state); const row = this.row(scope, id, next);
+    const receipt = row.operations.find(o => o.operationId === operationId);
+    if (!receipt || receipt.kind !== 'manage:rewind' || receipt.status !== 'pending') throw new Error('MANAGED_OPERATION_CONFLICT');
+    if (row.session.providerSessionId !== expected) throw new Error('MANAGED_PROVIDER_SESSION_CONFLICT');
+    row.session.providerSessionId = replacement; row.session.updatedAt = Date.now();
+    receipt.status = 'completed'; receipt.result = structuredClone(result);
+    if (journalEntry) {
+      identifier.parse(journalEntry.eventId); fingerprint(journalEntry.payload);
+      if (row.events.some(event => event.eventId === journalEntry.eventId)) throw new Error('MANAGED_EVENT_CONFLICT');
+      row.events.push({ eventId: journalEntry.eventId, type: 'native', payload: structuredClone(journalEntry.payload), sequence: row.events.length + 1, createdAt: Date.now() });
+    }
+    this.persist(next);
+    if (journalEntry) for (const listener of this.listeners) { try { listener(structuredClone(row.session), structuredClone(row.events.at(-1)!)); } catch { /* durable replay remains authoritative */ } }
+  }
+  /** Publish fork identity, inherited plugin journal and parent receipt together.
+   * A crash must never leave a visible unbound child that can create a second thread. */
+  commitFork(scope: ManagedSessionScope, id: string, operationId: string, providerSessionId: string, entries: Array<{ eventId: string; payload: JsonValue }>): ManagedSession {
+    identifier.parse(providerSessionId);
+    const next = structuredClone(this.state); const parent = this.row(scope, id, next);
+    const receipt = parent.operations.find(o => o.operationId === operationId);
+    if (!receipt || receipt.kind !== 'manage:fork' || receipt.status !== 'pending' || parent.session.providerSessionId === providerSessionId) throw new Error('MANAGED_OPERATION_CONFLICT');
+    const now = Date.now();
+    const session: ManagedSession = { ...parent.session, id: randomUUID(), providerSessionId, createdAt: now, updatedAt: now };
+    const events: ManagedEvent[] = entries.map((entry, index) => {
+      identifier.parse(entry.eventId); fingerprint(entry.payload);
+      return { eventId: entry.eventId, type: 'native', payload: structuredClone(entry.payload), sequence: index + 1, createdAt: now };
+    });
+    if (new Set(events.map(event => event.eventId)).size !== events.length) throw new Error('MANAGED_EVENT_CONFLICT');
+    const createOperationId = `fork:${createHash('sha256').update(JSON.stringify([id, operationId])).digest('hex')}`;
+    next.rows.push({ session, events, operations: [], createOperationId, createFingerprint: fingerprint({ agentId: session.agentId, providerId: session.providerId, workspacePath: session.workspacePath, title: session.title }) });
+    receipt.status = 'completed'; receipt.result = { sessionId: session.id, providerSessionId };
+    this.persist(next);
+    const last = events.at(-1);
+    if (last) for (const listener of this.listeners) { try { listener(structuredClone(session), structuredClone(last)); } catch { /* durable replay remains authoritative */ } }
+    return structuredClone(session);
+  }
   beginOperation(scope: ManagedSessionScope, id: string, input: { operationId: string; kind: string; input: JsonValue }): { execute: boolean; receipt: OperationReceipt } {
     identifier.parse(input.operationId); identifier.parse(input.kind);
     const hash = fingerprint({ kind: input.kind, input: input.input });

@@ -1,3 +1,5 @@
+import { ManagedProcessOwnership } from './managed-agents/process-ownership.js'
+import { ManagedLaunchRegistry } from './managed-agents/launch.js'
 import { generateManagedTitle } from './managed-agents/title.js'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
@@ -275,7 +277,8 @@ async function activate(
   if (config.managedAgents?.enabled && initialStorageError === undefined) {
     const rawGateway = new TypertGatewaySwitch(nativeTypertGateway, () => fallbackPeer).local()
     const scopeKey = createHash('sha256').update(`${config.serverUrl ?? 'local'}:${entryId}`).digest('hex').slice(0, 24)
-    const store = ManagedSessionStore.open(join(`${defaultIdentityDirectory}-agent-sessions`, scopeKey))
+    const managedDirectory = join(`${defaultIdentityDirectory}-agent-sessions`, scopeKey)
+    const store = ManagedSessionStore.open(managedDirectory)
     const workspaceSnapshot = async (signal?: AbortSignal) => {
       // Harness 0.2.2 exposes the directory through its snapshot stream, not workspace/list.
       const lifetime = new AbortController()
@@ -292,11 +295,13 @@ async function activate(
         await iterator.return?.()
       }
     }
-    managedBackend = new ManagedAgentBackend(store, createManagedAgentRuntime(), () => {
+    const processOwnership = process.platform === 'linux' ? new ManagedProcessOwnership(join(managedDirectory, 'process-ownership'), { exclusiveHostLockHeld: true }) : undefined
+    const launches = new ManagedLaunchRegistry({ profiles: config.managedAgents.profiles }, undefined, processOwnership ? input => processOwnership.forSession(input) : undefined)
+    managedBackend = new ManagedAgentBackend(store, createManagedAgentRuntime(launches), () => {
       const status = runtime?.hostStatus()
       if (!status?.authorized || !status.account || !status.deviceId || status.accountRequired) return undefined
       return { ownerId: createHash('sha256').update(`${config.serverUrl}:${status.account}`).digest('hex'), hostId: status.deviceId }
-    }, async signal => (await workspaceSnapshot(signal)).items!, { generateTitle: generateManagedTitle, nativeArchived: async signal => (await workspaceSnapshot(signal)).archivedSessionIds ?? [] })
+    }, async signal => (await workspaceSnapshot(signal)).items!, { launches, attachments: ctx.get('attachments', false) as import('@deepseek-ai/dsh-attachment').AttachmentStore | undefined, generateTitle: generateManagedTitle, nativeArchived: async signal => (await workspaceSnapshot(signal)).archivedSessionIds ?? [] })
     removeManagedGateway = installManagedAgentGateway(nativeTypertGateway, managedBackend)
   }
   const hostGateway = new TypertGatewaySwitch(nativeTypertGateway, () => fallbackPeer)

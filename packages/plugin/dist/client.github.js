@@ -184,18 +184,18 @@
           throw new Error("BitMatrix size must be defined and greater than 0");
         this.size = size, this.data = new Uint8Array(size * size), this.reservedBit = new Uint8Array(size * size);
       }
-      BitMatrix.prototype.set = function(row, col, value, reserved) {
-        let index = row * this.size + col;
+      BitMatrix.prototype.set = function(row2, col, value, reserved) {
+        let index = row2 * this.size + col;
         this.data[index] = value, reserved && (this.reservedBit[index] = !0);
       };
-      BitMatrix.prototype.get = function(row, col) {
-        return this.data[row * this.size + col];
+      BitMatrix.prototype.get = function(row2, col) {
+        return this.data[row2 * this.size + col];
       };
-      BitMatrix.prototype.xor = function(row, col, value) {
-        this.data[row * this.size + col] ^= value;
+      BitMatrix.prototype.xor = function(row2, col, value) {
+        this.data[row2 * this.size + col] ^= value;
       };
-      BitMatrix.prototype.isReserved = function(row, col) {
-        return this.reservedBit[row * this.size + col];
+      BitMatrix.prototype.isReserved = function(row2, col) {
+        return this.reservedBit[row2 * this.size + col];
       };
       module.exports = BitMatrix;
     }
@@ -269,11 +269,11 @@
       };
       exports.getPenaltyN1 = function(data) {
         let size = data.size, points = 0, sameCountCol = 0, sameCountRow = 0, lastCol = null, lastRow = null;
-        for (let row = 0; row < size; row++) {
+        for (let row2 = 0; row2 < size; row2++) {
           sameCountCol = sameCountRow = 0, lastCol = lastRow = null;
           for (let col = 0; col < size; col++) {
-            let module2 = data.get(row, col);
-            module2 === lastCol ? sameCountCol++ : (sameCountCol >= 5 && (points += PenaltyScores.N1 + (sameCountCol - 5)), lastCol = module2, sameCountCol = 1), module2 = data.get(col, row), module2 === lastRow ? sameCountRow++ : (sameCountRow >= 5 && (points += PenaltyScores.N1 + (sameCountRow - 5)), lastRow = module2, sameCountRow = 1);
+            let module2 = data.get(row2, col);
+            module2 === lastCol ? sameCountCol++ : (sameCountCol >= 5 && (points += PenaltyScores.N1 + (sameCountCol - 5)), lastCol = module2, sameCountCol = 1), module2 = data.get(col, row2), module2 === lastRow ? sameCountRow++ : (sameCountRow >= 5 && (points += PenaltyScores.N1 + (sameCountRow - 5)), lastRow = module2, sameCountRow = 1);
           }
           sameCountCol >= 5 && (points += PenaltyScores.N1 + (sameCountCol - 5)), sameCountRow >= 5 && (points += PenaltyScores.N1 + (sameCountRow - 5));
         }
@@ -281,19 +281,19 @@
       };
       exports.getPenaltyN2 = function(data) {
         let size = data.size, points = 0;
-        for (let row = 0; row < size - 1; row++)
+        for (let row2 = 0; row2 < size - 1; row2++)
           for (let col = 0; col < size - 1; col++) {
-            let last = data.get(row, col) + data.get(row, col + 1) + data.get(row + 1, col) + data.get(row + 1, col + 1);
+            let last = data.get(row2, col) + data.get(row2, col + 1) + data.get(row2 + 1, col) + data.get(row2 + 1, col + 1);
             (last === 4 || last === 0) && points++;
           }
         return points * PenaltyScores.N2;
       };
       exports.getPenaltyN3 = function(data) {
         let size = data.size, points = 0, bitsCol = 0, bitsRow = 0;
-        for (let row = 0; row < size; row++) {
+        for (let row2 = 0; row2 < size; row2++) {
           bitsCol = bitsRow = 0;
           for (let col = 0; col < size; col++)
-            bitsCol = bitsCol << 1 & 2047 | data.get(row, col), col >= 10 && (bitsCol === 1488 || bitsCol === 93) && points++, bitsRow = bitsRow << 1 & 2047 | data.get(col, row), col >= 10 && (bitsRow === 1488 || bitsRow === 93) && points++;
+            bitsCol = bitsCol << 1 & 2047 | data.get(row2, col), col >= 10 && (bitsCol === 1488 || bitsCol === 93) && points++, bitsRow = bitsRow << 1 & 2047 | data.get(col, row2), col >= 10 && (bitsRow === 1488 || bitsRow === 93) && points++;
         }
         return points * PenaltyScores.N3;
       };
@@ -327,8 +327,8 @@
       exports.applyMask = function(pattern, data) {
         let size = data.size;
         for (let col = 0; col < size; col++)
-          for (let row = 0; row < size; row++)
-            data.isReserved(row, col) || data.xor(row, col, getMaskAt(pattern, row, col));
+          for (let row2 = 0; row2 < size; row2++)
+            data.isReserved(row2, col) || data.xor(row2, col, getMaskAt(pattern, row2, col));
       };
       exports.getBestMask = function(data, setupFormatFunc) {
         let numPatterns = Object.keys(exports.Patterns).length, bestPattern = 0, lowerPenalty = 1 / 0;
@@ -1341,11 +1341,11 @@ Make sure your charset is UTF-8`
       function setupFinderPattern(matrix, version) {
         let size = matrix.size, pos = FinderPattern.getPositions(version);
         for (let i = 0; i < pos.length; i++) {
-          let row = pos[i][0], col = pos[i][1];
+          let row2 = pos[i][0], col = pos[i][1];
           for (let r = -1; r <= 7; r++)
-            if (!(row + r <= -1 || size <= row + r))
+            if (!(row2 + r <= -1 || size <= row2 + r))
               for (let c = -1; c <= 7; c++)
-                col + c <= -1 || size <= col + c || (r >= 0 && r <= 6 && (c === 0 || c === 6) || c >= 0 && c <= 6 && (r === 0 || r === 6) || r >= 2 && r <= 4 && c >= 2 && c <= 4 ? matrix.set(row + r, col + c, !0, !0) : matrix.set(row + r, col + c, !1, !0));
+                col + c <= -1 || size <= col + c || (r >= 0 && r <= 6 && (c === 0 || c === 6) || c >= 0 && c <= 6 && (r === 0 || r === 6) || r >= 2 && r <= 4 && c >= 2 && c <= 4 ? matrix.set(row2 + r, col + c, !0, !0) : matrix.set(row2 + r, col + c, !1, !0));
         }
       }
       function setupTimingPattern(matrix) {
@@ -1358,16 +1358,16 @@ Make sure your charset is UTF-8`
       function setupAlignmentPattern(matrix, version) {
         let pos = AlignmentPattern.getPositions(version);
         for (let i = 0; i < pos.length; i++) {
-          let row = pos[i][0], col = pos[i][1];
+          let row2 = pos[i][0], col = pos[i][1];
           for (let r = -2; r <= 2; r++)
             for (let c = -2; c <= 2; c++)
-              r === -2 || r === 2 || c === -2 || c === 2 || r === 0 && c === 0 ? matrix.set(row + r, col + c, !0, !0) : matrix.set(row + r, col + c, !1, !0);
+              r === -2 || r === 2 || c === -2 || c === 2 || r === 0 && c === 0 ? matrix.set(row2 + r, col + c, !0, !0) : matrix.set(row2 + r, col + c, !1, !0);
         }
       }
       function setupVersionInfo(matrix, version) {
-        let size = matrix.size, bits = Version.getEncodedBits(version), row, col, mod;
+        let size = matrix.size, bits = Version.getEncodedBits(version), row2, col, mod;
         for (let i = 0; i < 18; i++)
-          row = Math.floor(i / 3), col = i % 3 + size - 8 - 3, mod = (bits >> i & 1) === 1, matrix.set(row, col, mod, !0), matrix.set(col, row, mod, !0);
+          row2 = Math.floor(i / 3), col = i % 3 + size - 8 - 3, mod = (bits >> i & 1) === 1, matrix.set(row2, col, mod, !0), matrix.set(col, row2, mod, !0);
       }
       function setupFormatInfo(matrix, errorCorrectionLevel, maskPattern) {
         let size = matrix.size, bits = FormatInfo.getEncodedBits(errorCorrectionLevel, maskPattern), i, mod;
@@ -1376,16 +1376,16 @@ Make sure your charset is UTF-8`
         matrix.set(size - 8, 8, 1, !0);
       }
       function setupData(matrix, data) {
-        let size = matrix.size, inc = -1, row = size - 1, bitIndex = 7, byteIndex = 0;
+        let size = matrix.size, inc = -1, row2 = size - 1, bitIndex = 7, byteIndex = 0;
         for (let col = size - 1; col > 0; col -= 2)
           for (col === 6 && col--; ; ) {
             for (let c = 0; c < 2; c++)
-              if (!matrix.isReserved(row, col - c)) {
+              if (!matrix.isReserved(row2, col - c)) {
                 let dark = !1;
-                byteIndex < data.length && (dark = (data[byteIndex] >>> bitIndex & 1) === 1), matrix.set(row, col - c, dark), bitIndex--, bitIndex === -1 && (byteIndex++, bitIndex = 7);
+                byteIndex < data.length && (dark = (data[byteIndex] >>> bitIndex & 1) === 1), matrix.set(row2, col - c, dark), bitIndex--, bitIndex === -1 && (byteIndex++, bitIndex = 7);
               }
-            if (row += inc, row < 0 || size <= row) {
-              row -= inc, inc = -inc;
+            if (row2 += inc, row2 < 0 || size <= row2) {
+              row2 -= inc, inc = -inc;
               break;
             }
           }
@@ -1566,8 +1566,8 @@ Minimum version required to store current data is: ` + bestVersion + `.
       function qrToPath(data, size, margin) {
         let path = "", moveBy = 0, newRow = !1, lineLength = 0;
         for (let i = 0; i < data.length; i++) {
-          let col = Math.floor(i % size), row = Math.floor(i / size);
-          !col && !newRow && (newRow = !0), data[i] ? (lineLength++, i > 0 && col > 0 && data[i - 1] || (path += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0), moveBy = 0, newRow = !1), col + 1 < size && data[i + 1] || (path += svgCmd("h", lineLength), lineLength = 0)) : moveBy++;
+          let col = Math.floor(i % size), row2 = Math.floor(i / size);
+          !col && !newRow && (newRow = !0), data[i] ? (lineLength++, i > 0 && col > 0 && data[i - 1] || (path += newRow ? svgCmd("M", col + margin, 0.5 + row2 + margin) : svgCmd("m", moveBy, 0), moveBy = 0, newRow = !1), col + 1 < size && data[i + 1] || (path += svgCmd("h", lineLength), lineLength = 0)) : moveBy++;
         }
         return path;
       }
@@ -1583,20 +1583,20 @@ Minimum version required to store current data is: ` + bestVersion + `.
   var require_browser = __commonJS({
     "node_modules/qrcode/lib/browser.js"(exports) {
       var canPromise = require_can_promise(), QRCode4 = require_qrcode(), CanvasRenderer = require_canvas(), SvgRenderer = require_svg_tag();
-      function renderCanvas(renderFunc, canvas, text, opts, cb) {
+      function renderCanvas(renderFunc, canvas, text2, opts, cb) {
         let args = [].slice.call(arguments, 1), argsNum = args.length, isLastArgCb = typeof args[argsNum - 1] == "function";
         if (!isLastArgCb && !canPromise())
           throw new Error("Callback required as last argument");
         if (isLastArgCb) {
           if (argsNum < 2)
             throw new Error("Too few arguments provided");
-          argsNum === 2 ? (cb = text, text = canvas, canvas = opts = void 0) : argsNum === 3 && (canvas.getContext && typeof cb > "u" ? (cb = opts, opts = void 0) : (cb = opts, opts = text, text = canvas, canvas = void 0));
+          argsNum === 2 ? (cb = text2, text2 = canvas, canvas = opts = void 0) : argsNum === 3 && (canvas.getContext && typeof cb > "u" ? (cb = opts, opts = void 0) : (cb = opts, opts = text2, text2 = canvas, canvas = void 0));
         } else {
           if (argsNum < 1)
             throw new Error("Too few arguments provided");
-          return argsNum === 1 ? (text = canvas, canvas = opts = void 0) : argsNum === 2 && !canvas.getContext && (opts = text, text = canvas, canvas = void 0), new Promise(function(resolve, reject) {
+          return argsNum === 1 ? (text2 = canvas, canvas = opts = void 0) : argsNum === 2 && !canvas.getContext && (opts = text2, text2 = canvas, canvas = void 0), new Promise(function(resolve, reject) {
             try {
-              let data = QRCode4.create(text, opts);
+              let data = QRCode4.create(text2, opts);
               resolve(renderFunc(data, canvas, opts));
             } catch (e) {
               reject(e);
@@ -1604,7 +1604,7 @@ Minimum version required to store current data is: ` + bestVersion + `.
           });
         }
         try {
-          let data = QRCode4.create(text, opts);
+          let data = QRCode4.create(text2, opts);
           cb(null, renderFunc(data, canvas, opts));
         } catch (e) {
           cb(e);
@@ -1737,6 +1737,349 @@ Minimum version required to store current data is: ` + bestVersion + `.
       );
     }
     return { NewSession, SessionLogo };
+  }
+
+  // packages/plugin/src/client/managed-agent-management.ts
+  var row = (value) => typeof value == "object" && value !== null && !Array.isArray(value) ? value : {}, rows = (value) => Array.isArray(value) ? value.map(row) : [], text = (value) => typeof value == "string" ? value : "", finite = (value) => typeof value == "number" && Number.isFinite(value) ? value.toLocaleString() : "\u2014", browserStorage = () => {
+    try {
+      return globalThis.sessionStorage;
+    } catch {
+      return;
+    }
+  }, canonical = (value) => Array.isArray(value) ? `[${value.map(canonical).join(",")}]` : value && typeof value == "object" ? `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}` : JSON.stringify(value) ?? "null", digest = async (value) => {
+    let bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+    return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  }, ManagedManagementAttempts = class {
+    constructor(uuid = () => crypto.randomUUID(), storage = browserStorage) {
+      this.uuid = uuid;
+      this.storage = storage;
+    }
+    pending = /* @__PURE__ */ new Map();
+    async begin(sessionId, operation, payload) {
+      let key = `xcodex-management-intent:v1:${await digest(canonical([sessionId, operation, payload]))}`, persistent = !1, operationId = this.pending.get(key);
+      try {
+        operationId ??= this.storage()?.getItem(key) ?? void 0;
+      } catch {
+      }
+      operationId ??= this.uuid(), this.pending.set(key, operationId);
+      try {
+        let storage = this.storage();
+        storage?.setItem(key, operationId), persistent = storage !== void 0;
+      } catch {
+      }
+      return { key, operationId, persistent };
+    }
+    acknowledged(key) {
+      this.pending.delete(key);
+      try {
+        this.storage()?.removeItem(key);
+      } catch {
+      }
+    }
+  };
+  async function refreshManagedNativeHistory(sessions, sessionId) {
+    let service = sessions, session = service.binding?.(sessionId)?.session;
+    return typeof session?.resync != "function" ? !1 : (await session.resync(), await service.refreshProjections?.(sessionId), !0);
+  }
+  function createManagedAgentManagementUi(React, ctx) {
+    let h = React.createElement, attempts = new ManagedManagementAttempts(), t = (zh2, en2) => ctx.chinese ? zh2 : en2, button = (label, onClick, disabled = !1) => h("button", { type: "button", disabled, onClick, style: { padding: "6px 10px", margin: "4px 4px 4px 0" } }, label);
+    function Management() {
+      let [, changed] = React.useState(0);
+      React.useEffect(() => ctx.sessions.list.subscribe(() => changed((n) => n + 1)), []);
+      let current = Object.values(ctx.sessions.list.getSnapshot().byId ?? {}).find((item) => (item.retainedBy?.mainView ?? 0) > 0), sessionId = current?.id, [identified, setIdentified] = React.useState(void 0), [expanded, setExpanded] = React.useState(!1), [discovery, setDiscovery] = React.useState({}), [results, setResults] = React.useState({}), [error, setError] = React.useState(""), [working, setWorking] = React.useState(!1), [instructions, setInstructions] = React.useState(""), [goal, setGoal] = React.useState(""), [checkpoint, setCheckpoint] = React.useState(""), [answers, setAnswers] = React.useState({}), [profile, setProfile] = React.useState(""), [location, setLocation] = React.useState(""), [storageWarning, setStorageWarning] = React.useState(!1), [callbacks, setCallbacks] = React.useState({}), dialog = React.useRef(null), active = React.useRef(sessionId), mutation = React.useRef(!1), refreshing = React.useRef(!1);
+      active.current = sessionId, React.useEffect(() => () => {
+        active.current = void 0;
+      }, []), React.useEffect(() => {
+        let live = !0;
+        if (setIdentified(void 0), setWorking(!1), setExpanded(!1), setDiscovery({}), setResults({}), setError(""), setAnswers({}), setCheckpoint(""), setInstructions(""), setGoal(""), setProfile(""), setLocation(""), setCallbacks({}), !!sessionId) {
+          if (typeof row(current?.projections?.values?.managedAgent).agentId == "string") {
+            setIdentified(sessionId);
+            return;
+          }
+          return ctx.call("managedAgent/catalog", {}).then((value) => {
+            let items = Array.isArray(value) ? rows(value) : rows(row(value).items);
+            live && items.some((item) => item.sessionId === sessionId && typeof item.agentId == "string") && setIdentified(sessionId);
+          }).catch(() => {
+          }), () => {
+            live = !1;
+          };
+        }
+      }, [sessionId]);
+      let refresh = async () => {
+        if (!sessionId || refreshing.current) return;
+        refreshing.current = !0;
+        let captured = sessionId;
+        try {
+          let next = row(await ctx.call("managedAgent/management", { request: { sessionId: captured } }));
+          active.current === captured && (setDiscovery(next), setError(""));
+        } catch (reason) {
+          active.current === captured && setError(reason instanceof Error ? reason.message : String(reason));
+        } finally {
+          refreshing.current = !1;
+        }
+      };
+      React.useEffect(() => {
+        if (!expanded) {
+          dialog.current?.close();
+          return;
+        }
+        dialog.current?.showModal(), refresh();
+        let timer = setInterval(() => {
+          mutation.current || refresh();
+        }, 5e3);
+        return () => {
+          clearInterval(timer), dialog.current?.close();
+        };
+      }, [expanded, sessionId]);
+      let operations = Array.isArray(discovery.operations) ? discovery.operations.filter((op) => typeof op == "string") : [], has = (op) => operations.includes(op), state = row(discovery.state), checkpoints = rows(state.checkpoints), run = async (operation, payload = {}, read = !1) => {
+        if (!sessionId || mutation.current || !has(operation)) return;
+        let captured = sessionId;
+        mutation.current = !0, setWorking(!0), setError("");
+        let receipt;
+        try {
+          receipt = read ? void 0 : await attempts.begin(captured, operation, payload), receipt && !receipt.persistent && setStorageWarning(!0);
+          let unresolved = rows(row(discovery.state).unresolvedOperations);
+          if (!read && unresolved.some((item) => item.operationId !== receipt?.operationId))
+            throw receipt && !unresolved.some((item) => item.operationId === receipt?.operationId) && attempts.acknowledged(receipt.key), new Error(t("\u6B64\u4F1A\u8BDD\u6709\u7ED3\u679C\u672A\u786E\u8BA4\u7684\u64CD\u4F5C\uFF0C\u8BF7\u5148\u6838\u5BF9\u539F\u64CD\u4F5C\uFF0C\u4E0D\u80FD\u63D0\u4EA4\u65B0\u7684\u4FEE\u6539\u3002", "This session has an unresolved operation. Reconcile it before submitting a new mutation."));
+          if (active.current !== captured) return;
+          let result = row(await ctx.call("managedAgent/manage", { request: { sessionId: captured, operation, ...receipt ? { operationId: receipt.operationId } : {}, payload } }));
+          if (receipt && attempts.acknowledged(receipt.key), active.current === captured && (setResults((previous) => ({ ...previous, [operation]: result })), operation === "mcp.callback" && setCallbacks((previous) => ({ ...previous, [text(payload.name)]: "" })), operation === "fork" && typeof result.sessionId == "string" && (await ctx.sessions.refresh?.(), active.current === captured && ctx.open(result.sessionId)), await refresh(), operation === "rewind" && active.current === captured))
+            try {
+              await refreshManagedNativeHistory(ctx.sessions, captured) || setError(t("\u56DE\u9000\u5DF2\u5B8C\u6210\uFF0C\u4F46\u5F53\u524D DSH \u7248\u672C\u65E0\u6CD5\u76F4\u63A5\u5237\u65B0\u5386\u53F2\uFF1B\u8BF7\u91CD\u65B0\u6253\u5F00\u6B64\u4F1A\u8BDD\uFF0C\u4E0D\u8981\u91CD\u590D\u56DE\u9000\u3002", "Rewind completed, but this DSH version cannot refresh history directly. Reopen the session; do not rewind again."));
+            } catch {
+              setError(t("\u56DE\u9000\u5DF2\u5B8C\u6210\uFF0C\u5386\u53F2\u5237\u65B0\u5931\u8D25\uFF0C\u8BF7\u91CD\u65B0\u6253\u5F00\u4F1A\u8BDD\uFF0C\u4E0D\u8981\u91CD\u590D\u64CD\u4F5C\u3002", "Rewind completed; history refresh failed. Reopen the session without repeating the operation."));
+            }
+        } catch (reason) {
+          active.current === captured && setError(reason instanceof Error ? reason.message : String(reason));
+        } finally {
+          mutation.current = !1, active.current === captured && setWorking(!1);
+        }
+      };
+      if (!sessionId || identified !== sessionId) return null;
+      let busy = working || discovery.busy === !0, section = (title, ...children) => h("section", { style: { borderTop: "1px solid #8885", padding: "10px 0" } }, h("h3", { style: { margin: "4px 0", fontSize: "1rem" } }, title), ...children), field = (label, value, change, multiline = !1) => h(
+        "label",
+        { style: { display: "block", margin: "8px 0" } },
+        label,
+        h(multiline ? "textarea" : "input", { value, disabled: working, onChange: (event) => change(event.target.value), style: { display: "block", width: "100%", boxSizing: "border-box", padding: 6 } })
+      ), context = results.context ?? row(state.context), usage = results.accountUsage ?? row(state.accountUsage), settings = results.settings ?? row(state.settings), mcpAuthUrl = results["mcp.authenticate"]?.authUrl ?? results["mcp.authenticate"]?.authorizationUrl, mcp = results["mcp.list"] ?? row(state.mcp), tasks = results["tasks.list"] ?? row(state.tasks), launch = results["launch.options"] ?? row(state.launch), currentGoal = row(results["goal.read"]?.goal ?? state.goal), select = (label, value, options, choose, disabled = !1) => h(
+        "label",
+        { style: { display: "block", margin: "8px 0" } },
+        label,
+        h(
+          "select",
+          { value, disabled: working || disabled, onChange: (event) => choose(event.target.value), style: { width: "100%", padding: 6 } },
+          h("option", { value: "" }, t("\u8BF7\u9009\u62E9", "Select")),
+          ...options.map((option) => h("option", { key: text(option.id ?? option.value), value: text(option.id ?? option.value) }, text(option.title ?? option.label ?? option.name ?? option.id ?? option.value)))
+        )
+      );
+      return h(
+        React.Fragment,
+        null,
+        button(t("Agent \u7BA1\u7406", "Manage Agent"), () => setExpanded(!0)),
+        h(
+          "dialog",
+          { ref: dialog, onCancel: () => setExpanded(!1), onClose: () => setExpanded(!1), style: { color: "inherit", background: "var(--background, Canvas)", border: "1px solid #8887", borderRadius: 12, padding: 18, width: "min(620px, calc(100vw - 40px))", maxHeight: "85dvh", overflowY: "auto", boxSizing: "border-box" } },
+          h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } }, h("h2", { style: { margin: 0 } }, t("Agent \u7BA1\u7406", "Agent management")), button(t("\u5173\u95ED", "Close"), () => setExpanded(!1))),
+          h("p", { role: "status" }, discovery.busy === !0 ? t("\u6B63\u5728\u6267\u884C\u4EFB\u52A1\uFF1B\u5173\u95ED\u9762\u677F\u4E0D\u4F1A\u505C\u6B62\u4EFB\u52A1\u3002", "A task is running. Closing this panel does not stop it.") : text(row(state.lifecycle).state)),
+          button(t("\u5237\u65B0\u72B6\u6001", "Refresh state"), () => {
+            refresh();
+          }, working),
+          error ? h("p", { role: "alert" }, error) : null,
+          storageWarning ? h("p", { role: "alert" }, t("\u6D4F\u89C8\u5668\u65E0\u6CD5\u4FDD\u5B58\u64CD\u4F5C\u56DE\u6267\uFF1B\u82E5\u7ED3\u679C\u4E0D\u786E\u5B9A\uFF0C\u8BF7\u52FF\u5237\u65B0\u9875\u9762\u540E\u91CD\u590D\u63D0\u4EA4\u3002", "Browser receipt storage is unavailable. Do not reload and resubmit an uncertain operation.")) : null,
+          rows(state.unresolvedOperations).length ? section(
+            t("\u5F85\u786E\u8BA4\u7684\u64CD\u4F5C", "Unresolved operations"),
+            h("p", null, t("\u4EE5\u4E0B\u64CD\u4F5C\u7ED3\u679C\u5C1A\u672A\u786E\u8BA4\u3002\u4EC5\u53EF\u7528\u5B8C\u5168\u76F8\u540C\u7684\u539F\u8F93\u5165\u91CD\u8BD5\uFF0C\u4E0D\u80FD\u53D1\u8D77\u65B0\u7684\u4FEE\u6539\u3002", "Results are not yet confirmed. Retry only with the exact original input; do not initiate a new mutation.")),
+            ...rows(state.unresolvedOperations).map((item) => h("p", { key: text(item.operationId) }, `${text(item.operation)} \xB7 ${text(item.status)}`))
+          ) : null,
+          typeof state.unsupportedReason == "string" ? h("p", { role: "status" }, state.unsupportedReason) : null,
+          operations.length ? null : h("p", null, t("\u6B63\u5728\u8BFB\u53D6\u53EF\u7528\u7BA1\u7406\u80FD\u529B\uFF0C\u6216\u5F53\u524D\u7248\u672C\u672A\u63D0\u4F9B\u7BA1\u7406\u80FD\u529B\u3002", "Reading available controls, or this version has no management controls.")),
+          has("launch.open") ? section(
+            t("\u542F\u52A8 Agent", "Start Agent"),
+            h("p", null, t("\u53EF\u4EE5\u5148\u9009\u62E9\u4E0B\u65B9\u8D26\u53F7\u914D\u7F6E\u548C\u6267\u884C\u4F4D\u7F6E\uFF0C\u518D\u542F\u52A8\u5E76\u8BFB\u53D6\u6B64 Agent \u7684\u5B9E\u9645\u80FD\u529B\u3002", "Choose the account profile and execution location below before starting and reading this Agent\u2019s capabilities.")),
+            button(t("\u542F\u52A8 Agent \u5E76\u8BFB\u53D6\u80FD\u529B", "Start Agent and read capabilities"), () => {
+              run("launch.open");
+            }, busy)
+          ) : null,
+          has("context") || has("accountUsage") ? section(
+            t("\u7528\u91CF", "Usage"),
+            has("context") ? button(t("\u8BFB\u53D6\u4E0A\u4E0B\u6587", "Read context"), () => {
+              run("context", {}, !0);
+            }, working) : null,
+            has("accountUsage") ? button(t("\u8BFB\u53D6\u8D26\u53F7\u989D\u5EA6", "Read account usage"), () => {
+              run("accountUsage", {}, !0);
+            }, working) : null,
+            Object.keys(context).length ? h("p", null, `${t("\u4E0A\u4E0B\u6587\u5DF2\u7528 / \u4E0A\u9650", "Context used / window")}: ${finite(context.usedTokens)} / ${finite(context.contextWindow)} \xB7 ${t("\u5269\u4F59", "Remaining")}: ${finite(context.remainingTokens)}`) : null,
+            typeof context.message == "string" ? h("p", null, context.message) : null,
+            ...rows(usage.windows).map((item, index) => h("p", { key: index }, `${text(item.name)} ${finite(item.usedPercent)}%${item.resetsAt ? ` \xB7 ${t("\u91CD\u7F6E", "Resets")}: ${text(item.resetsAt)}` : ""}`)),
+            typeof usage.message == "string" ? h("p", null, usage.message) : null
+          ) : null,
+          has("settings") ? section(
+            t("\u6267\u884C\u8BBE\u7F6E", "Execution settings"),
+            button(t("\u8BFB\u53D6\u8BBE\u7F6E", "Read settings"), () => {
+              run("settings", {}, !0);
+            }, working),
+            ...["model", "reasoningEffort", "permissionMode"].filter((key) => typeof settings[key] == "string").map((key) => h("p", { key }, `${{ model: t("\u6A21\u578B", "Model"), reasoningEffort: t("\u63A8\u7406\u5F3A\u5EA6", "Reasoning effort"), permissionMode: t("\u6743\u9650\u6A21\u5F0F", "Permission mode") }[key]}: ${settings[key]}`)),
+            ...rows(settings.options).filter((option) => typeof option.key == "string" && rows(option.choices).length > 0).map((option) => h(
+              "div",
+              { key: text(option.key) },
+              select(text(option.label ?? option.key), text(option.value), rows(option.choices), (value) => {
+                value && has("option.set") && run("option.set", { key: option.key, value });
+              }, !has("option.set"))
+            ))
+          ) : null,
+          has("commands") ? section(
+            t("\u53EF\u7528\u547D\u4EE4", "Available commands"),
+            button(t("\u8BFB\u53D6\u547D\u4EE4", "Read commands"), () => {
+              run("commands", {}, !0);
+            }, working),
+            ...rows(results.commands?.commands).map((command) => h("p", { key: text(command.name) }, h("strong", null, text(command.name)), ` ${text(command.argumentHint)} \u2014 ${text(command.description)}`))
+          ) : null,
+          has("compact") ? section(
+            t("\u538B\u7F29\u4E0A\u4E0B\u6587", "Compact context"),
+            state.compactInstructions === !0 ? field(t("\u6458\u8981\u8981\u6C42\uFF08\u53EF\u9009\uFF09", "Summary instructions (optional)"), instructions, setInstructions, !0) : h("p", null, t("\u5F53\u524D Agent \u4E0D\u63A5\u53D7\u989D\u5916\u538B\u7F29\u8981\u6C42\u3002", "This Agent does not accept compaction instructions.")),
+            button(t("\u5F00\u59CB\u538B\u7F29", "Compact"), () => {
+              run("compact", state.compactInstructions === !0 && instructions.trim() ? { instructions: instructions.trim() } : {});
+            }, busy)
+          ) : null,
+          has("rewind") || has("fork") ? section(
+            t("\u5BF9\u8BDD\u68C0\u67E5\u70B9", "Conversation checkpoints"),
+            results.rewind ? h("p", null, t("\u5DF2\u56DE\u9000 Agent \u4E0A\u4E0B\u6587\u3002\u539F\u6D88\u606F\u4FDD\u7559\u4E3A\u5386\u53F2\u8BB0\u5F55\u3002", "Agent context rewound. Earlier messages remain in the audit history.")) : null,
+            select(t("\u9009\u62E9\u771F\u5B9E\u68C0\u67E5\u70B9", "Choose a checkpoint"), checkpoint, checkpoints, setCheckpoint),
+            has("rewind") ? button(t("\u56DE\u9000\u5230\u6B64\u68C0\u67E5\u70B9", "Rewind to checkpoint"), () => {
+              run("rewind", { checkpointId: checkpoint });
+            }, busy || !checkpoints.some((item) => item.id === checkpoint)) : null,
+            has("fork") ? button(t("\u5206\u53C9\u4E3A\u65B0\u4F1A\u8BDD", "Fork into new session"), () => {
+              run("fork", checkpoint ? { checkpointId: checkpoint } : {});
+            }, busy || !!checkpoint && !checkpoints.some((item) => item.id === checkpoint)) : null
+          ) : null,
+          has("goal.read") || has("goal.set") ? section(
+            t("\u7EBF\u7A0B\u76EE\u6807", "Thread goal"),
+            has("goal.read") ? button(t("\u8BFB\u53D6\u76EE\u6807", "Read goal"), () => {
+              run("goal.read", {}, !0);
+            }, working) : null,
+            text(currentGoal.objective) ? h("p", null, `${text(currentGoal.objective)} \xB7 ${text(currentGoal.status)}`) : null,
+            has("goal.set") ? field(t("\u65B0\u76EE\u6807", "New objective"), goal, setGoal, !0) : null,
+            has("goal.set") ? button(t("\u8BBE\u7F6E\u76EE\u6807", "Set goal"), () => {
+              run("goal.set", { objective: goal.trim() });
+            }, busy || !goal.trim()) : null,
+            has("goal.set") && currentGoal.status === "active" ? button(t("\u6682\u505C\u76EE\u6807", "Pause goal"), () => {
+              run("goal.set", { status: "paused" });
+            }, busy) : null,
+            has("goal.set") && currentGoal.status === "paused" ? button(t("\u7EE7\u7EED\u76EE\u6807", "Resume goal"), () => {
+              run("goal.set", { status: "active" });
+            }, busy) : null,
+            has("goal.clear") ? button(t("\u6E05\u9664\u76EE\u6807", "Clear goal"), () => {
+              run("goal.clear");
+            }, busy) : null
+          ) : null,
+          typeof mcpAuthUrl == "string" && /^https?:\/\//i.test(mcpAuthUrl) ? h("p", null, h("a", { href: mcpAuthUrl, target: "_blank", rel: "noreferrer noopener" }, t("\u7EE7\u7EED MCP \u6388\u6743", "Continue MCP authorization"))) : null,
+          has("mcp.list") ? section(
+            "MCP",
+            button(t("\u8BFB\u53D6\u670D\u52A1\u5668", "Read servers"), () => {
+              run("mcp.list", {}, !0);
+            }, working),
+            ...rows(mcp.servers).map((server) => h(
+              "div",
+              { key: text(server.name) },
+              h("p", null, `${text(server.name)} \xB7 ${text(server.status)}`),
+              has("mcp.reconnect") ? button(t("\u91CD\u8FDE", "Reconnect"), () => {
+                run("mcp.reconnect", { name: server.name });
+              }, working) : null,
+              has("mcp.toggle") && typeof server.enabled == "boolean" ? button(server.enabled ? t("\u505C\u7528", "Disable") : t("\u542F\u7528", "Enable"), () => {
+                run("mcp.toggle", { name: server.name, enabled: !server.enabled });
+              }, working) : null,
+              has("mcp.authenticate") ? button(t("\u6388\u6743", "Authorize"), () => {
+                run("mcp.authenticate", { name: server.name });
+              }, working) : null,
+              has("mcp.callback") ? h(
+                "div",
+                null,
+                field(t("\u6388\u6743\u56DE\u8DF3\u5730\u5740", "Authorization callback URL"), callbacks[text(server.name)] ?? "", (value) => setCallbacks((previous) => ({ ...previous, [text(server.name)]: value }))),
+                button(t("\u5B8C\u6210\u6388\u6743\u56DE\u8DF3", "Complete authorization callback"), () => {
+                  run("mcp.callback", { name: server.name, callbackUrl: callbacks[text(server.name)]?.trim() });
+                }, working || !callbacks[text(server.name)]?.trim())
+              ) : null,
+              typeof server.authUrl == "string" && /^https?:\/\//i.test(server.authUrl) ? h("a", { href: server.authUrl, target: "_blank", rel: "noreferrer noopener" }, t("\u6253\u5F00\u6388\u6743\u9875\u9762", "Open authorization page")) : null
+            )),
+            has("mcp.reload") ? button(t("\u91CD\u65B0\u52A0\u8F7D\u914D\u7F6E", "Reload configuration"), () => {
+              run("mcp.reload");
+            }, working) : null
+          ) : null,
+          has("tasks.list") ? section(
+            t("\u540E\u53F0\u4EFB\u52A1", "Background tasks"),
+            button(t("\u8BFB\u53D6\u4EFB\u52A1", "Read tasks"), () => {
+              run("tasks.list", {}, !0);
+            }, working),
+            ...rows(tasks.tasks).map((task) => h(
+              "div",
+              { key: text(task.id) },
+              h("p", null, `${text(task.title ?? task.id)} \xB7 ${text(task.status)}`),
+              has("tasks.stop") ? button(t("\u505C\u6B62\u6B64\u4EFB\u52A1", "Stop task"), () => {
+                run("tasks.stop", { taskId: task.id });
+              }, working) : null,
+              has("tasks.background") && typeof task.toolUseId == "string" ? button(t("\u8F6C\u4E3A\u540E\u53F0", "Run in background"), () => {
+                run("tasks.background", { toolUseId: task.toolUseId });
+              }, working) : null
+            ))
+          ) : null,
+          rows(state.queued).length || has("queue.run") ? section(
+            t("\u6D88\u606F\u961F\u5217", "Message queue"),
+            ...rows(state.queued).map((item) => h(
+              "div",
+              { key: text(item.requestId) },
+              h("p", null, text(item.text)),
+              h("p", null, text(item.state)),
+              item.state === "dispatching" || item.state === "unknown" ? h("p", { role: "status" }, t("\u6B64\u6D88\u606F\u53EF\u80FD\u5DF2\u7ECF\u6295\u9012\uFF0C\u8BF7\u6838\u5BF9\u4F1A\u8BDD\u7ED3\u679C\uFF0C\u4E0D\u8981\u91CD\u590D\u53D1\u9001\u3002", "This message may already have been delivered. Check the conversation; do not send it again.")) : null,
+              item.state === "queued" && has("queue.remove") ? button(t("\u79FB\u51FA\u961F\u5217", "Remove from queue"), () => {
+                run("queue.remove", { requestId: item.requestId });
+              }, working) : null
+            )),
+            has("queue.run") ? button(t("\u6062\u590D\u961F\u5217", "Resume queue"), () => {
+              run("queue.run");
+            }, busy || rows(state.queued).some((item) => item.state === "dispatching" || item.state === "unknown")) : null
+          ) : null,
+          has("question.answer") ? section(t("Agent \u63D0\u95EE", "Agent questions"), ...rows(state.questions).map((question) => {
+            let requestId = text(question.requestId), questionRows = rows(question.questions);
+            return h(
+              "fieldset",
+              { key: requestId, disabled: working },
+              h("legend", null, text(question.title)),
+              ...questionRows.map((item) => {
+                let id = text(item.id), selected = answers[requestId]?.[id] ?? [], set = (value) => setAnswers((previous) => ({ ...previous, [requestId]: { ...previous[requestId], [id]: value } })), choices = rows(item.options);
+                return h("div", { key: id }, h("p", null, text(item.question)), ...choices.map((option) => {
+                  let label = text(option.label);
+                  return h(
+                    "label",
+                    { key: label, style: { display: "block", margin: "6px 0" } },
+                    h("input", { type: item.multiSelect === !0 ? "checkbox" : "radio", name: `${requestId}:${id}`, checked: selected.includes(label), onChange: () => set(item.multiSelect === !0 ? selected.includes(label) ? selected.filter((value) => value !== label) : [...selected, label] : [label]) }),
+                    ` ${label}${option.description ? ` \u2014 ${text(option.description)}` : ""}`
+                  );
+                }), choices.length ? null : field(t("\u56DE\u7B54", "Answer"), selected[0] ?? "", (value) => set(value ? [value] : []), !0));
+              }),
+              button(t("\u63D0\u4EA4\u56DE\u7B54", "Submit answer"), () => {
+                run("question.answer", { requestId, answers: answers[requestId] ?? {} });
+              }, working || !questionRows.length || questionRows.some((item) => !answers[requestId]?.[text(item.id)]?.length))
+            );
+          })) : null,
+          has("launch.options") ? section(
+            t("\u8D26\u53F7\u914D\u7F6E\u4E0E\u6267\u884C\u4F4D\u7F6E", "Account profile and execution location"),
+            button(t("\u8BFB\u53D6\u542F\u52A8\u9009\u9879", "Read launch options"), () => {
+              run("launch.options", {}, !0);
+            }, working),
+            launch.canSelect === !0 && has("launch.select") ? h(
+              "div",
+              null,
+              select(t("\u8D26\u53F7\u914D\u7F6E", "Account profile"), profile || text(launch.selectedProfileId), rows(launch.profiles), setProfile),
+              select(t("\u6267\u884C\u4F4D\u7F6E", "Execution location"), location || text(launch.selectedLocationId), rows(launch.locations), setLocation),
+              button(t("\u4FDD\u5B58\u542F\u52A8\u9009\u62E9", "Save launch selection"), () => {
+                run("launch.select", { profileId: profile || text(launch.selectedProfileId), locationId: location || text(launch.selectedLocationId) });
+              }, busy || !profile && !location || !(profile || text(launch.selectedProfileId)) || !(location || text(launch.selectedLocationId)))
+            ) : h("p", null, t("\u5DF2\u6709\u4F1A\u8BDD\u4FDD\u6301\u539F\u8D26\u53F7\u548C\u6267\u884C\u4F4D\u7F6E\uFF1B\u4EC5\u652F\u6301\u7684\u65B0\u4F1A\u8BDD\u53EF\u9009\u62E9\u3002", "Existing sessions keep their account and execution location. Selection is available only for supported new sessions."))
+          ) : null
+        )
+      );
+    }
+    return Management;
   }
 
   // packages/plugin/src/client/browser-login.ts
@@ -2578,12 +2921,12 @@ If a code was sent, recover the original submission without changing it.`,
         let timer = setTimeout(() => setRestored(!1), 4e3);
         return () => clearTimeout(timer);
       }, [offline, linked]);
-      let seconds = expiresAt === void 0 ? void 0 : Math.max(0, Math.ceil((expiresAt - now) / 1e3)), lost = hadLink.current && (!linked || offline && seconds === 0), text = props.compact ? lost ? t("serverLinkDisconnected") : offline ? linked && seconds !== void 0 ? t("serverUnavailableCountdown", { seconds }) : t("serverUnavailableShort") : linked ? t("remoteLinkEncrypted") : void 0 : lost ? t("serverLinkDisconnected") : offline && linked && seconds !== void 0 ? t(props.countdownOnly ? "connectionHoldCountdown" : "serverUnavailableCountdown", { seconds }) : offline ? t("serverUnavailableShort") : restored ? t("serverRestored") : void 0;
-      return text === void 0 ? null : React.createElement("span", {
+      let seconds = expiresAt === void 0 ? void 0 : Math.max(0, Math.ceil((expiresAt - now) / 1e3)), lost = hadLink.current && (!linked || offline && seconds === 0), text2 = props.compact ? lost ? t("serverLinkDisconnected") : offline ? linked && seconds !== void 0 ? t("serverUnavailableCountdown", { seconds }) : t("serverUnavailableShort") : linked ? t("remoteLinkEncrypted") : void 0 : lost ? t("serverLinkDisconnected") : offline && linked && seconds !== void 0 ? t(props.countdownOnly ? "connectionHoldCountdown" : "serverUnavailableCountdown", { seconds }) : offline ? t("serverUnavailableShort") : restored ? t("serverRestored") : void 0;
+      return text2 === void 0 ? null : React.createElement("span", {
         className: props.compact && !offline && !lost ? "xcodexRemoteEncrypted" : `xcodexRemoteServerNotice${lost ? " isError" : offline ? " isWarning" : " isRestored"}`,
         role: "status",
         "aria-live": "polite"
-      }, text, lost && props.onReconnect ? React.createElement("button", {
+      }, text2, lost && props.onReconnect ? React.createElement("button", {
         type: "button",
         onClick: props.onReconnect
       }, t("reconnect")) : null);
@@ -4128,14 +4471,14 @@ If a code was sent, recover the original submission without changing it.`,
       if (React.useEffect(() => {
         if (portal2 === void 0) return;
         let attempt = 0, timer, host, observer, attach = () => {
-          let row = document.querySelector('[class*="settingsArea"] [class*="triggerRow"]');
-          if (row === null) {
+          let row2 = document.querySelector('[class*="settingsArea"] [class*="triggerRow"]');
+          if (row2 === null) {
             attempt < 40 && (attempt += 1, timer = window.setTimeout(attach, 50));
             return;
           }
           host = document.createElement("span"), observer = new MutationObserver(() => {
-            host !== void 0 && !host.isConnected && row.append(host);
-          }), observer.observe(row, { childList: !0 }), row.append(host), setContainer(host);
+            host !== void 0 && !host.isConnected && row2.append(host);
+          }), observer.observe(row2, { childList: !0 }), row2.append(host), setContainer(host);
         };
         return attach(), () => {
           timer !== void 0 && window.clearTimeout(timer), observer?.disconnect(), host?.remove();
@@ -6080,7 +6423,7 @@ If a code was sent, recover the original submission without changing it.`,
             }, stopHostFileOpen = (event) => {
               let target = event.target instanceof Element ? event.target.closest('button,[role="button"],a') ?? event.target : void 0;
               if (!(target instanceof Element)) return;
-              let text = target.textContent?.trim().replace(/^@/, "") ?? "", device = hostCache.get(text);
+              let text2 = target.textContent?.trim().replace(/^@/, "") ?? "", device = hostCache.get(text2);
               if (!device) return;
               event.preventDefault(), event.stopImmediatePropagation();
               let invocation = `@${device.name}`, container = target;
@@ -6105,7 +6448,7 @@ If a code was sent, recover the original submission without changing it.`,
           locale: localeNamespace,
           inject: () => ({ control, statusFeed, onSignIn: openRemote })
         }, RemoteSessionHeaderAction));
-        let managedUi = createManagedAgentUi(React, {
+        let managedContext = {
           sessions: ctx.sessions,
           workspaces: ctx.workspaces,
           chinese: ctx.locale.getLocale().active === "zh",
@@ -6115,8 +6458,12 @@ If a code was sent, recover the original submission without changing it.`,
             if (!navigation) throw new Error("Native conversation navigation is unavailable");
             navigation.openSession(sessionId);
           }
-        });
-        ctx.slots.inject("sidebar.session.row.leading", () => ctx.slots.register({
+        }, managedUi = createManagedAgentUi(React, managedContext), ManagedManagement = createManagedAgentManagementUi(React, managedContext);
+        ctx.slots.inject("conversation.session.header.utilities", () => ctx.slots.register({
+          name: "conversation.session.header.utilities",
+          id: "xcodex-managed-agent-management",
+          order: 30
+        }, ManagedManagement)), ctx.slots.inject("sidebar.session.row.leading", () => ctx.slots.register({
           name: "sidebar.session.row.leading",
           id: "xcodex-managed-agent-logo",
           order: -100

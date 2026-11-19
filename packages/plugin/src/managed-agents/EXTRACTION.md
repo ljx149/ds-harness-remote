@@ -5,6 +5,10 @@ License: MIT, Copyright (c) 2026 Lovecast Inc.; full notice in this directory an
 
 This is a Host-local subsystem: it imports no Orca application, desktop IPC, or remote Orca daemon. Closing a viewer or revoking one device does not own or stop an Agent process. Only explicit session/Host shutdown closes a managed process.
 
+## 0.8 management implementation
+
+The table and validation below describe the earlier 0.7 baseline. Current provider controls, native UI, streaming, durable queue, launch profiles, process fences and verification are recorded in `docs/design/orca-management-0.8-validation.md` and `docs/design/orca-management-completion-plan.md`. They supersede the earlier final-only streaming and unavailable-route removal descriptions. Complete Orca cross-platform process recovery is still not claimed.
+
 ## Source inventory and migration coverage
 
 | Orca source | Plugin implementation | Coverage |

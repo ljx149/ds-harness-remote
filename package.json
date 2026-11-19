@@ -1,6 +1,6 @@
 {
   "name": "xcodex-remote",
-  "version": "0.7.0-xcodex.5",
+  "version": "0.8.0-xcodex.1",
   "description": "P2P-based, end-to-end encrypted remote access to DeepSeek Harness, CodeX, Claude Code, Pi, and other workspaces from web and mobile clients.",
   "keywords": [
     "deepseek",
@@ -44,6 +44,7 @@
     "index.js",
     "packages/plugin/dist/index.js",
     "packages/plugin/dist/client.github.js",
+    "packages/plugin/dist/claude-history-sdk.js",
     "packages/plugin/bin/ds-harness-remote.js",
     "packages/plugin/public.d.ts",
     "packages/plugin/LICENSE",

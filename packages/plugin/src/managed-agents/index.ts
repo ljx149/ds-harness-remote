@@ -1,3 +1,4 @@
+import { defaultManagedLaunchRegistry, type ManagedLaunchRegistry } from './launch.js'
 import { ManagedAcpAdapter } from './acp-adapter.js'
 import { ManagedClaudeAdapter } from './claude-adapter.js'
 import { ManagedCodexAdapter } from './codex-adapter.js'
@@ -9,13 +10,13 @@ export * from './types.js'
 export * from './capabilities.js'
 export { ManagedAgentRegistry, ManagedAgentRuntime, ManagedAcpAdapter, ManagedCodexAdapter, ManagedClaudeAdapter }
 
-export function createManagedAgentRuntime(): ManagedAgentRuntime {
+export function createManagedAgentRuntime(launches: ManagedLaunchRegistry = defaultManagedLaunchRegistry): ManagedAgentRuntime {
   const capabilities: AgentSessionCapabilities = {
     rewind: false, compact: false, threadGoal: false, contextUsage: false,
     imagePrompts: false, steering: 'queue', approvalEnforcement: 'provider',
   }
   return new ManagedAgentRuntime(new ManagedAgentRegistry([
-    { definition: { agent: 'codex', title: 'Codex', icon: 'codex', capabilities: { ...capabilities } }, adapter: new ManagedCodexAdapter() },
-    { definition: { agent: 'claude', title: 'Claude Code', icon: 'claude', capabilities: { ...capabilities } }, adapter: new ManagedClaudeAdapter() },
+    { definition: { agent: 'codex', title: 'Codex', icon: 'codex', capabilities: { ...capabilities } }, adapter: new ManagedCodexAdapter(undefined, launches) },
+    { definition: { agent: 'claude', title: 'Claude Code', icon: 'claude', capabilities: { ...capabilities } }, adapter: new ManagedClaudeAdapter(undefined, 'claude', undefined, launches) },
   ]))
 }

@@ -10,6 +10,63 @@ import {
 import type { SafeLogger } from '../src/logging.js'
 
 describe('CodexAppServerClient', () => {
+  it('shares close completion and waits for exit after both termination signals', async () => {
+    vi.useFakeTimers()
+    try {
+      const fake = fakeProcess()
+      fake.kill.mockImplementation(() => true)
+      const client = await startedClient(fake)
+      const first = client.close()
+      expect(client.close()).toBe(first)
+      const completed = vi.fn()
+      void first.then(completed)
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(fake.kill.mock.calls.map(args => args[0])).toEqual(['SIGTERM', 'SIGKILL'])
+      expect(completed).not.toHaveBeenCalled()
+      fake.child.emit('exit', null, 'SIGKILL')
+      await first
+      expect(completed).toHaveBeenCalledOnce()
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally { vi.useRealTimers() }
+  })
+
+  it('rejects cleanup when a signalled process never exits and retains the same rejected close', async () => {
+    vi.useFakeTimers()
+    try {
+      const fake = fakeProcess()
+      fake.kill.mockImplementation(() => true)
+      Object.defineProperty(fake.child, 'killed', { value: true })
+      const client = await startedClient(fake)
+      const close = client.close()
+      const rejected = expect(close).rejects.toMatchObject({ code: 'CODEX_CLEANUP_UNCONFIRMED' })
+      await vi.advanceTimersByTimeAsync(4_000)
+      await rejected
+      expect(client.close()).toBe(close)
+      expect(fake.kill).toHaveBeenCalledWith('SIGKILL')
+      expect(vi.getTimerCount()).toBe(0)
+    } finally { vi.useRealTimers() }
+  })
+
+  it('retains the process after communication failure until close confirms process termination', async () => {
+    vi.useFakeTimers()
+    try {
+      const fake = fakeProcess()
+      fake.kill.mockImplementation(() => true)
+      const client = await startedClient(fake)
+      fake.child.emit('error', new Error('transport failed'))
+      const close = client.close()
+      const completed = vi.fn()
+      void close.then(completed)
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(completed).not.toHaveBeenCalled()
+      fake.child.emit('close', 0, null)
+      await close
+      expect(completed).toHaveBeenCalledOnce()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally { vi.useRealTimers() }
+  })
+
   it('initializes once, correlates responses, and separates inbound events from requests', async () => {
     const fake = fakeProcess()
     const outbound: Array<Record<string, unknown>> = []
@@ -160,3 +217,15 @@ function logger(): SafeLogger {
 }
 
 async function flush(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)) }
+
+async function startedClient(fake: ReturnType<typeof fakeProcess>): Promise<CodexAppServerClient> {
+  fake.child.stdin.on('data', chunk => {
+    for (const line of String(chunk).trim().split('\n')) {
+      const message = JSON.parse(line) as Record<string, unknown>
+      if (message.method === 'initialize') fake.stdout.write(`${JSON.stringify({ id: message.id, result: {} })}\n`)
+    }
+  })
+  const client = new CodexAppServerClient('codex', logger(), () => fake.child)
+  await client.start()
+  return client
+}

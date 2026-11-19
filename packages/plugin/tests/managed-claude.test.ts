@@ -60,7 +60,7 @@ describe('Orca Claude management extraction', () => {
     const events: ManagedAgentEvent[] = []
     const connection = await new ManagedClaudeAdapter(factory).open({ sessionId: 'managed', agent: 'claude', workspacePath: '/work/a' }, event => events.push(event))
     expect(events).toEqual([
-      { type: 'reasoning', text: 'reason' }, { type: 'text', text: 'answer', itemId: 'answer' },
+      { type: 'reasoning', text: 'reason', itemId: 'claude:/:block:answer:0' }, { type: 'text', text: 'answer', itemId: 'claude:/:block:answer:1' },
       { type: 'tool', itemId: 'tool', name: 'Read', status: 'running', data: { type: 'tool_use', id: 'tool', name: 'Read', input: {} } },
     ])
     await connection.close()

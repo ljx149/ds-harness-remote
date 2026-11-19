@@ -1,4 +1,5 @@
 import { createManagedAgentUi } from './client/managed-agent.js'
+import { createManagedAgentManagementUi } from './client/managed-agent-management.js'
 import { createBrowserLogin } from './client/browser-login.js'
 import { renderBodyPortal } from './client/portal.js'
 import type { Translate } from './client-locale.js'
@@ -578,7 +579,7 @@ window.__ModuleLoader__.load({
         locale: localeNamespace,
         inject: () => ({ control, statusFeed, onSignIn: openRemote }),
       }, RemoteSessionHeaderAction))
-      const managedUi = createManagedAgentUi(React, {
+      const managedContext: import('./client/managed-agent.js').ManagedAgentUiContext = {
         sessions: ctx.sessions as unknown as import('./client/managed-agent.js').ManagedAgentUiContext['sessions'],
         workspaces: ctx.workspaces,
         chinese: ctx.locale.getLocale().active === 'zh',
@@ -590,7 +591,12 @@ window.__ModuleLoader__.load({
           if (!navigation) throw new Error('Native conversation navigation is unavailable')
           navigation.openSession(sessionId)
         },
-      })
+      }
+      const managedUi = createManagedAgentUi(React, managedContext)
+      const ManagedManagement = createManagedAgentManagementUi(React, managedContext)
+      ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
+        name: 'conversation.session.header.utilities', id: 'xcodex-managed-agent-management', order: 30,
+      }, ManagedManagement))
       ctx.slots.inject('sidebar.session.row.leading', () => ctx.slots.register({
         name: 'sidebar.session.row.leading', id: 'xcodex-managed-agent-logo', order: -100,
       }, managedUi.SessionLogo))

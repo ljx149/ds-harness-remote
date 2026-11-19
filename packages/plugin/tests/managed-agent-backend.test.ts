@@ -57,7 +57,7 @@ describe('managed backend integration', () => {
     const f = fixture(), sessionId = await f.create()
     const identity = { agentId: 'codex', name: 'Codex', registered: true, availability: 'unverified', capabilities: {
       textPrompts: true, modelSelection: true, reasoningEffort: true, archive: true, unarchive: true,
-      imagePrompts: false, fileAttachments: false, steering: false, queueWhileBusy: false, fork: false, compact: false,
+      imagePrompts: false, fileAttachments: false, steering: false, queueWhileBusy: true, fork: false, compact: false,
     } }
     expect((await f.call('managedAgent/agents', {})).items[0]).toMatchObject({ id: 'codex', ...identity })
     expect((await f.backend.catalog())[0]!.summary.projections.values.managedAgent).toMatchObject(identity)
@@ -451,4 +451,74 @@ describe('managed backend integration', () => {
     expect(restored.send).toHaveBeenCalledTimes(1)
   })
 
+})
+
+describe('managed controls durability', () => {
+  function controlled() {
+    const f = fixture()
+    const manage = vi.fn(async (operation: string): Promise<unknown> => operation === 'state' ? { idle: 'idle', checkpoints: [] } : { accepted: true })
+    f.open.mockImplementation(async (input, emit) => ({ providerSessionId: input.providerSessionId ?? 'provider-1', send: f.send, cancel: f.cancel, approve: f.approve, close: f.close,
+      managementOperations: ['state', 'compact', 'fork', 'rewind', 'question.answer'], manage }))
+    return { ...f, manage }
+  }
+  it('deduplicates provider mutations and refuses a different payload for the same operation', async () => {
+    const f = controlled(), sessionId = await f.create()
+    await f.call('managedAgent/management', { sessionId })
+    const request = { sessionId, operation: 'compact', operationId: 'compact-once', payload: {} }
+    expect(await f.call('managedAgent/manage', request)).toEqual({ accepted: true })
+    expect(await f.call('managedAgent/manage', request)).toEqual({ accepted: true })
+    expect(f.manage.mock.calls.filter(call => call[0] === 'compact')).toHaveLength(1)
+    await expect(f.call('managedAgent/manage', { ...request, payload: { instructions: 'different' } })).rejects.toThrow('MANAGED_OPERATION_CONFLICT')
+  })
+  it('retains unknown outcomes and prevents a fresh mutation from duplicating an uncertain effect', async () => {
+    const f = controlled(), sessionId = await f.create()
+    f.manage.mockRejectedValue(new Error('transport closed after write'))
+    await expect(f.call('managedAgent/manage', { sessionId, operation: 'compact', operationId: 'uncertain', payload: {} })).rejects.toThrow('transport closed')
+    await expect(f.call('managedAgent/manage', { sessionId, operation: 'compact', operationId: 'different', payload: {} })).rejects.toThrow('MANAGED_OPERATION_OUTCOME_UNKNOWN')
+    expect(f.manage).toHaveBeenCalledTimes(1)
+  })
+  it('releases definite preflight rejection without allowing an uncertain action to be replayed', async () => {
+    const f = controlled(), sessionId = await f.create()
+    f.manage.mockRejectedValueOnce(Object.assign(new Error('unsupported instructions'), { definiteRejection: true }))
+    await expect(f.call('managedAgent/manage', { sessionId, operation: 'compact', operationId: 'invalid', payload: {} })).rejects.toThrow('unsupported')
+    expect(await f.call('managedAgent/manage', { sessionId, operation: 'compact', operationId: 'valid', payload: {} })).toEqual({ accepted: true })
+  })
+  it('rejects foreign provider IDs before crossing the adapter boundary', async () => {
+    const f = controlled(), sessionId = await f.create()
+    await expect(f.call('managedAgent/manage', { sessionId, operation: 'fork', operationId: 'fork', payload: { threadId: 'foreign' } })).rejects.toThrow('Invalid managed Agent request')
+    await expect(f.call('managedAgent/manage', { sessionId, operation: 'fork', operationId: 'fork', payload: { checkpointId: 'foreign' } })).rejects.toThrow('MANAGED_CHECKPOINT_NOT_FOUND')
+    expect(f.manage).not.toHaveBeenCalled()
+    f.setPrincipal({ ownerId: 'other', hostId: 'host' })
+    await expect(f.call('managedAgent/management', { sessionId })).rejects.toThrow('MANAGED_SESSION_NOT_FOUND')
+  })
+  it('queues explicitly while running and dispatches once after completion', async () => {
+    const f = fixture(), sessionId = await f.create()
+    await f.prompt(sessionId)
+    const queued = { sessionId, requestId: 'queued-message', mode: 'queue', content: [{ type: 'text', text: 'next' }] }
+    expect(await f.call('session/prompt', queued)).toMatchObject({ accepted: true, queued: true })
+    expect(await f.call('session/prompt', queued)).toMatchObject({ accepted: true, queued: true })
+    expect(f.send).toHaveBeenCalledTimes(1)
+    f.emit({ type: 'turn-completed', status: 'completed' })
+    await vi.waitFor(() => expect(f.send).toHaveBeenCalledTimes(2))
+    expect(f.send).toHaveBeenLastCalledWith({ messageId: 'queued-message', text: 'next' })
+  })
+  it('streams once and reconnects with the host accumulator rather than a second provider', async () => {
+    const f = fixture(), sessionId = await f.create()
+    await f.prompt(sessionId)
+    f.emit({ type: 'text-delta', itemId: 'answer', text: 'hel' })
+    f.emit({ type: 'text-delta', itemId: 'answer', text: 'lo' })
+    const controller = new AbortController()
+    const stream = await f.backend.open('session/follow', { args: { sessionId } }, controller.signal)
+    const iterator = stream[Symbol.asyncIterator]()
+    const snapshot = (await iterator.next()).value as any
+    expect(snapshot.assistantStream.activeAttempt).toMatchObject({ nextIndex: 3 })
+    f.emit({ type: 'text', itemId: 'answer', text: 'hello' })
+    f.emit({ type: 'turn-completed', status: 'completed' })
+    const history = await f.call('session/history', { sessionId })
+    const answers = history.records.filter((record: any) => record.event.type === 'assistant/message')
+    expect(answers).toHaveLength(1)
+    expect(answers[0].event.data.message.content).toEqual([{ type: 'text', text: 'hello' }])
+    expect(f.open).toHaveBeenCalledTimes(1)
+    controller.abort(); await iterator.return?.()
+  })
 })

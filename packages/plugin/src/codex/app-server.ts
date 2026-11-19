@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { Buffer } from 'node:buffer'
 import type { SafeLogger } from '../logging.js'
 import { PLUGIN_VERSION } from '../version.js'
+import { discoverCodexMethods } from '../managed-agents/codex-schema.js'
 
 const APP_SERVER_REQUEST_TIMEOUT_MS = 60_000
 const APP_SERVER_START_TIMEOUT_MS = 15_000
@@ -33,6 +34,7 @@ export type CodexAppServerUnavailableHandler = (code: string) => void
 export type SpawnCodexAppServer = (binary: string) => ChildProcessWithoutNullStreams
 
 export interface CodexAppServerLike {
+  discoverSupportedMethods?(): Promise<ReadonlySet<string>>
   start(): Promise<void>
   isReady(): boolean
   call(method: string, params: unknown, timeoutMs?: number): Promise<unknown>
@@ -67,6 +69,7 @@ export class CodexAppServerClient implements CodexAppServerLike {
   private closed = false
   private failureNotified = false
   private startPromise?: Promise<void>
+  private closePromise?: Promise<void>
 
   constructor(
     private readonly binary: string,
@@ -75,6 +78,7 @@ export class CodexAppServerClient implements CodexAppServerLike {
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     }),
+    private readonly discoverMethods: () => Promise<ReadonlySet<string>> = () => discoverCodexMethods(binary),
   ) {}
 
   start(): Promise<void> {
@@ -85,6 +89,8 @@ export class CodexAppServerClient implements CodexAppServerLike {
   }
 
   isReady(): boolean { return this.ready }
+
+  discoverSupportedMethods(): Promise<ReadonlySet<string>> { return this.discoverMethods() }
 
   async call(method: string, params: unknown, timeoutMs = APP_SERVER_REQUEST_TIMEOUT_MS): Promise<unknown> {
     if (!this.ready) throw new CodexAppServerError('CODEX_UNAVAILABLE', 'Codex App Server is not ready.')
@@ -109,25 +115,56 @@ export class CodexAppServerClient implements CodexAppServerLike {
     return () => this.unavailableHandlers.delete(handler)
   }
 
-  async close(): Promise<void> {
-    if (this.closed) return
+  close(): Promise<void> {
+    if (!this.closePromise) {
+      this.closed = true
+      this.ready = false
+      // Publish the single-flight promise before kill() can emit synchronous events.
+      this.closePromise = Promise.resolve().then(() => this.closeOnce())
+    }
+    return this.closePromise
+  }
+
+  private async closeOnce(): Promise<void> {
     this.closed = true
     this.ready = false
     this.failPending(new CodexAppServerError('CODEX_CLOSED', 'Codex App Server was closed.'))
     const child = this.process
-    this.process = undefined
-    if (child === undefined || child.exitCode !== null || child.killed) return
-    await new Promise<void>(resolve => {
-      const timer = setTimeout(() => {
-        child.kill('SIGKILL')
-        resolve()
+    if (child === undefined) return
+    // `killed` confirms that a signal was sent, not that the process exited.
+    if (child.exitCode != null || child.signalCode != null) {
+      if (this.process === child) this.process = undefined
+      return
+    }
+    await new Promise<void>((resolve, reject) => {
+      let settled = false
+      let escalation: ReturnType<typeof setTimeout> | undefined
+      let deadline: ReturnType<typeof setTimeout> | undefined
+      const finish = (confirmed: boolean) => {
+        if (settled) return
+        settled = true
+        if (escalation) clearTimeout(escalation)
+        if (deadline) clearTimeout(deadline)
+        child.removeListener('exit', exited)
+        child.removeListener('close', exited)
+        if (confirmed) {
+          if (this.process === child) this.process = undefined
+          resolve()
+        } else reject(new CodexAppServerError('CODEX_CLEANUP_UNCONFIRMED', 'Codex App Server exit could not be confirmed.'))
+      }
+      const exited = () => finish(true)
+      const signal = (name: NodeJS.Signals) => {
+        try { child.kill(name) } catch { /* Only an exit/close event proves cleanup. */ }
+      }
+      child.once('exit', exited)
+      child.once('close', exited)
+      escalation = setTimeout(() => {
+        deadline = setTimeout(() => finish(false), 2_000)
+        deadline.unref?.()
+        signal('SIGKILL')
       }, 2_000)
-      timer.unref?.()
-      child.once('exit', () => {
-        clearTimeout(timer)
-        resolve()
-      })
-      child.kill('SIGTERM')
+      escalation.unref?.()
+      signal('SIGTERM')
     })
   }
 
@@ -173,6 +210,7 @@ export class CodexAppServerClient implements CodexAppServerLike {
           mcpServerOpenaiFormElicitation: false,
         },
       }, APP_SERVER_START_TIMEOUT_MS)
+      if (this.closed) throw new CodexAppServerError('CODEX_CLOSED', 'Codex App Server was closed during initialization.')
       this.write({ method: 'initialized', params: {} })
       this.ready = true
       this.logger?.info('Codex App Server ready')
@@ -262,7 +300,7 @@ export class CodexAppServerClient implements CodexAppServerLike {
     this.ready = false
     this.failPending(new CodexAppServerError(code, 'Codex App Server communication failed.', { cause }))
     const child = this.process
-    this.process = undefined
+    // Retain ownership until exit: a successful kill() is not cleanup evidence.
     child?.kill('SIGTERM')
     this.logger?.warn('Codex App Server communication failed', { code })
     if (!this.closed) this.notifyUnavailable(code)
@@ -303,6 +341,7 @@ function safeUpstreamError(value: unknown): CodexAppServerError {
   if (!isRecord(value) || typeof value.message !== 'string') {
     return new CodexAppServerError('CODEX_UPSTREAM_ERROR', 'Codex App Server rejected the request.')
   }
+  if (value.code === -32601) return new CodexAppServerError('CODEX_METHOD_NOT_FOUND', 'Codex does not support this method.')
   // Upstream messages may contain paths or prompt fragments. Only retain a
   // short generic category for the Remote boundary.
   const message = value.message.toLowerCase()

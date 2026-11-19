@@ -16,6 +16,34 @@ function open(directory?: string) {
 }
 afterEach(() => { stores.splice(0).forEach(s => s.close()); directories.splice(0).forEach(d => rmSync(d, { recursive: true, force: true })); });
 describe('managed session durability and isolation', () => {
+  it('publishes fork identity, inherited history and receipt in one recoverable snapshot', () => {
+    const { dir, store } = open(); const parent = store.createSession(scope, input);
+    store.bindProviderSession(scope, parent.id, 'parent-thread');
+    const operation = { operationId: 'fork-1', kind: 'manage:fork', input: {} };
+    store.beginOperation(scope, parent.id, operation);
+    expect(() => store.commitFork({ ...scope, ownerId: 'other' }, parent.id, 'fork-1', 'child-thread', [])).toThrow('NOT_FOUND');
+    expect(store.listSessions(scope)).toHaveLength(1);
+    const child = store.commitFork(scope, parent.id, 'fork-1', 'child-thread', [{ eventId: 'copied', payload: { type: 'user/message', data: { content: [] } } }]);
+    store.close(); const recovered = open(dir).store;
+    expect(recovered.getSession(scope, child.id).providerSessionId).toBe('child-thread');
+    expect(recovered.readEvents(scope, child.id).events).toHaveLength(1);
+    expect(recovered.beginOperation(scope, parent.id, operation)).toMatchObject({ execute: false, receipt: { status: 'completed', result: { sessionId: child.id, providerSessionId: 'child-thread' } } });
+    expect(() => recovered.commitFork(scope, parent.id, 'fork-1', 'duplicate-thread', [])).toThrow('CONFLICT');
+    expect(recovered.listSessions(scope)).toHaveLength(2);
+  });
+  it('commits rewind identity with its receipt and rejects an outdated provider identity', () => {
+    const { dir, store } = open(); const session = store.createSession(scope, input);
+    store.bindProviderSession(scope, session.id, 'old-thread');
+    const operation = { operationId: 'rewind-1', kind: 'manage:rewind', input: {} };
+    store.beginOperation(scope, session.id, operation);
+    expect(() => store.commitProviderReplacement(scope, session.id, 'rewind-1', 'incorrect-thread', 'new-thread', {})).toThrow('CONFLICT');
+    expect(store.getOperation(scope, session.id, 'rewind-1')?.status).toBe('pending');
+    store.commitProviderReplacement(scope, session.id, 'rewind-1', 'old-thread', 'new-thread', { providerSessionId: 'new-thread' }, { eventId: 'rewind-marker', payload: { type: 'managed/rewind', data: { throughSeq: 0 } } });
+    store.close(); const recovered = open(dir).store;
+    expect(recovered.getSession(scope, session.id).providerSessionId).toBe('new-thread');
+    expect(recovered.readEvents(scope, session.id).events[0]?.payload).toMatchObject({ type: 'managed/rewind' });
+    expect(recovered.beginOperation(scope, session.id, operation)).toMatchObject({ execute: false, receipt: { status: 'completed' } });
+  });
   it('keeps stable create identity across restarts and rejects changed request reuse', () => {
     const { dir, store } = open(); const session = store.createSession(scope, input);
     expect(store.createSession(scope, input).id).toBe(session.id);

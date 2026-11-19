@@ -165,6 +165,8 @@ export const HARNESS_REMOTE_ALLOWLIST = [
   'session/create',
   'managedAgent/agents',
   'managedAgent/create',
+  'managedAgent/management',
+  'managedAgent/manage',
   'session/follow',
   'session/fork',
   'session/list',

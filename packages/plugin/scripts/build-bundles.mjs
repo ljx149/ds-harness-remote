@@ -64,6 +64,13 @@ await buildBundle({
 
 // The command-line helper does not require a running Harness or its peer loader.
 await buildBundle({
+  entryPoints: [join(root, 'src/managed-agents/claude-history-sdk.ts')],
+  bundle: true, platform: 'node', format: 'esm',
+  outfile: join(root, 'dist/claude-history-sdk.js'),
+  banner: { js: 'import { createRequire as __dshCreateRequire } from "node:module";\nconst require = __dshCreateRequire(import.meta.url);' },
+})
+
+await buildBundle({
   entryPoints: [join(root, 'src/cli.ts')], bundle: true, platform: 'node', format: 'esm',
   outfile: join(root, 'dist/cli.bundle.js'),
   banner: { js: 'import { createRequire as __dshCreateRequire } from "node:module";\nconst require = __dshCreateRequire(import.meta.url);' },
