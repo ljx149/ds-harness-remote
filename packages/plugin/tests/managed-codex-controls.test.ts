@@ -34,6 +34,20 @@ function fixture(methods: string[] = []) {
 }
 
 describe('Codex managed controls', () => {
+  it('does not reclaim an idle foreground thread with background work or an active goal', async () => {
+    const f = fixture(['thread/backgroundTerminals/list', 'thread/goal/get'])
+    f.routes['thread/goal/get'] = () => ({ goal: { status: 'active' } })
+    const connection = await f.open()
+    expect(await connection.isIdle!()).toBe('busy')
+    f.routes['thread/goal/get'] = () => ({ goal: { status: 'paused' } })
+    expect(await connection.isIdle!()).toBe('idle')
+    f.routes['thread/backgroundTerminals/list'] = () => ({ data: [{ processId: 'task' }], nextCursor: null })
+    expect(await connection.isIdle!()).toBe('busy')
+    await connection.close()
+    const old = await fixture().open()
+    expect(await old.isIdle!()).toBe('unknown')
+    await old.close()
+  })
   it('normalizes provider usage and skills into the native management view contract', async () => {
     const f = fixture(['account/rateLimits/read', 'skills/list'])
     f.routes['account/rateLimits/read'] = () => ({ rateLimitsByLimitId: { codex: { primary: { usedPercent: 12, resetsAt: 1800000000 }, secondary: null } } })

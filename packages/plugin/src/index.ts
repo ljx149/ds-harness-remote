@@ -301,7 +301,7 @@ async function activate(
       const status = runtime?.hostStatus()
       if (!status?.authorized || !status.account || !status.deviceId || status.accountRequired) return undefined
       return { ownerId: createHash('sha256').update(`${config.serverUrl}:${status.account}`).digest('hex'), hostId: status.deviceId }
-    }, async signal => (await workspaceSnapshot(signal)).items!, { launches, attachments: ctx.get('attachments', false) as import('@deepseek-ai/dsh-attachment').AttachmentStore | undefined, generateTitle: generateManagedTitle, nativeArchived: async signal => (await workspaceSnapshot(signal)).archivedSessionIds ?? [] })
+    }, async signal => (await workspaceSnapshot(signal)).items!, { idleTimeoutMs: config.managedAgents.idleTimeoutMs, launches, attachments: ctx.get('attachments', false) as import('@deepseek-ai/dsh-attachment').AttachmentStore | undefined, generateTitle: generateManagedTitle, nativeArchived: async signal => (await workspaceSnapshot(signal)).archivedSessionIds ?? [] })
     removeManagedGateway = installManagedAgentGateway(nativeTypertGateway, managedBackend)
   }
   const hostGateway = new TypertGatewaySwitch(nativeTypertGateway, () => fallbackPeer)

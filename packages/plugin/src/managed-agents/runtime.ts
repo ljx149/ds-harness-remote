@@ -34,6 +34,7 @@ export class ManagedAgentRuntime {
   private readonly routes = new Map<string, Route>()
   private readonly ownerId = randomUUID()
   private closed = false
+  private stopMaintenance?: () => void
   private readonly now: () => number
   private readonly closeTimeoutMs: number
 
@@ -139,23 +140,49 @@ export class ManagedAgentRuntime {
     return route.closing
   }
 
-  /** Host maintenance only. No timer and no viewer-count based disposal here.
+  /** Host maintenance only. No viewer-count based disposal here.
    * A fresh provider answer plus unchanged route activity is required. */
-  async cleanupIdle(sessionId: string, idleForMs: number): Promise<boolean> {
+  async cleanupIdle(sessionId: string, idleForMs: number, canClose: () => boolean = () => true): Promise<boolean> {
     if (!Number.isFinite(idleForMs) || idleForMs < 0) throw new Error('Invalid idle interval.')
     const route = this.routes.get(sessionId)
-    if (!route || route.state !== 'ready' || !route.raw?.isIdle || this.now() - route.lastActivityAt < idleForMs) return false
+    if (!route || route.state !== 'ready' || !route.raw?.isIdle || this.now() - route.lastActivityAt < idleForMs || !canClose()) return false
     const revision = route.revision
     let observation: 'idle' | 'busy' | 'unknown'
-    try { observation = await route.raw.isIdle() } catch { return false }
-    if (observation !== 'idle' || !this.current(route) || route.state !== 'ready' || route.revision !== revision) return false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try { observation = await Promise.race([route.raw.isIdle(), new Promise<'unknown'>(resolve => { timer = setTimeout(() => resolve('unknown'), 3000); timer.unref?.() })]) } catch { return false }
+    finally { if (timer) clearTimeout(timer) }
+    if (observation !== 'idle' || !this.current(route) || route.state !== 'ready' || route.revision !== revision || !canClose()) return false
     route.idleObservedAt = this.now()
     await this.close(sessionId)
     return true
   }
 
+  /** Serial, bounded maintenance of only this runtime's owned routes. */
+  startIdleMaintenance(idleForMs: number, canClose: (sessionId: string) => boolean, intervalMs = 60_000): () => void {
+    if (!Number.isFinite(idleForMs) || idleForMs < 0 || !Number.isFinite(intervalMs) || intervalMs < 1) throw new Error('Invalid idle maintenance interval.')
+    this.stopMaintenance?.()
+    if (!idleForMs || this.closed) return () => {}
+    let stopped = false
+    let running = false
+    const timer = setInterval(() => {
+      if (stopped || running || this.closed) return
+      running = true
+      void (async () => {
+        for (const id of [...this.routes.keys()]) {
+          if (stopped || this.closed) break
+          try { await this.cleanupIdle(id, idleForMs, () => !stopped && !this.closed && canClose(id)) } catch { /* failed cleanup keeps ownership blocked */ }
+        }
+      })().finally(() => { running = false })
+    }, intervalMs)
+    timer.unref?.()
+    const stop = () => { stopped = true; clearInterval(timer); if (this.stopMaintenance === stop) this.stopMaintenance = undefined }
+    this.stopMaintenance = stop
+    return stop
+  }
+
   async closeAll(): Promise<void> {
     this.closed = true
+    this.stopMaintenance?.()
     const results = await Promise.allSettled([...this.routes.keys()].map(id => this.close(id)))
     if (results.some(result => result.status === 'rejected')) throw new Error('Some managed agent processes could not be closed; ownership remains blocked.')
   }

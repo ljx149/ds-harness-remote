@@ -104864,6 +104864,12 @@ var ManagedAgentBackend = class {
     this.unsubscribe = store.subscribe(() => {
       for (const callback of this.listeners) callback();
     });
+    runtime.startIdleMaintenance(services.idleTimeoutMs ?? 0, (sessionId) => {
+      const session2 = this.sessions.get(sessionId);
+      if (!session2 || this.closedSignal.signal.aborted || this.busy.has(sessionId) || this.opening.has(sessionId) || this.queuePumps.has(sessionId) || this.managementFlights.has(sessionId) || this.optionFlights.has(sessionId) || this.questions.get(sessionId)?.size) return false;
+      if ([...this.approvals.values()].some((approval) => approval.session.id === sessionId) || this.queued(session2).some((item) => item.state !== "rejected")) return false;
+      return !store.listOperations(session2, sessionId).some((receipt) => receipt.status === "pending" || receipt.status === "unknown");
+    });
   }
   listeners = /* @__PURE__ */ new Set();
   sessions = /* @__PURE__ */ new Map();
@@ -107970,7 +107976,7 @@ var CodexManagement = class {
       throw error62;
     }
   }
-  async idle() {
+  async idle(forCleanup = false) {
     if (this.host.ended()) return "unknown";
     if (this.host.active()) return "busy";
     try {
@@ -107978,6 +107984,18 @@ var CodexManagement = class {
       const thread = object2(reply.thread);
       if (thread.id !== this.host.threadId) return "unknown";
       const status2 = object2(thread.status).type;
+      if (forCleanup && status2 === "idle") {
+        if (!this.supported.has("thread/backgroundTerminals/list")) return "unknown";
+        if ((await this.terminals()).length) return "busy";
+        await this.refreshChildren();
+        if ([...this.children.values()].some((child) => child.status !== "idle")) return "busy";
+        if (this.supported.has("thread/goal/get")) {
+          const goal = object2(object2(await this.rpc("thread/goal/get", { threadId: this.host.threadId })).goal);
+          if (goal.status === "active") return "busy";
+          if (Object.keys(goal).length && !["paused", "complete", "completed"].includes(String(goal.status))) return "unknown";
+        }
+        if (this.host.active()) return "busy";
+      }
       return status2 === "idle" ? "idle" : status2 === "active" ? "busy" : "unknown";
     } catch {
       return "unknown";
@@ -108807,7 +108825,7 @@ var ManagedCodexAdapter = class {
           }
           return management.manage(operation, request);
         },
-        isIdle: () => management.idle(),
+        isIdle: () => management.idle(true),
         steer: methods2?.has("turn/steer") ? async ({ messageId, text, images }) => {
           if (ended) throw new Error("Codex process is unavailable.");
           if (!active2 || !turnId || sending) throw new Error("No confirmed active turn to steer.");
@@ -108938,6 +108956,7 @@ var ManagedAgentRuntime = class {
   routes = /* @__PURE__ */ new Map();
   ownerId = randomUUID8();
   closed = false;
+  stopMaintenance;
   now;
   closeTimeoutMs;
   status(sessionId) {
@@ -109063,26 +109082,65 @@ var ManagedAgentRuntime = class {
     });
     return route.closing;
   }
-  /** Host maintenance only. No timer and no viewer-count based disposal here.
+  /** Host maintenance only. No viewer-count based disposal here.
    * A fresh provider answer plus unchanged route activity is required. */
-  async cleanupIdle(sessionId, idleForMs) {
+  async cleanupIdle(sessionId, idleForMs, canClose = () => true) {
     if (!Number.isFinite(idleForMs) || idleForMs < 0) throw new Error("Invalid idle interval.");
     const route = this.routes.get(sessionId);
-    if (!route || route.state !== "ready" || !route.raw?.isIdle || this.now() - route.lastActivityAt < idleForMs) return false;
+    if (!route || route.state !== "ready" || !route.raw?.isIdle || this.now() - route.lastActivityAt < idleForMs || !canClose()) return false;
     const revision = route.revision;
     let observation;
+    let timer2;
     try {
-      observation = await route.raw.isIdle();
+      observation = await Promise.race([route.raw.isIdle(), new Promise((resolve12) => {
+        timer2 = setTimeout(() => resolve12("unknown"), 3e3);
+        timer2.unref?.();
+      })]);
     } catch {
       return false;
+    } finally {
+      if (timer2) clearTimeout(timer2);
     }
-    if (observation !== "idle" || !this.current(route) || route.state !== "ready" || route.revision !== revision) return false;
+    if (observation !== "idle" || !this.current(route) || route.state !== "ready" || route.revision !== revision || !canClose()) return false;
     route.idleObservedAt = this.now();
     await this.close(sessionId);
     return true;
   }
+  /** Serial, bounded maintenance of only this runtime's owned routes. */
+  startIdleMaintenance(idleForMs, canClose, intervalMs = 6e4) {
+    if (!Number.isFinite(idleForMs) || idleForMs < 0 || !Number.isFinite(intervalMs) || intervalMs < 1) throw new Error("Invalid idle maintenance interval.");
+    this.stopMaintenance?.();
+    if (!idleForMs || this.closed) return () => {
+    };
+    let stopped = false;
+    let running = false;
+    const timer2 = setInterval(() => {
+      if (stopped || running || this.closed) return;
+      running = true;
+      void (async () => {
+        for (const id10 of [...this.routes.keys()]) {
+          if (stopped || this.closed) break;
+          try {
+            await this.cleanupIdle(id10, idleForMs, () => !stopped && !this.closed && canClose(id10));
+          } catch {
+          }
+        }
+      })().finally(() => {
+        running = false;
+      });
+    }, intervalMs);
+    timer2.unref?.();
+    const stop = () => {
+      stopped = true;
+      clearInterval(timer2);
+      if (this.stopMaintenance === stop) this.stopMaintenance = void 0;
+    };
+    this.stopMaintenance = stop;
+    return stop;
+  }
   async closeAll() {
     this.closed = true;
+    this.stopMaintenance?.();
     const results = await Promise.allSettled([...this.routes.keys()].map((id10) => this.close(id10)));
     if (results.some((result) => result.status === "rejected")) throw new Error("Some managed agent processes could not be closed; ownership remains blocked.");
   }
@@ -126850,7 +126908,7 @@ defineMethod("transform", [
 // packages/plugin/src/config.ts
 var DEFAULT_REMOTE_SERVER_URL = "https://agent.xcodex.vip";
 var entryConfigSchema = Schema.object({
-  managedAgents: Schema.object({ enabled: Schema.boolean(), profiles: Schema.array(Schema.object({ id: Schema.string(), label: Schema.string(), codexHome: Schema.string(), claudeConfigDir: Schema.string() })) }),
+  managedAgents: Schema.object({ enabled: Schema.boolean(), idleTimeoutMs: Schema.number(), profiles: Schema.array(Schema.object({ id: Schema.string(), label: Schema.string(), codexHome: Schema.string(), claudeConfigDir: Schema.string() })) }),
   enabled: Schema.boolean(),
   role: Schema.union(["host", "client", "both"]),
   serverUrl: Schema.string(),
@@ -126896,7 +126954,7 @@ var reconnectSchema = external_exports.union([
   }).strict()
 ]);
 var configSchema = external_exports.object({
-  managedAgents: external_exports.object({ enabled: external_exports.boolean().optional(), profiles: external_exports.array(external_exports.object({ id: external_exports.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/), label: external_exports.string().min(1).max(128), codexHome: external_exports.string().min(1).max(4096).optional(), claudeConfigDir: external_exports.string().min(1).max(4096).optional() }).strict()).max(32).optional() }).strict().optional(),
+  managedAgents: external_exports.object({ enabled: external_exports.boolean().optional(), idleTimeoutMs: external_exports.number().int().min(0).max(864e5).optional(), profiles: external_exports.array(external_exports.object({ id: external_exports.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/), label: external_exports.string().min(1).max(128), codexHome: external_exports.string().min(1).max(4096).optional(), claudeConfigDir: external_exports.string().min(1).max(4096).optional() }).strict()).max(32).optional() }).strict().optional(),
   enabled: external_exports.boolean().optional(),
   role: external_exports.enum(["host", "client", "both"]).optional(),
   serverUrl: external_exports.string().url().optional(),
@@ -126947,7 +127005,7 @@ function resolveConfig(input4 = {}, env = process.env) {
     httpServerAllowlist,
     deviceName: parsed.deviceName ?? env.XCODEX_REMOTE_DEVICE_NAME ?? hostname3(),
     hostControl: { enabled: parsed.hostControl?.enabled ?? true },
-    managedAgents: { enabled: parsed.managedAgents?.enabled ?? true, ...parsed.managedAgents?.profiles ? { profiles: parsed.managedAgents.profiles } : {} },
+    managedAgents: { enabled: parsed.managedAgents?.enabled ?? true, idleTimeoutMs: parsed.managedAgents?.idleTimeoutMs ?? 0, ...parsed.managedAgents?.profiles ? { profiles: parsed.managedAgents.profiles } : {} },
     terminal: { enabled: parsed.terminal?.enabled ?? (env.XCODEX_REMOTE_TERMINAL_ENABLED === void 0 || env.XCODEX_REMOTE_TERMINAL_ENABLED === "true") },
     remoteTools: { enabled: parsed.remoteTools?.enabled ?? true },
     sidebar: { entry: parsed.sidebar?.entry === "compact" ? "compact" : "standard" },
@@ -144708,7 +144766,7 @@ async function activate(ctx, readConfig, entryId, requireRemoteEvents = false) {
       const status2 = runtime?.hostStatus();
       if (!status2?.authorized || !status2.account || !status2.deviceId || status2.accountRequired) return void 0;
       return { ownerId: createHash11("sha256").update(`${config2.serverUrl}:${status2.account}`).digest("hex"), hostId: status2.deviceId };
-    }, async (signal) => (await workspaceSnapshot(signal)).items, { launches, attachments: ctx.get("attachments", false), generateTitle: generateManagedTitle, nativeArchived: async (signal) => (await workspaceSnapshot(signal)).archivedSessionIds ?? [] });
+    }, async (signal) => (await workspaceSnapshot(signal)).items, { idleTimeoutMs: config2.managedAgents.idleTimeoutMs, launches, attachments: ctx.get("attachments", false), generateTitle: generateManagedTitle, nativeArchived: async (signal) => (await workspaceSnapshot(signal)).archivedSessionIds ?? [] });
     removeManagedGateway = installManagedAgentGateway(nativeTypertGateway, managedBackend);
   }
   const hostGateway = new TypertGatewaySwitch(nativeTypertGateway, () => fallbackPeer);

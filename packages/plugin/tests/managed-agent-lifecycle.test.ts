@@ -23,6 +23,54 @@ function setup() {
 }
 
 describe('Host-owned managed Agent lifecycle', () => {
+  it('runs opt-in idle maintenance and respects Host queues and stop disposal', async () => {
+    vi.useFakeTimers()
+    const f = setup()
+    try {
+      await f.runtime.open(input, () => {})
+      f.clock(10000)
+      let queued = true
+      const stop = f.runtime.startIdleMaintenance(100, () => !queued, 50)
+      await vi.advanceTimersByTimeAsync(50)
+      expect(f.connection.close).not.toHaveBeenCalled()
+      queued = false
+      await vi.advanceTimersByTimeAsync(50)
+      expect(f.connection.close).toHaveBeenCalledTimes(1)
+      stop()
+      await f.runtime.open({ ...input, providerSessionId: 'provider-session' }, () => {})
+      f.clock(20000)
+      await vi.advanceTimersByTimeAsync(100)
+      expect(f.connection.close).toHaveBeenCalledTimes(1)
+      await f.runtime.closeAll()
+    } finally { vi.useRealTimers() }
+  })
+  it('rechecks Host admission after a provider idle probe', async () => {
+    const f = setup()
+    await f.runtime.open(input, () => {})
+    f.clock(10000)
+    let queued = false
+    vi.mocked(f.connection.isIdle!).mockImplementationOnce(async () => { queued = true; return 'idle' })
+    expect(await f.runtime.cleanupIdle(input.sessionId, 100, () => !queued)).toBe(false)
+    expect(f.connection.close).not.toHaveBeenCalled()
+    await f.runtime.closeAll()
+  })
+  it('bounds a stuck idle probe without treating its late answer as exit permission', async () => {
+    vi.useFakeTimers()
+    const f = setup()
+    try {
+      await f.runtime.open(input, () => {})
+      f.clock(10000)
+      let resolve!: (value: 'idle') => void
+      vi.mocked(f.connection.isIdle!).mockImplementationOnce(() => new Promise(done => { resolve = done }))
+      const cleanup = f.runtime.cleanupIdle(input.sessionId, 100)
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(await cleanup).toBe(false)
+      resolve('idle')
+      await Promise.resolve()
+      expect(f.connection.close).not.toHaveBeenCalled()
+      await f.runtime.closeAll()
+    } finally { vi.useRealTimers() }
+  })
   it('retains ownership after a failed close, refusing reopen until cleanup succeeds', async () => {
     const f = setup()
     const connection = await f.runtime.open(input, () => {})

@@ -7,7 +7,7 @@ import { z } from 'zod'
 export const DEFAULT_REMOTE_SERVER_URL = 'https://agent.xcodex.vip'
 
 export interface Config {
-  managedAgents?: { enabled?: boolean; profiles?: Array<Pick<ManagedLaunchProfile, 'id' | 'label' | 'codexHome' | 'claudeConfigDir'>> }
+  managedAgents?: { enabled?: boolean; idleTimeoutMs?: number; profiles?: Array<Pick<ManagedLaunchProfile, 'id' | 'label' | 'codexHome' | 'claudeConfigDir'>> }
   enabled?: boolean
   role?: 'host' | 'client' | 'both'
   serverUrl?: string
@@ -71,7 +71,7 @@ export interface ResolvedAcpConfig {
 }
 
 export interface ResolvedConfig {
-  managedAgents?: { enabled: boolean; profiles?: Array<Pick<ManagedLaunchProfile, 'id' | 'label' | 'codexHome' | 'claudeConfigDir'>> }
+  managedAgents?: { enabled: boolean; idleTimeoutMs?: number; profiles?: Array<Pick<ManagedLaunchProfile, 'id' | 'label' | 'codexHome' | 'claudeConfigDir'>> }
   enabled: boolean
   role: 'host' | 'client' | 'both'
   serverUrl?: string
@@ -111,7 +111,7 @@ export type ConfigInput = Config | VolatileSnapshot<Config>
  * the plain schema required by the namespace-registration API.
  */
 export const entryConfigSchema = s.object({
-  managedAgents: s.object({ enabled: s.boolean(), profiles: s.array(s.object({ id: s.string(), label: s.string(), codexHome: s.string(), claudeConfigDir: s.string() })) }),
+  managedAgents: s.object({ enabled: s.boolean(), idleTimeoutMs: s.number(), profiles: s.array(s.object({ id: s.string(), label: s.string(), codexHome: s.string(), claudeConfigDir: s.string() })) }),
   enabled: s.boolean(),
   role: s.union(['host', 'client', 'both'] as const),
   serverUrl: s.string(),
@@ -169,7 +169,7 @@ const reconnectSchema = z.union([
 ])
 
 const configSchema = z.object({
-  managedAgents: z.object({ enabled: z.boolean().optional(), profiles: z.array(z.object({ id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/), label: z.string().min(1).max(128), codexHome: z.string().min(1).max(4096).optional(), claudeConfigDir: z.string().min(1).max(4096).optional() }).strict()).max(32).optional() }).strict().optional(),
+  managedAgents: z.object({ enabled: z.boolean().optional(), idleTimeoutMs: z.number().int().min(0).max(86400000).optional(), profiles: z.array(z.object({ id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/), label: z.string().min(1).max(128), codexHome: z.string().min(1).max(4096).optional(), claudeConfigDir: z.string().min(1).max(4096).optional() }).strict()).max(32).optional() }).strict().optional(),
   enabled: z.boolean().optional(),
   role: z.enum(['host', 'client', 'both']).optional(),
   serverUrl: z.string().url().optional(),
@@ -224,7 +224,7 @@ export function resolveConfig(input: ConfigInput = {}, env: NodeJS.ProcessEnv = 
     httpServerAllowlist,
     deviceName: parsed.deviceName ?? env.XCODEX_REMOTE_DEVICE_NAME ?? hostname(),
     hostControl: { enabled: parsed.hostControl?.enabled ?? true },
-    managedAgents: { enabled: parsed.managedAgents?.enabled ?? true, ...(parsed.managedAgents?.profiles ? { profiles: parsed.managedAgents.profiles } : {}) },
+    managedAgents: { enabled: parsed.managedAgents?.enabled ?? true, idleTimeoutMs: parsed.managedAgents?.idleTimeoutMs ?? 0, ...(parsed.managedAgents?.profiles ? { profiles: parsed.managedAgents.profiles } : {}) },
     terminal: { enabled: parsed.terminal?.enabled ?? (env.XCODEX_REMOTE_TERMINAL_ENABLED === undefined || env.XCODEX_REMOTE_TERMINAL_ENABLED === 'true') },
     remoteTools: { enabled: parsed.remoteTools?.enabled ?? true },
     sidebar: { entry: parsed.sidebar?.entry === 'compact' ? 'compact' : 'standard' },

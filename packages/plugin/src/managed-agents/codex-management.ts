@@ -125,7 +125,7 @@ export class CodexManagement {
       throw error
     }
   }
-  async idle(): Promise<'idle' | 'busy' | 'unknown'> {
+  async idle(forCleanup = false): Promise<'idle' | 'busy' | 'unknown'> {
     if (this.host.ended()) return 'unknown'
     if (this.host.active()) return 'busy'
     try {
@@ -133,6 +133,19 @@ export class CodexManagement {
       const thread = object(reply.thread)
       if (thread.id !== this.host.threadId) return 'unknown'
       const status = object(thread.status).type
+      if (forCleanup && status === 'idle') {
+        // An idle foreground turn does not prove background work or goals ended.
+        if (!this.supported.has('thread/backgroundTerminals/list')) return 'unknown'
+        if ((await this.terminals()).length) return 'busy'
+        await this.refreshChildren()
+        if ([...this.children.values()].some(child => child.status !== 'idle')) return 'busy'
+        if (this.supported.has('thread/goal/get')) {
+          const goal = object(object(await this.rpc('thread/goal/get', { threadId: this.host.threadId })).goal)
+          if (goal.status === 'active') return 'busy'
+          if (Object.keys(goal).length && !['paused', 'complete', 'completed'].includes(String(goal.status))) return 'unknown'
+        }
+        if (this.host.active()) return 'busy'
+      }
       return status === 'idle' ? 'idle' : status === 'active' ? 'busy' : 'unknown'
     } catch { return 'unknown' }
   }

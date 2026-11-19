@@ -188,7 +188,7 @@ export class ManagedCodexAdapter implements ManagedAgentAdapter {
           }
           return management!.manage(operation, request)
         },
-        isIdle: () => management!.idle(),
+        isIdle: () => management!.idle(true),
         steer: methods?.has('turn/steer') ? async ({ messageId, text, images }) => {
           if (ended) throw new Error('Codex process is unavailable.')
           if (!active || !turnId || sending) throw new Error('No confirmed active turn to steer.')

@@ -48,9 +48,15 @@ export class ManagedAgentBackend {
     readonly runtime: ManagedAgentRuntime,
     private readonly principal: () => Principal | undefined,
     private readonly workspaces: (signal?: AbortSignal) => Promise<readonly Workspace[]>,
-    private readonly services: { launches?: ManagedLaunchRegistry; attachments?: Pick<AttachmentStore, 'admitPromptContent' | 'readImage'>; nativeArchived?: (signal: AbortSignal) => Promise<string[]>; generateTitle?: (input: ManagedTitleInput) => Promise<string> } = {},
+    private readonly services: { idleTimeoutMs?: number; launches?: ManagedLaunchRegistry; attachments?: Pick<AttachmentStore, 'admitPromptContent' | 'readImage'>; nativeArchived?: (signal: AbortSignal) => Promise<string[]>; generateTitle?: (input: ManagedTitleInput) => Promise<string> } = {},
   ) {
     this.unsubscribe = store.subscribe(() => { for (const callback of this.listeners) callback() })
+    runtime.startIdleMaintenance(services.idleTimeoutMs ?? 0, sessionId => {
+      const session = this.sessions.get(sessionId)
+      if (!session || this.closedSignal.signal.aborted || this.busy.has(sessionId) || this.opening.has(sessionId) || this.queuePumps.has(sessionId) || this.managementFlights.has(sessionId) || this.optionFlights.has(sessionId) || this.questions.get(sessionId)?.size) return false
+      if ([...this.approvals.values()].some(approval => approval.session.id === sessionId) || this.queued(session).some(item => item.state !== 'rejected')) return false
+      return !store.listOperations(session, sessionId).some(receipt => receipt.status === 'pending' || receipt.status === 'unknown')
+    })
   }
 
   ownsSession(sessionId: string): boolean { return this.sessions.has(sessionId) }
