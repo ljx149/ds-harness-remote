@@ -1,3 +1,4 @@
+import type { ManagedAgentBackend } from './managed-agent-backend.js'
 import { hostname } from 'node:os'
 import { existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
@@ -107,6 +108,10 @@ export class PluginControlRuntime {
     private readonly useDefaultStorage = false,
   ) {}
 
+  private managedAgents?: ManagedAgentBackend
+
+  setManagedAgents(backend: ManagedAgentBackend | undefined): void { this.managedAgents = backend }
+
   register(connection: HostConnectionHandle, webServer?: HostWebServerLike): () => Promise<void> {
     const statusStream = new ControlStatusStream(() => this.streamStatus())
     return registerControlRoute(
@@ -133,6 +138,13 @@ export class PluginControlRuntime {
       // A request arriving during replacement must use the new Server runtime.
       if (endpoint !== 'settings.server.set' && endpoint !== 'settings.identity.reset'
         && endpoint !== 'settings.startup.retry') await this.serverSwitchFlight
+      if (endpoint === 'managedAgent.agents' || endpoint === 'managedAgent.create' || endpoint === 'managedAgent.catalog') {
+        if (!this.managedAgents) throw new ClientModeError('METHOD_NOT_ALLOWED', 'Managed Agents are not enabled.')
+        if (this.logoutFlight || this.serverSwitchFlight) throw new ClientModeError('CONNECTION_FAILED', 'Account change in progress.', true)
+        signal.throwIfAborted()
+        if (endpoint === 'managedAgent.catalog') return ok({ items: (await this.managedAgents.catalog(signal)).map(({ sessionId, agentId }) => ({ sessionId, agentId })) })
+        return ok(await this.managedAgents.invoke({ namespace: 'managedAgent', method: endpoint.split('.')[1]!, args: record(payload), signal }))
+      }
       if (endpoint.startsWith('host.pairing.')) {
         if (this.host?.pairingControl === undefined) throw new ClientModeError('METHOD_NOT_ALLOWED', 'Host device pairing is unavailable.')
         const action = endpoint.slice('host.pairing.'.length)
@@ -749,6 +761,7 @@ function editableConfig(config: ResolvedConfig): Config {
     terminal: config.terminal,
     remoteTools: config.remoteTools,
     sidebar: config.sidebar,
+    managedAgents: config.managedAgents,
     hostControl: config.hostControl ?? { enabled: true },
     loopback: config.loopback,
     forceRelay: config.forceRelay,

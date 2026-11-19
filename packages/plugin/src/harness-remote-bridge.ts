@@ -163,6 +163,8 @@ export const HARNESS_REMOTE_ALLOWLIST = [
   'session/canOpenWorkspacePath',
   'session/control',
   'session/create',
+  'managedAgent/agents',
+  'managedAgent/create',
   'session/follow',
   'session/fork',
   'session/list',
@@ -562,6 +564,7 @@ export class HarnessRemoteBridge {
     const params = streamOpenSchema.parse(input) as HarnessRemoteStreamOpenParams
     this.assertAllowed(params.endpoint)
     if (params.endpoint.startsWith('pluginManager/')) throw new RpcError('METHOD_NOT_ALLOWED', 'Plugin management endpoints are not streams.')
+    if (params.endpoint.startsWith('managedAgent/')) throw new RpcError('METHOD_NOT_ALLOWED', 'Managed Agent commands are not streams.')
     if (params.endpoint.startsWith('settings/')) throw new RpcError('METHOD_NOT_ALLOWED', 'Settings endpoints are not streams.')
     if (TERMINAL_CALLS.has(params.endpoint)) throw new RpcError('METHOD_NOT_ALLOWED', 'This terminal endpoint is not a stream.')
     if (TERMINAL_STREAMS.has(params.endpoint)) this.terminal.check(params.endpoint, params.payload)
@@ -1306,6 +1309,7 @@ function needsDirectoryFallback(result: TypertRpcResult): boolean {
 }
 
 const SESSION_PROJECTION_WHITELIST = new Set([
+  'managedAgent',
   'permissions',
   'remoteStatusKnown',
   'codexStatus',

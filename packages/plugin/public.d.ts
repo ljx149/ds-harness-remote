@@ -6,6 +6,7 @@ export interface Config {
   serverUrl?: string
   deviceName?: string
   terminal?: { enabled?: boolean }
+  managedAgents?: { enabled?: boolean }
   loopback?: { ports?: number[] }
   forceRelay?: boolean
   logLevel?: 'debug' | 'info' | 'warn' | 'error'

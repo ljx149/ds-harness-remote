@@ -68,3 +68,5 @@
 - [设备凭据兑换 schema 与安全诊断](device-exchange-diagnostics.md)：给手机客户端对接，400 字段类型/长度/原因，不含凭据。
 
 - [开发与线上分支约定](development-workflow.md)：origin/upstream、production/dev 以及发布流程。
+
+- [工作区内多 Agent 会话实施记录](design/managed-agent-sessions.md)：Orca 管理代码抽取、原生侧栏接入及多端验收边界。

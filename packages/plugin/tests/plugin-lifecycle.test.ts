@@ -8,7 +8,7 @@ import type { Config } from '../src/config.js'
 import type { ControlRouteHandler } from '../src/control-route.js'
 
 const directories: string[] = []
-const disabledAgentDomains = { codex: { enabled: false }, acp: { enabled: false } }
+const disabledAgentDomains = { codex: { enabled: false }, acp: { enabled: false }, managedAgents: { enabled: false } }
 
 afterEach(async () => {
   vi.unstubAllEnvs()

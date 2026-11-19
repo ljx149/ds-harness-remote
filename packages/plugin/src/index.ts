@@ -1,3 +1,9 @@
+import { createHash } from 'node:crypto'
+import { join } from 'node:path'
+import { ManagedAgentBackend } from './managed-agent-backend.js'
+import { ManagedSessionStore } from './managed-session-store/index.js'
+import { createManagedAgentRuntime } from './managed-agents/index.js'
+import { installManagedAgentGateway } from './managed-agent-gateway.js'
 import * as DshConnection from '@deepseek-ai/dsh-client-connection'
 import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the `ctx.settings` Context merge and the rc.1 forms type.
@@ -263,6 +269,34 @@ async function activate(
     fallbackPeer = undefined
     return peer?.dispose?.()
   }, 'xcodex-remote fallback owner peer')
+  let managedBackend: ManagedAgentBackend | undefined
+  let removeManagedGateway: (() => void) | undefined
+  if (config.managedAgents?.enabled && initialStorageError === undefined) {
+    const rawGateway = new TypertGatewaySwitch(nativeTypertGateway, () => fallbackPeer).local()
+    const scopeKey = createHash('sha256').update(`${config.serverUrl ?? 'local'}:${entryId}`).digest('hex').slice(0, 24)
+    const store = ManagedSessionStore.open(join(`${defaultIdentityDirectory}-agent-sessions`, scopeKey))
+    managedBackend = new ManagedAgentBackend(store, createManagedAgentRuntime(), () => {
+      const status = runtime?.hostStatus()
+      if (!status?.authorized || !status.account || !status.deviceId || status.accountRequired) return undefined
+      return { ownerId: createHash('sha256').update(`${config.serverUrl}:${status.account}`).digest('hex'), hostId: status.deviceId }
+    }, async signal => {
+      // Harness 0.2.2 exposes the directory through its snapshot stream, not workspace/list.
+      const lifetime = new AbortController()
+      const combined = signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal
+      const stream = await rawGateway.open('workspace/follow', { args: {} }, combined)
+      const iterator = stream[Symbol.asyncIterator]()
+      try {
+        const first = await iterator.next()
+        const frame = first.value as { type?: string; value?: { items?: Array<{ workspaceId: string; path: string }> } } | undefined
+        if (first.done || frame?.type !== 'baseline' || !Array.isArray(frame.value?.items)) throw new Error('Managed Agent workspace directory is invalid.')
+        return frame.value.items
+      } finally {
+        lifetime.abort()
+        await iterator.return?.()
+      }
+    })
+    removeManagedGateway = installManagedAgentGateway(nativeTypertGateway, managedBackend)
+  }
   const hostGateway = new TypertGatewaySwitch(nativeTypertGateway, () => fallbackPeer)
   const localTypertGateway = hostGateway.local()
   localTypertGateway.createPeer = () => {
@@ -369,6 +403,7 @@ async function activate(
       await previousReplacement?.catch(() => undefined)
       if (closed) throw new Error('Remote plugin is closed')
       clientActive = false
+      if (managedBackend) throw new Error('Restart the plugin before changing servers while managed Agents are enabled.')
       // Stop both authorities before loading identities scoped to another Server.
       const shutdown = await Promise.allSettled([clientRuntime?.close(), runtime?.close()])
       const failure = shutdown.find(result => result.status === 'rejected')
@@ -412,6 +447,7 @@ async function activate(
         updateChecker,
         true,
       )
+  controlRuntime?.setManagedAgents(managedBackend)
   if (initialStorageError !== undefined) {
     controlRuntime?.setStartupFailure(initialStorageError, { storageAvailable: false })
   }
@@ -461,6 +497,8 @@ async function activate(
       await disposeControl?.()
       await clientRuntime?.close()
       await runtime?.close()
+      await managedBackend?.close()
+      removeManagedGateway?.()
     }
   }, 'xcodex-remote lifecycle')
   if (config.remoteTools?.enabled) installRemoteDiscoveryTools(ctx, () => closed || !clientActive ? undefined : clientRuntime)

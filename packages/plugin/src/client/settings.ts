@@ -675,6 +675,20 @@ export function createRemotePluginOptions(React: ClientReact) {
 
     if (props.view === 'summary') return React.createElement('span', null, t('pluginDescription'))
 
+    // Managed sessions live in native DSH conversations. This page stays an account entry.
+    if (settingsView?.config.managedAgents?.enabled === true) return React.createElement('div', {
+      className: 'xcodexRemotePluginCard xcodexRemotePluginModern', 'data-xcodex-remote-settings': '',
+    },
+      React.createElement('strong', null, t('pluginTitle')),
+      startupErrorBanner,
+      association === undefined
+        ? React.createElement(BrowserLogin, { control: props.control, t, serverUrl, disabled: busy, onComplete: load })
+        : React.createElement('div', { className: 'xcodexRemoteAssociation' },
+          React.createElement('strong', null, association.account === undefined ? t('authorizationComplete') : displayRemoteAccount(association.account)),
+          React.createElement('p', null, serverUrl),
+          React.createElement('button', { type: 'button', disabled: busy, onClick: () => { void logout() } }, t(busy ? 'signingOut' : 'signOut'))),
+      error === undefined ? null : React.createElement('p', { role: 'alert' }, error))
+
     const orderedQrProviders = [...oauthProviders].sort((a, b) =>
       Number(b.id === props.preferredQrProvider) - Number(a.id === props.preferredQrProvider))
     const selectedProvider = oauthProviders.find(item => `oauth:${item.id}` === loginMethod)

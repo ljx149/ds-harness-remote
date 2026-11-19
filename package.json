@@ -1,6 +1,6 @@
 {
   "name": "xcodex-remote",
-  "version": "0.6.4-xcodex.2",
+  "version": "0.7.0-xcodex.1",
   "description": "P2P-based, end-to-end encrypted remote access to DeepSeek Harness, CodeX, Claude Code, Pi, and other workspaces from web and mobile clients.",
   "keywords": [
     "deepseek",
@@ -15,7 +15,7 @@
   "homepage": "https://xcodex.vip",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/liguobao/ds-harness-remote.git"
+    "url": "git+https://github.com/ljx149/ds-harness-remote.git"
   },
   "bugs": {
     "url": "https://xcodex.vip"
@@ -47,6 +47,7 @@
     "packages/plugin/bin/ds-harness-remote.js",
     "packages/plugin/public.d.ts",
     "packages/plugin/LICENSE",
+    "packages/plugin/ORCA-LICENSE",
     "dsh-plugin.json",
     "cordis.patch.yml",
     "locale/",

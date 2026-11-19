@@ -1,5 +1,9 @@
 # Repository Guide for Agents
 
+## 工作区多 Agent 开发（2026-11-19）
+
+用户指定本轮在 `feat/orca-agent-management` 开发，从 dev 的 `44bcc2cb` 建立。实现/验收记录位于 `docs/design/managed-agent-sessions.md`，待办统一记录在 `docs/TODO.md`。测试发行版 `0.7.0-xcodex.1` 默认启用 `managedAgents.enabled`（显式 false 仍保留）；不把隔离试装等同生产部署，不将测试 Provider 的回复等同真实模型验收。复用 Orca 代码必须保留 `packages/plugin/ORCA-LICENSE`，迁移覆盖见 `src/managed-agents/EXTRACTION.md`。手机/平板真机、真实 Codex 聊天及高级管理能力仍需分别验收。
+
 ## 仓库与分支约定（2026-11-16）
 
 - `origin`: https://github.com/ljx149/ds-harness-remote.git，用户自己的 fork，已授权提交并推送本次本地完成的修改。

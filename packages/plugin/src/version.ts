@@ -8,4 +8,4 @@
  * If they diverge, `npm scripts` checks in `scripts/verify-version-sync.mjs`
  * will fail fast during build/check/test.
  */
-export const PLUGIN_VERSION = '0.6.4-xcodex.2'
+export const PLUGIN_VERSION = '0.7.0-xcodex.1'

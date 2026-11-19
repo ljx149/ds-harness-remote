@@ -13,6 +13,8 @@
         enabled: true
         role: host
         serverUrl: https://agent.xcodex.vip
+        managedAgents:
+          enabled: true
         codex:
           enabled: true
           binary: codex

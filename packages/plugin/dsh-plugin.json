@@ -2,7 +2,7 @@
   "$schema": "https://dsh.community/schemas/dsh-plugin-0.15.json",
   "id": "vip.xcodex.remote",
   "name": "xcodex-remote",
-  "version": "0.6.4-xcodex.2",
+  "version": "0.7.0-xcodex.1",
   "manifestVersion": "0.15",
   "facets": {
     "host": {
@@ -13,6 +13,6 @@
   "subscriptions": [],
   "license": "MIT",
   "source": {
-    "repository": "https://github.com/liguobao/ds-harness-remote"
+    "repository": "https://github.com/ljx149/ds-harness-remote"
   }
 }

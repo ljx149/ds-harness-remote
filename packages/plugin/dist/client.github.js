@@ -1619,6 +1619,91 @@ Minimum version required to store current data is: ` + bestVersion + `.
     }
   });
 
+  // packages/plugin/src/client/icons.ts
+  var deepSeekWorkspaceIcon = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAACVBMVEUAAADy8vXx8fUsA3vyAAAAAXRSTlMAQObYZgAAAOxJREFUWMPtlsEOwyAMQxP+/6OnTZMGxHGcot3wDYgfhkJbs6urprzveGtu9d1NgEdto8w93GuA7zPS2RFg7ynsCOAokbtAmLr2YaeKgJ6fxpT8jCAC0qSqPyNoO5DXdvyouj4ClFAdYaDxK09uiBDCIYBf6CxLesnR0uF2pG+JmhCqrUb0AOvjjoQaYDTCEAAgMg5grhAeAQIB+/M15IcKlnUIp4CkTCd0AKb4zVsRSJVGYEVzT0agK107IMGMEurvromEpaX4wzk/IKw378kq4LafED6Oowxfk7AP2q8W16EdM3p29Eyvrv6vF0WIBfBziKyCAAAAAElFTkSuQmCC", gptWorkspaceIcon = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAclBMVEX////v7+++wMf////s7O3k5OTExcrX2Ny6vMTv8PPW19yXmqRqboJmaHd3eoaqrLPs7fGMjpfb3eKlpq1eYXOxs7pWWWd+gY5HSVdRVGVub3k+QU74+Pg4OkcvMT1ISlUoKjUiIy4fICueoKkaGyUSFB21Bp+qAAAAAXRSTlMAQObYZgAABChJREFUWMPtl916qjoQhlsdEwIECEgMYCBxx/u/xT1DrFUL1LO1DtY8LSLJvPnmB4gfH//sr7TPDfvdebf/xXZbkE/4zZ0MVhGHd9zJDsv+7F3//Z69tT5wljAu3tXw+TIlzXKJlhflYmJ+5uF5WpWhb54X+C/zZCmT2wJA4dJZwus0UYjIGqWyMhVbEp4yKNRRqlv0opW5PJLJ4rFJXvP4JKDRMqturBZjkMVJFYjR6iHQDQDI4+k2k51wZbWrqwp4mR/1CVYATyko9TFGxBUqL5IvMbXSWt0T8bkGgFLqgqZBI/Uxbx5UAxLaNcCNLBpttM7wbCc1pmJOpWAsDtey68UaQMyrFgb9uxLPjqg3+nGluyKN0XUdWw0BJ0NvTFFqgzpr9J+Dh4w0Ga1qkqBNswagxdRgFPAbgHRQG5jumGWyMxrTIaRRa4AzFs0YrNMXgI4MJWnsKYFhGNMnIh/mBOPsV8CZBFjN9w8ArowxnZzDr5IcvxTaKpxJCVsoI3SWysz1UM4AqQdzlCgho1IKrK+x1mKFzisANtgEU8E7GwHDgOqxe4w9tnM166wbaA2xBMBLrTWcAGYGdCiYVUJUrMCF+7l6gklrW1RwPi8ByjuActANqhKzVWoYrFGcCFzbDgNaBrTWpncFQMcI2DfWoAiDqRCiHcYM/ZdCEKkZqfR8spj4F0CiJjv2gHL6URNoCQDaYacL6O1oFDO2eQDUFP7AKdCRdC4CRDZaNifbjA41l/uYb/SZMAFNTBGzY7sG4J2jTsJgToOzIzXF3HZqBpSOAGduXbkGEKV1OqVGqRJpRxtvwbSw5IqAiUJItwBCOT9R32FCGo3nCkAN3t0UTBRC6zDONcBeOee9pr4T+ASbnDOdc5OmtREwEEB5w8Wqgt4bOV5c7Lt9iiK8zdP/IsBbutUGX4gNwEVCqd3FUt/xYnRWt7BvPBYQjwjAGXa3ASguHVAZ/WXKlA3eZDX1wRegFsr7E2wAlB9xFbx/7MV70kFT8aqNgLL3F8nFBmA3hrn/IJHjKJOK2oj1WI4Z4FzwN/81AOhgYD6v2xbIvaZIurLC9AfvB1WLTYAoXejF1xeBL5cpBIyEbmxkZymIXwDQh1BAfOrhI1lfwtgz8tozF5T4ttf3+32AyxC6klwAgw/YVTHpoK82xYt3wLP/Bw4AAI4D7/01TLKXBj9NEz2wEuGiKpoy68S/FwCLMQAZ3gXhihaCa25vQo6RyToOz9PE6wYjJgGi1YnqZX8qMIK+TDlnargGzSv4NvFjlwXf/nfLLMrAB4O/Xl3BH0d+RIASFgDA8IYMIXgr2+cBsbDdPSwAAHjSZFmb3txETCKIxc0uWwI8rxsLJcTiVndNwyMgKljbbNN2/zcEAja2+4RgIDYN2Bu/WtAOaEodnu2dnzz/7I/Y/w/LaEcX/MdfAAAAAElFTkSuQmCC";
+
+  // packages/plugin/src/client/managed-agent.ts
+  var record = (value) => typeof value == "object" && value !== null ? value : {}, claudeIcon = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g stroke="#D97757" stroke-width="2.2"><path d="M12 1v22M1 12h22M4.2 4.2l15.6 15.6M4.2 19.8L19.8 4.2M7.8 1.8l8.4 20.4M1.8 7.8l20.4 8.4M1.8 16.2l20.4-8.4M7.8 22.2l8.4-20.4"/></g></svg>');
+  function createManagedAgentUi(React, ctx) {
+    let managedIds = /* @__PURE__ */ new Map(), catalogFlight, catalogListeners = /* @__PURE__ */ new Set(), refreshCatalog = () => {
+      catalogFlight || (catalogFlight = ctx.call("managedAgent/catalog", {}).then((value) => {
+        let items = Array.isArray(value) ? value : record(value).items;
+        if (Array.isArray(items)) {
+          managedIds.clear();
+          for (let item of items) {
+            let entry = record(item);
+            typeof entry.sessionId == "string" && typeof entry.agentId == "string" && managedIds.set(entry.sessionId, entry.agentId);
+          }
+          for (let listener of catalogListeners) listener();
+        }
+      }).catch(() => {
+        managedIds.clear();
+        for (let listener of catalogListeners) listener();
+      }).finally(() => {
+        catalogFlight = void 0;
+      }));
+    };
+    function useSnapshots() {
+      let [, update] = React.useState(0);
+      React.useEffect(() => {
+        let changed = () => update((value) => value + 1), a = ctx.sessions.list.subscribe(() => {
+          changed(), refreshCatalog();
+        });
+        catalogListeners.add(changed), refreshCatalog();
+        let b = ctx.workspaces.list.subscribe(changed);
+        return () => {
+          a(), b(), catalogListeners.delete(changed);
+        };
+      }, []);
+    }
+    function SessionLogo({ sessionId }) {
+      if (useSnapshots(), !ctx.sessions.list.getSnapshot().byId?.[sessionId]) return null;
+      let id = managedIds.get(sessionId) ?? "dsh", src = id === "codex" ? gptWorkspaceIcon : id === "claude" || id === "claude-code" ? claudeIcon : id === "dsh" ? deepSeekWorkspaceIcon : void 0;
+      return src ? React.createElement("img", { src, alt: id, title: id, width: 16, height: 16, style: { flexShrink: 0 } }) : React.createElement("span", { title: id, "aria-label": id }, id.slice(0, 1).toUpperCase());
+    }
+    function NewSession({ wide }) {
+      useSnapshots();
+      let [agents, setAgents] = React.useState([]), [expanded, setExpanded] = React.useState(!1), [busy, setBusy] = React.useState(!1), [error, setError] = React.useState(void 0), [attempt, setAttempt] = React.useState(void 0);
+      if (React.useEffect(() => {
+        let active = !0;
+        return ctx.call("managedAgent/agents", {}).then((value) => {
+          let values = Array.isArray(value) ? value : record(value).items;
+          active && Array.isArray(values) && setAgents(values.flatMap((item) => {
+            let agent = record(item);
+            return typeof agent.id == "string" && agent.available !== !1 ? [{ id: agent.id, label: typeof agent.name == "string" ? agent.name : agent.id }] : [];
+          }));
+        }).catch(() => {
+        }), () => {
+          active = !1;
+        };
+      }, []), !agents.length) return null;
+      let current = Object.values(ctx.sessions.list.getSnapshot().byId ?? {}).find((item) => (item.retainedBy?.mainView ?? 0) > 0), workspace = ctx.workspaces.list.getSnapshot().items.find((item) => current && item.sessionIds?.includes(current.id)), create = async (agentId) => {
+        if (busy || !workspace) return;
+        let request = attempt?.workspaceId === workspace.workspaceId && attempt.agentId === agentId ? attempt : { workspaceId: workspace.workspaceId, agentId, operationId: crypto.randomUUID() };
+        setAttempt(request), setBusy(!0), setError(void 0);
+        try {
+          let result = record(await ctx.call("managedAgent/create", { request }));
+          if (typeof result.sessionId != "string") throw new Error(ctx.chinese ? "\u521B\u5EFA\u4F1A\u8BDD\u5931\u8D25" : "Session creation failed");
+          await ctx.sessions.refresh?.(), ctx.open(result.sessionId), setAttempt(void 0), setExpanded(!1);
+        } catch (reason) {
+          setError(reason instanceof Error ? reason.message : String(reason));
+        } finally {
+          setBusy(!1);
+        }
+      };
+      return React.createElement(
+        "div",
+        { className: "xcodexManagedAgentCreate" },
+        React.createElement("button", { className: "xcodexManagedAgentButton", type: "button", "aria-expanded": expanded, disabled: busy || !workspace, title: workspace ? `${ctx.chinese ? "\u5728\u5F53\u524D\u76EE\u5F55\u65B0\u5EFA Agent \u5BF9\u8BDD" : "New Agent session in current workspace"}: ${workspace.path ?? workspace.title}` : ctx.chinese ? "\u8BF7\u5148\u9009\u62E9\u4E00\u4E2A\u5DE5\u4F5C\u533A\u4E2D\u7684\u5BF9\u8BDD" : "Select a conversation in a workspace first", onClick: () => setExpanded((value) => !value) }, wide === !1 ? "+" : ctx.chinese ? "+ Agent \u5BF9\u8BDD" : "+ Agent session"),
+        expanded ? React.createElement("div", { role: "group", className: "xcodexManagedAgentMenu" }, ...agents.map((agent) => React.createElement("button", { className: "xcodexManagedAgentButton", key: agent.id, type: "button", disabled: busy, onClick: () => {
+          create(agent.id);
+        } }, agent.label))) : null,
+        error ? React.createElement("div", { role: "alert" }, error) : null
+      );
+    }
+    return { NewSession, SessionLogo };
+  }
+
   // packages/plugin/src/client/browser-login.ts
   function createBrowserLogin(React) {
     return function(props) {
@@ -2820,9 +2905,9 @@ If a code was sent, recover the original submission without changing it.`,
     };
     inspect(document.body);
     let observer = new MutationObserver((records) => {
-      for (let record of records) {
-        record.type === "attributes" && inspect(record.target);
-        for (let node of Array.from(record.addedNodes))
+      for (let record2 of records) {
+        record2.type === "attributes" && inspect(record2.target);
+        for (let node of Array.from(record2.addedNodes))
           node instanceof Element && inspect(node);
       }
     });
@@ -3510,6 +3595,25 @@ If a code was sent, recover the original submission without changing it.`,
         )
       );
       if (props.view === "summary") return React.createElement("span", null, t("pluginDescription"));
+      if (settingsView?.config.managedAgents?.enabled === !0) return React.createElement(
+        "div",
+        {
+          className: "xcodexRemotePluginCard xcodexRemotePluginModern",
+          "data-xcodex-remote-settings": ""
+        },
+        React.createElement("strong", null, t("pluginTitle")),
+        startupErrorBanner,
+        association === void 0 ? React.createElement(BrowserLogin, { control: props.control, t, serverUrl, disabled: busy, onComplete: load }) : React.createElement(
+          "div",
+          { className: "xcodexRemoteAssociation" },
+          React.createElement("strong", null, association.account === void 0 ? t("authorizationComplete") : displayRemoteAccount(association.account)),
+          React.createElement("p", null, serverUrl),
+          React.createElement("button", { type: "button", disabled: busy, onClick: () => {
+            logout();
+          } }, t(busy ? "signingOut" : "signOut"))
+        ),
+        error === void 0 ? null : React.createElement("p", { role: "alert" }, error)
+      );
       let orderedQrProviders = [...oauthProviders].sort((a, b) => +(b.id === props.preferredQrProvider) - +(a.id === props.preferredQrProvider)), selectedProvider = oauthProviders.find((item) => `oauth:${item.id}` === loginMethod), scanLabel = t("scanWithProvider", { provider: selectedProvider?.displayName ?? "" }), passwordVisible = !savingServer && !serverDirty && loginMethod === "password" && (loginMethodManuallySelected.current || !providersLoading && oauthProviders.length === 0), qrLoginTab = (provider) => React.createElement("button", {
         key: provider.id,
         type: "button",
@@ -3800,6 +3904,7 @@ If a code was sent, recover the original submission without changing it.`,
   function installStyle(clientModuleId2) {
     let style = document.createElement("style");
     return style.dataset.plugin = clientModuleId2, style.dataset.pluginCss = "xcodex-remote", style.textContent = [
+      ".xcodexManagedAgentCreate{position:relative}.xcodexManagedAgentButton{display:flex;align-items:center;min-height:32px;padding:6px 10px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;text-align:left;cursor:pointer}.xcodexManagedAgentButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}.xcodexManagedAgentButton:disabled{opacity:.45;cursor:default}.xcodexManagedAgentButton:focus-visible{outline:2px solid var(--dsw-alias-label-secondary);outline-offset:2px}.xcodexManagedAgentMenu{position:absolute;bottom:calc(100% + 6px);left:0;min-width:160px;padding:4px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-2,#252525);box-shadow:0 4px 16px #0002;z-index:20}.xcodexManagedAgentMenu .xcodexManagedAgentButton{width:100%}",
       ".xcodexRemoteConnectedPanelHeader{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:6px 12px;margin-bottom:6px}.xcodexRemoteConnectedPanelHeader .xcodexRemoteConnectedPanelTitle{margin-bottom:0}",
       ".xcodexRemoteHostNameLine{display:flex;align-items:center;flex-wrap:wrap;gap:8px}",
       ".xcodexRemoteServerNotice{font-size:12px;line-height:1.5;white-space:normal;overflow-wrap:anywhere}.xcodexRemoteServerNotice.isWarning{color:var(--dsw-alias-state-warning-primary,#946200)}.xcodexRemoteServerNotice.isError{color:var(--dsw-alias-state-error-primary)}.xcodexRemoteServerNotice.isRestored{color:var(--dsw-alias-state-success-primary)}",
@@ -3979,9 +4084,6 @@ If a code was sent, recover the original submission without changing it.`,
         return Math.sign(parsedLeft.core[index] - parsedRight.core[index]);
     return comparePrerelease(parsedLeft.prerelease, parsedRight.prerelease);
   }
-
-  // packages/plugin/src/client/icons.ts
-  var deepSeekWorkspaceIcon = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAACVBMVEUAAADy8vXx8fUsA3vyAAAAAXRSTlMAQObYZgAAAOxJREFUWMPtlsEOwyAMQxP+/6OnTZMGxHGcot3wDYgfhkJbs6urprzveGtu9d1NgEdto8w93GuA7zPS2RFg7ynsCOAokbtAmLr2YaeKgJ6fxpT8jCAC0qSqPyNoO5DXdvyouj4ClFAdYaDxK09uiBDCIYBf6CxLesnR0uF2pG+JmhCqrUb0AOvjjoQaYDTCEAAgMg5grhAeAQIB+/M15IcKlnUIp4CkTCd0AKb4zVsRSJVGYEVzT0agK107IMGMEurvromEpaX4wzk/IKw378kq4LafED6Oowxfk7AP2q8W16EdM3p29Eyvrv6vF0WIBfBziKyCAAAAAElFTkSuQmCC", gptWorkspaceIcon = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAclBMVEX////v7+++wMf////s7O3k5OTExcrX2Ny6vMTv8PPW19yXmqRqboJmaHd3eoaqrLPs7fGMjpfb3eKlpq1eYXOxs7pWWWd+gY5HSVdRVGVub3k+QU74+Pg4OkcvMT1ISlUoKjUiIy4fICueoKkaGyUSFB21Bp+qAAAAAXRSTlMAQObYZgAABChJREFUWMPtl916qjoQhlsdEwIECEgMYCBxx/u/xT1DrFUL1LO1DtY8LSLJvPnmB4gfH//sr7TPDfvdebf/xXZbkE/4zZ0MVhGHd9zJDsv+7F3//Z69tT5wljAu3tXw+TIlzXKJlhflYmJ+5uF5WpWhb54X+C/zZCmT2wJA4dJZwus0UYjIGqWyMhVbEp4yKNRRqlv0opW5PJLJ4rFJXvP4JKDRMqturBZjkMVJFYjR6iHQDQDI4+k2k51wZbWrqwp4mR/1CVYATyko9TFGxBUqL5IvMbXSWt0T8bkGgFLqgqZBI/Uxbx5UAxLaNcCNLBpttM7wbCc1pmJOpWAsDtey68UaQMyrFgb9uxLPjqg3+nGluyKN0XUdWw0BJ0NvTFFqgzpr9J+Dh4w0Ga1qkqBNswagxdRgFPAbgHRQG5jumGWyMxrTIaRRa4AzFs0YrNMXgI4MJWnsKYFhGNMnIh/mBOPsV8CZBFjN9w8ArowxnZzDr5IcvxTaKpxJCVsoI3SWysz1UM4AqQdzlCgho1IKrK+x1mKFzisANtgEU8E7GwHDgOqxe4w9tnM166wbaA2xBMBLrTWcAGYGdCiYVUJUrMCF+7l6gklrW1RwPi8ByjuActANqhKzVWoYrFGcCFzbDgNaBrTWpncFQMcI2DfWoAiDqRCiHcYM/ZdCEKkZqfR8spj4F0CiJjv2gHL6URNoCQDaYacL6O1oFDO2eQDUFP7AKdCRdC4CRDZaNifbjA41l/uYb/SZMAFNTBGzY7sG4J2jTsJgToOzIzXF3HZqBpSOAGduXbkGEKV1OqVGqRJpRxtvwbSw5IqAiUJItwBCOT9R32FCGo3nCkAN3t0UTBRC6zDONcBeOee9pr4T+ASbnDOdc5OmtREwEEB5w8Wqgt4bOV5c7Lt9iiK8zdP/IsBbutUGX4gNwEVCqd3FUt/xYnRWt7BvPBYQjwjAGXa3ASguHVAZ/WXKlA3eZDX1wRegFsr7E2wAlB9xFbx/7MV70kFT8aqNgLL3F8nFBmA3hrn/IJHjKJOK2oj1WI4Z4FzwN/81AOhgYD6v2xbIvaZIurLC9AfvB1WLTYAoXejF1xeBL5cpBIyEbmxkZymIXwDQh1BAfOrhI1lfwtgz8tozF5T4ttf3+32AyxC6klwAgw/YVTHpoK82xYt3wLP/Bw4AAI4D7/01TLKXBj9NEz2wEuGiKpoy68S/FwCLMQAZ3gXhihaCa25vQo6RyToOz9PE6wYjJgGi1YnqZX8qMIK+TDlnargGzSv4NvFjlwXf/nfLLMrAB4O/Xl3BH0d+RIASFgDA8IYMIXgr2+cBsbDdPSwAAHjSZFmb3txETCKIxc0uWwI8rxsLJcTiVndNwyMgKljbbNN2/zcEAja2+4RgIDYN2Bu/WtAOaEodnu2dnzz/7I/Y/w/LaEcX/MdfAAAAAElFTkSuQmCC";
 
   // packages/plugin/src/client/workspaces.ts
   function createRemoteWorkspaceAction(React, portal) {
@@ -5967,7 +6069,27 @@ If a code was sent, recover the original submission without changing it.`,
           order: 20,
           locale: localeNamespace,
           inject: () => ({ control, statusFeed, onSignIn: openRemote })
-        }, RemoteSessionHeaderAction)), ctx.slots.inject("sidebar.footer.action", () => ctx.slots.register({
+        }, RemoteSessionHeaderAction));
+        let managedUi = createManagedAgentUi(React, {
+          sessions: ctx.sessions,
+          workspaces: ctx.workspaces,
+          chinese: ctx.locale.getLocale().active === "zh",
+          call: async (endpoint, request) => control(endpoint.replace("managedAgent/", "managedAgent."), request),
+          open: (sessionId) => {
+            let navigation = ctx.get("uiWorkspace");
+            if (!navigation) throw new Error("Native conversation navigation is unavailable");
+            navigation.openSession(sessionId);
+          }
+        });
+        ctx.slots.inject("sidebar.session.row.leading", () => ctx.slots.register({
+          name: "sidebar.session.row.leading",
+          id: "xcodex-managed-agent-logo",
+          order: -100
+        }, managedUi.SessionLogo)), ctx.slots.inject("sidebar.footer.action", () => ctx.slots.register({
+          name: "sidebar.footer.action",
+          id: "xcodex-managed-agent-create",
+          order: -30
+        }, managedUi.NewSession)), ctx.slots.inject("sidebar.footer.action", () => ctx.slots.register({
           name: "sidebar.footer.action",
           id: "xcodex-remote-workspace",
           order: -20,

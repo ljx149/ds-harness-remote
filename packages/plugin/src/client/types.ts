@@ -203,6 +203,7 @@ interface PluginSettings {
   hostControl?: { enabled?: boolean }
   loopback?: { ports?: number[] }
   remoteTools?: { enabled?: boolean }
+  managedAgents?: { enabled?: boolean }
   forceRelay?: boolean
   logLevel?: 'debug' | 'info' | 'warn' | 'error'
   reconnect?: boolean | {

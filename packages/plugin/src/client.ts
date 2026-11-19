@@ -1,3 +1,4 @@
+import { createManagedAgentUi } from './client/managed-agent.js'
 import { createBrowserLogin } from './client/browser-login.js'
 import { renderBodyPortal } from './client/portal.js'
 import type { Translate } from './client-locale.js'
@@ -577,6 +578,25 @@ window.__ModuleLoader__.load({
         locale: localeNamespace,
         inject: () => ({ control, statusFeed, onSignIn: openRemote }),
       }, RemoteSessionHeaderAction))
+      const managedUi = createManagedAgentUi(React, {
+        sessions: ctx.sessions as unknown as import('./client/managed-agent.js').ManagedAgentUiContext['sessions'],
+        workspaces: ctx.workspaces,
+        chinese: ctx.locale.getLocale().active === 'zh',
+        call: async (endpoint, request) => {
+          return control(endpoint.replace('managedAgent/', 'managedAgent.'), request)
+        },
+        open: sessionId => {
+          const navigation = ctx.get<UiWorkspaceClientServiceLike>('uiWorkspace')
+          if (!navigation) throw new Error('Native conversation navigation is unavailable')
+          navigation.openSession(sessionId)
+        },
+      })
+      ctx.slots.inject('sidebar.session.row.leading', () => ctx.slots.register({
+        name: 'sidebar.session.row.leading', id: 'xcodex-managed-agent-logo', order: -100,
+      }, managedUi.SessionLogo))
+      ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
+        name: 'sidebar.footer.action', id: 'xcodex-managed-agent-create', order: -30,
+      }, managedUi.NewSession))
       ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
         name: 'sidebar.footer.action',
         id: 'xcodex-remote-workspace',

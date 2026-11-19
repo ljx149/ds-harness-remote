@@ -6,6 +6,7 @@ import { z } from 'zod'
 export const DEFAULT_REMOTE_SERVER_URL = 'https://agent.xcodex.vip'
 
 export interface Config {
+  managedAgents?: { enabled?: boolean }
   enabled?: boolean
   role?: 'host' | 'client' | 'both'
   serverUrl?: string
@@ -69,6 +70,7 @@ export interface ResolvedAcpConfig {
 }
 
 export interface ResolvedConfig {
+  managedAgents?: { enabled: boolean }
   enabled: boolean
   role: 'host' | 'client' | 'both'
   serverUrl?: string
@@ -108,6 +110,7 @@ export type ConfigInput = Config | VolatileSnapshot<Config>
  * the plain schema required by the namespace-registration API.
  */
 export const entryConfigSchema = s.object({
+  managedAgents: s.object({ enabled: s.boolean() }),
   enabled: s.boolean(),
   role: s.union(['host', 'client', 'both'] as const),
   serverUrl: s.string(),
@@ -165,6 +168,7 @@ const reconnectSchema = z.union([
 ])
 
 const configSchema = z.object({
+  managedAgents: z.object({ enabled: z.boolean().optional() }).strict().optional(),
   enabled: z.boolean().optional(),
   role: z.enum(['host', 'client', 'both']).optional(),
   serverUrl: z.string().url().optional(),
@@ -219,6 +223,7 @@ export function resolveConfig(input: ConfigInput = {}, env: NodeJS.ProcessEnv = 
     httpServerAllowlist,
     deviceName: parsed.deviceName ?? env.XCODEX_REMOTE_DEVICE_NAME ?? hostname(),
     hostControl: { enabled: parsed.hostControl?.enabled ?? true },
+    managedAgents: { enabled: parsed.managedAgents?.enabled ?? true },
     terminal: { enabled: parsed.terminal?.enabled ?? (env.XCODEX_REMOTE_TERMINAL_ENABLED === undefined || env.XCODEX_REMOTE_TERMINAL_ENABLED === 'true') },
     remoteTools: { enabled: parsed.remoteTools?.enabled ?? true },
     sidebar: { entry: parsed.sidebar?.entry === 'compact' ? 'compact' : 'standard' },

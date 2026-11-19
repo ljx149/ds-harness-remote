@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { normalizeServerUrl, resolveConfig } from '../src/config.js'
 
 describe('plugin config', () => {
+  it('enables managed sessions for this release and preserves an explicit opt-out', () => {
+    expect(resolveConfig({}, {}).managedAgents?.enabled).toBe(true)
+    expect(resolveConfig({ managedAgents: { enabled: false } }, {}).managedAgents?.enabled).toBe(false)
+  })
   it('applies safe defaults', () => {
     expect(resolveConfig({}, {})).toMatchObject({
       enabled: true,
