@@ -1,3 +1,5 @@
+当前功能、完成程度、未完成项与安装方式统一见 [Xagent 状态说明](docs/xagent-status-and-install.md)（2026-11-20）。
+
 ## Xagent scoped package (2026-11-20)
 
 Package: `@xcoder/xagent`, display name: **Xagent**, preview version: `0.8.1-xagent.1`.
