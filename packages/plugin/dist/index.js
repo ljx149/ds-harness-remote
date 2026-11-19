@@ -105218,7 +105218,7 @@ import { spawn as spawn2 } from "node:child_process";
 import { Buffer as Buffer2 } from "node:buffer";
 
 // packages/plugin/src/version.ts
-var PLUGIN_VERSION = "0.7.0-xcodex.3";
+var PLUGIN_VERSION = "0.7.0-xcodex.4";
 
 // packages/plugin/src/acp/adapters/cursor-process.ts
 var ACP_REQUEST_TIMEOUT_MS = 6e4;
