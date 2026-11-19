@@ -104300,6 +104300,9 @@ var ManagedAgentBackend = class {
   summary(session2) {
     const records = this.records(session2);
     const selected = this.selection(session2);
+    const prompts = records.filter((record13) => record13.event.type === "user/message");
+    const blank = prompts.length === 0;
+    const title = session2.title === "New conversation" && !records.some((record13) => record13.event.type === "session/title") ? this.promptTitle(prompts[0]?.event.data) ?? session2.title : session2.title;
     return {
       sessionId: session2.id,
       updatedAt: session2.updatedAt,
@@ -104307,15 +104310,27 @@ var ManagedAgentBackend = class {
       agentAvailable: true,
       formatStatus: "current",
       running: this.busy.has(session2.id),
-      blank: records.length === 0,
+      blank,
       agentId: session2.agentId,
       projections: { kind: "sequenced", asOfSeq: records.length - 1, values: {
-        title: session2.title,
+        title,
         managedAgent: { agentId: session2.agentId },
         modelSelection: { lastUsed: selected ?? null, next: selected ?? null },
-        sessionListMetadata: { blank: records.length === 0, lastPromptAt: records.length ? session2.updatedAt : null }
+        sessionListMetadata: { blank, lastPromptAt: prompts.at(-1)?.event.time ?? null }
       } }
     };
+  }
+  promptTitle(data2) {
+    const content = data2?.content;
+    const text = content?.filter((block) => block.type === "text").map((block) => block.text ?? "").join(" ").replace(/\s+/gu, " ").trim();
+    if (!text) return void 0;
+    const characters = Array.from(text);
+    return characters.length > 72 ? characters.slice(0, 71).join("") + "\u2026" : text;
+  }
+  rename(session2, title, source, messageSeqs = []) {
+    this.store.renameSession(session2, session2.id, title);
+    this.append(session2, "session/title", { title, source: { kind: source }, messageSeqs });
+    return this.records(session2).at(-1).event.seq;
   }
   append(session2, type, data2, eventId = randomUUID()) {
     this.store.appendEvent(session2, session2.id, { eventId, type: "native", payload: JSON.parse(JSON.stringify({ type, data: data2 })) });
@@ -104451,10 +104466,8 @@ var ManagedAgentBackend = class {
     const address2 = request.address;
     const session2 = await this.requireSession(id2.parse(request.sessionId ?? address2?.sessionId ?? address2?.id), signal);
     if (endpoint === "session/rename") {
-      const title = external_exports.string().min(1).max(1024).parse(request.title);
-      this.store.renameSession(session2, session2.id, title);
-      for (const callback of this.listeners) callback();
-      return { title };
+      const title = external_exports.string().trim().min(1).max(1024).parse(request.title);
+      return { title, seq: this.rename(session2, title, "user") };
     }
     if (endpoint === "session/projections") return this.summary(session2).projections;
     if (endpoint === "session/prompt") {
@@ -104474,6 +104487,12 @@ var ManagedAgentBackend = class {
       const turn = this.records(session2).filter((item) => item.event.type === "turn/start").length + 1;
       this.turns.set(session2.id, turn);
       this.append(session2, "user/message", { id: input4.requestId, role: "user", content: input4.content, source: { kind: "user", rpcId: input4.requestId } }, `user:${input4.requestId}`);
+      const records = this.records(session2);
+      if (session2.title === "New conversation" && !records.some((record13) => record13.event.type === "session/title")) {
+        const first2 = records.find((record13) => record13.event.type === "user/message");
+        const title = this.promptTitle(first2?.event.data);
+        if (title && first2) this.rename(session2, title, "fallback", [first2.event.seq]);
+      }
       this.append(session2, "turn/start", { turn });
       this.append(session2, "step/start", { turn, step: 1 });
       let dispatched = false;
@@ -105058,7 +105077,7 @@ import { spawn } from "node:child_process";
 import { Buffer as Buffer2 } from "node:buffer";
 
 // packages/plugin/src/version.ts
-var PLUGIN_VERSION = "0.7.0-xcodex.1";
+var PLUGIN_VERSION = "0.7.0-xcodex.2";
 
 // packages/plugin/src/acp/adapters/cursor-process.ts
 var ACP_REQUEST_TIMEOUT_MS = 6e4;

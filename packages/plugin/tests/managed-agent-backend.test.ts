@@ -53,6 +53,35 @@ function fixture(existingDirectory?: string) {
   }
 }
 describe('managed backend integration', () => {
+  it('keeps model-only sessions blank and names the first prompt without overwriting a rename', async () => {
+    const f = fixture(), sessionId = await f.create()
+    await f.call('session/selectModel', { sessionId, provider: 'codex', model: 'gpt-test' })
+    const blank = (await f.backend.catalog())[0]!.summary
+    expect(blank).toMatchObject({ blank: true, projections: { values: { sessionListMetadata: { blank: true, lastPromptAt: null } } } })
+    f.emit({ type: 'error', code: 'MODEL_LOOKUP_FAILED', message: 'initialization diagnostic' })
+    expect((await f.backend.catalog())[0]!.summary).toMatchObject({ blank: true })
+    await f.prompt(sessionId, 'first', '  帮我检查\n登录接口  ')
+    expect((await f.backend.catalog())[0]!.summary).toMatchObject({ blank: false, projections: { values: { title: '帮我检查 登录接口', sessionListMetadata: { blank: false } } } })
+    f.emit({ type: 'turn-completed', status: 'completed' })
+    const renamed = await f.call('session/rename', { sessionId, title: '我的登录问题' })
+    expect(renamed.seq).toBeGreaterThan(0)
+    await f.prompt(sessionId, 'second', '这条消息不能改标题')
+    expect((await f.backend.catalog())[0]!.summary).toMatchObject({ projections: { values: { title: '我的登录问题' } } })
+    await f.backend.close()
+    const restored = fixture(f.directory)
+    expect((await restored.backend.catalog())[0]!.summary).toMatchObject({ blank: false, projections: { values: { title: '我的登录问题' } } })
+  })
+  it('derives a title for legacy chat history and keeps renamed empty drafts blank', async () => {
+    const f = fixture(), sessionId = await f.create()
+    const scope = { ownerId: 'owner', hostId: 'host', workspaceId: 'a' }
+    f.store.appendEvent(scope, sessionId, { eventId: 'old-message', type: 'native', payload: { type: 'user/message', data: { content: [{ type: 'text', text: '已有对话的第一条问题' }], source: { kind: 'user' } } } })
+    expect((await f.backend.catalog())[0]!.summary).toMatchObject({ projections: { values: { title: '已有对话的第一条问题' } } })
+    const draft = await f.create('b', 'draft')
+    await f.call('session/rename', { sessionId: draft, title: '预设名字' })
+    expect((await f.backend.catalog()).find(row => row.sessionId === draft)!.summary).toMatchObject({ blank: true })
+    await f.prompt(draft, 'draft-message', '不能覆盖预设名字')
+    expect((await f.backend.catalog()).find(row => row.sessionId === draft)!.summary).toMatchObject({ projections: { values: { title: '预设名字' } } })
+  })
   it('does not dispatch a prompt revoked while its provider is starting', async () => {
     const f = fixture(), sessionId = await f.create()
     let release!: () => void

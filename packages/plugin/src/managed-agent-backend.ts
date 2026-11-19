@@ -89,13 +89,31 @@ export class ManagedAgentBackend {
   private summary(session: ManagedSession) {
     const records = this.records(session)
     const selected = this.selection(session)
+    const prompts = records.filter(record => record.event.type === 'user/message')
+    const blank = prompts.length === 0
+    // Configuration and title events are not conversation content. The native
+    // sidebar hides a blank session when it is no longer the selected session.
+    const title = session.title === 'New conversation' && !records.some(record => record.event.type === 'session/title')
+      ? this.promptTitle(prompts[0]?.event.data) ?? session.title : session.title
     return { sessionId: session.id, updatedAt: session.updatedAt, cwd: session.workspacePath, agentAvailable: true, formatStatus: 'current',
-      running: this.busy.has(session.id), blank: records.length === 0, agentId: session.agentId,
+      running: this.busy.has(session.id), blank, agentId: session.agentId,
       projections: { kind: 'sequenced', asOfSeq: records.length - 1, values: {
-        title: session.title, managedAgent: { agentId: session.agentId },
+        title, managedAgent: { agentId: session.agentId },
         modelSelection: { lastUsed: selected ?? null, next: selected ?? null },
-        sessionListMetadata: { blank: records.length === 0, lastPromptAt: records.length ? session.updatedAt : null },
+        sessionListMetadata: { blank, lastPromptAt: prompts.at(-1)?.event.time ?? null },
       } } }
+  }
+  private promptTitle(data: unknown): string | undefined {
+    const content = (data as { content?: Array<{ type?: string; text?: string }> } | undefined)?.content
+    const text = content?.filter(block => block.type === 'text').map(block => block.text ?? '').join(' ').replace(/\s+/gu, ' ').trim()
+    if (!text) return undefined
+    const characters = Array.from(text)
+    return characters.length > 72 ? characters.slice(0, 71).join('') + '…' : text
+  }
+  private rename(session: ManagedSession, title: string, source: 'user' | 'fallback', messageSeqs: number[] = []): number {
+    this.store.renameSession(session, session.id, title)
+    this.append(session, 'session/title', { title, source: { kind: source }, messageSeqs })
+    return this.records(session).at(-1)!.event.seq
   }
   private append(session: ManagedSession, type: string, data: unknown, eventId: string = randomUUID()): void {
     this.store.appendEvent(session, session.id, { eventId, type: 'native', payload: JSON.parse(JSON.stringify({ type, data })) as JsonValue })
@@ -201,7 +219,10 @@ export class ManagedAgentBackend {
     }
     const address = request.address as { sessionId?: string; id?: string } | undefined
     const session = await this.requireSession(id.parse(request.sessionId ?? address?.sessionId ?? address?.id), signal)
-    if (endpoint === 'session/rename') { const title = z.string().min(1).max(1024).parse(request.title); this.store.renameSession(session, session.id, title); for (const callback of this.listeners) callback(); return { title } }
+    if (endpoint === 'session/rename') {
+      const title = z.string().trim().min(1).max(1024).parse(request.title)
+      return { title, seq: this.rename(session, title, 'user') }
+    }
     if (endpoint === 'session/projections') return this.summary(session).projections
     if (endpoint === 'session/prompt') {
       const input = promptSchema.parse(request)
@@ -221,6 +242,12 @@ export class ManagedAgentBackend {
       const turn = this.records(session).filter(item => item.event.type === 'turn/start').length + 1
       this.turns.set(session.id, turn)
       this.append(session, 'user/message', { id: input.requestId, role: 'user', content: input.content, source: { kind: 'user', rpcId: input.requestId } }, `user:${input.requestId}`)
+      const records = this.records(session)
+      if (session.title === 'New conversation' && !records.some(record => record.event.type === 'session/title')) {
+        const first = records.find(record => record.event.type === 'user/message')
+        const title = this.promptTitle(first?.event.data)
+        if (title && first) this.rename(session, title, 'fallback', [first.event.seq])
+      }
       this.append(session, 'turn/start', { turn })
       this.append(session, 'step/start', { turn, step: 1 })
       let dispatched = false
