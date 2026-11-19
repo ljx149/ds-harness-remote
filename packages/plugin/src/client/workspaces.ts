@@ -1360,7 +1360,7 @@ export function createRemoteWorkspaceAction(React: ClientReact, portal?: PortalR
                       })),
                     updateNotice === undefined ? null : React.createElement('a', {
                       className: 'xcodexRemoteAccountUpdate',
-                      href: 'https://github.com/liguobao/ds-harness-remote/releases',
+                      href: 'https://github.com/ljx149/ds-harness-remote/releases',
                       target: '_blank',
                       rel: 'noreferrer',
                       title: updateNotice,

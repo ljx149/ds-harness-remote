@@ -4815,7 +4815,7 @@ If a code was sent, recover the original submission without changing it.`,
                     ),
                     updateNotice === void 0 ? null : React.createElement("a", {
                       className: "xcodexRemoteAccountUpdate",
-                      href: "https://github.com/liguobao/ds-harness-remote/releases",
+                      href: "https://github.com/ljx149/ds-harness-remote/releases",
                       target: "_blank",
                       rel: "noreferrer",
                       title: updateNotice

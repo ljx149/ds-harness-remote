@@ -1,3 +1,10 @@
+## 2026-11-19 更新检测与 Orca 差距复核
+
+- [x] GitHub Releases 更新检测、测试版比较和 fork 下载入口修复（源码已改，待随新版发行）。
+- [ ] 发布包含更新检测修复的新包，旧 tgz 用户手动更新一次；registry 原生一键更新另行接入。
+- Orca 未接入项与优先级：[差距审计](design/orca-agent-management-gap-audit.md)。
+- 更新来源与限制：[更新检测说明](plugin-update-discovery.md)。
+
 ## 工作区内多 Agent 会话（2026-11-19，开发中）
 
 分支 `feat/orca-agent-management`。详细边界与验收见 [实施记录](design/managed-agent-sessions.md)。
