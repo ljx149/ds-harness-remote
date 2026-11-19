@@ -53,6 +53,30 @@ function fixture(existingDirectory?: string, services: ConstructorParameters<typ
   }
 }
 describe('managed backend integration', () => {
+  it('advertises implemented mobile capabilities in discovery and session snapshots without probing a CLI', async () => {
+    const f = fixture(), sessionId = await f.create()
+    const identity = { agentId: 'codex', name: 'Codex', registered: true, availability: 'unverified', capabilities: {
+      textPrompts: true, modelSelection: true, reasoningEffort: true, archive: true, unarchive: true,
+      imagePrompts: false, fileAttachments: false, steering: false, queueWhileBusy: false, fork: false, compact: false,
+    } }
+    expect((await f.call('managedAgent/agents', {})).items[0]).toMatchObject({ id: 'codex', ...identity })
+    expect((await f.backend.catalog())[0]!.summary.projections.values.managedAgent).toMatchObject(identity)
+    const controller = new AbortController()
+    const stream = await f.backend.open('session/follow', { args: { sessionId } }, controller.signal)
+    const iterator = stream[Symbol.asyncIterator]()
+    expect((await iterator.next()).value).toMatchObject({ type: 'snapshot', projections: { values: { managedAgent: identity } } })
+    controller.abort(); await iterator.return?.()
+    expect(f.open).not.toHaveBeenCalled()
+  })
+  it('rejects attachment receipts rather than silently sending only the text', async () => {
+    const f = fixture(), sessionId = await f.create()
+    await expect(f.call('session/prompt', { sessionId, requestId: 'attachment', content: [{ type: 'text', text: 'inspect file' }], fileReceiptIds: ['receipt'] })).rejects.toThrow('MANAGED_ATTACHMENTS_NOT_SUPPORTED')
+    expect(f.send).not.toHaveBeenCalled()
+    expect(f.open).not.toHaveBeenCalled()
+    await f.call('session/prompt', { sessionId, requestId: 'text', content: [{ type: 'text', text: 'hello' }], fileReceiptIds: [] })
+    expect(f.send).toHaveBeenCalledTimes(1)
+  })
+
   it('archives and restores only the scoped session, preserving native archives and history across restart', async () => {
     const f = fixture(undefined, { nativeArchived: async () => ['native-archived'] })
     const sessionId = await f.create()

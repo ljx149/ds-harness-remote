@@ -102,12 +102,24 @@ export function installManagedAgentGateway(gateway: TypertGatewayLike, backend: 
   const dispatch = runtime.dispatchRpc
   const stream = runtime.stream
   const open = runtime.openWireStream
+  // A phone may resume directly after Host restart without listing sessions first.
+  // Resolve persisted membership for trusted callers before deciding native vs managed.
+  const owns = async (endpoint: string, payload: unknown, signal: AbortSignal, peer: unknown) => {
+    if (managedAgentOwnsRequest(backend, endpoint, payload)) return true
+    const request = requestOf(payload)
+    const id = request.sessionId ?? row(request.address)?.sessionId ?? row(request.address)?.id
+    if (isLiveOwner(peer) && typeof id === 'string' && (endpoint.startsWith('session/') || endpoint.startsWith('workspace/'))) {
+      await backend.catalog(ownerSignal(signal, peer))
+      return managedAgentOwnsRequest(backend, endpoint, payload)
+    }
+    return false
+  }
   const merge = async (endpoint: string, result: TypertRpcResult, signal: AbortSignal, payload: unknown) => globalModelCatalog(endpoint, payload)
     ? mergeModels(result, backend, signal) : ['session/list', 'workspace/list', 'workspace/archiveSession', 'workspace/unarchiveSession'].includes(endpoint)
     ? mergeBusiness(result, endpoint, await backend.catalog(signal)) : result
   runtime.invoke = async request => {
     const endpoint = `${request.namespace}/${request.method}`
-    if (managedAgentOwnsRequest(backend, endpoint, { args: request.args })) {
+    if (await owns(endpoint, { args: request.args }, request.signal ?? new AbortController().signal, request.peer)) {
       if (!isLiveOwner(request.peer)) throw ownerDenied()
       return backend.invoke({ ...request, signal: ownerSignal(request.signal ?? new AbortController().signal, request.peer) })
     }
@@ -127,7 +139,7 @@ export function installManagedAgentGateway(gateway: TypertGatewayLike, backend: 
   if (dispatch) runtime.dispatchRpc = async (...args) => {
     const [endpoint, payload, signal] = args as [string, unknown, AbortSignal]
     const peer = args[3]
-    if (managedAgentOwnsRequest(backend, endpoint, payload)) {
+    if (await owns(endpoint, payload, signal, peer)) {
       if (!isLiveOwner(peer)) return { ok: false, error: { code: 'remote-access/denied', message: ownerDenied().message, details: {} } }
       return backend.dispatch(endpoint, payload, ownerSignal(signal, peer))
     }
@@ -203,7 +215,7 @@ export function installManagedAgentGateway(gateway: TypertGatewayLike, backend: 
   if (stream) runtime.stream = async request => {
     const endpoint = `${request.namespace}/${request.method}`
     const signal = request.signal ?? new AbortController().signal
-    if (managedAgentOwnsRequest(backend, endpoint, { args: request.args })) {
+    if (await owns(endpoint, { args: request.args }, request.signal ?? new AbortController().signal, request.peer)) {
       if (!isLiveOwner(request.peer)) throw ownerDenied()
       return backend.open(endpoint, { args: request.args }, ownerSignal(signal, request.peer))
     }
@@ -214,7 +226,7 @@ export function installManagedAgentGateway(gateway: TypertGatewayLike, backend: 
     const [endpoint, payload] = args as [string, unknown]
     const signal = (args.length >= 5 ? args[4] : args[2]) as AbortSignal
     const peer = args.length >= 5 ? args[3] : undefined
-    if (managedAgentOwnsRequest(backend, endpoint, payload)) {
+    if (await owns(endpoint, payload, signal, peer)) {
       if (!isLiveOwner(peer)) throw ownerDenied()
       return backend.open(endpoint, payload, ownerSignal(signal, peer))
     }

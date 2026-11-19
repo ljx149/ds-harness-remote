@@ -13,6 +13,27 @@ function backend(): ManagedAgentNativeBackend {
   }
 }
 describe('managed Agent native gateway authority', () => {
+  it('resolves persisted membership before a phone resumes without listing after Host restart', async () => {
+    const agent = backend()
+    let loaded = false
+    agent.ownsSession = id => loaded && id === 'managed:1'
+    const catalog = vi.fn(async () => { loaded = true; return entries })
+    agent.catalog = catalog
+    const native = vi.fn(async (_request?: unknown) => 'native')
+    const wire = { invoke: native, openWireStream: async (_endpoint: string, _payload: unknown, _uplink: unknown, _peer: unknown, _signal: AbortSignal) => ({ async *[Symbol.asyncIterator]() {} }) }
+    const undo = installManagedAgentGateway(wire, agent)
+    await wire.openWireStream('session/follow', { args: { sessionId: 'managed:1' } }, {}, owner(), new AbortController().signal)
+    expect(agent.open).toHaveBeenCalledTimes(1)
+    expect(catalog).toHaveBeenCalledTimes(1)
+    loaded = false
+    expect(await wire.invoke({ namespace: 'session', method: 'projections', args: { sessionId: 'managed:1' }, peer: owner() } as never)).toBe('managed')
+    expect(native).not.toHaveBeenCalled()
+    loaded = false; catalog.mockClear()
+    await wire.invoke({ namespace: 'session', method: 'projections', args: { sessionId: 'managed:1' }, peer: { principal: { kind: 'guest' } } } as never)
+    expect(catalog).not.toHaveBeenCalled()
+    undo()
+  })
+
   it('unions native and managed archive sets in snapshots and native mutations', async () => {
     const agent = backend()
     agent.catalog = async () => entries.map(entry => ({ ...entry, archived: true }))

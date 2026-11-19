@@ -102,10 +102,25 @@ export class ManagedAgentBackend {
     return { sessionId: session.id, updatedAt: session.updatedAt, cwd: session.workspacePath, agentAvailable: true, formatStatus: 'current',
       running: this.busy.has(session.id), blank, agentId: session.agentId,
       projections: { kind: 'sequenced', asOfSeq: records.length - 1, values: {
-        title, managedAgent: { agentId: session.agentId },
+        title, managedAgent: this.agentIdentity(session.agentId),
         modelSelection: { lastUsed: selected ?? null, next: selected ?? null },
         sessionListMetadata: { blank, lastPromptAt: prompts.at(-1)?.event.time ?? null },
       } } }
+  }
+  /** Transport capabilities describe implemented endpoints, not Orca adapter aspirations.
+   * Registration alone does not prove a CLI is installed or its credentials work. */
+  private agentIdentity(agentId: string) {
+    const definition = this.runtime.registry.definition(agentId)
+    return { agentId, name: definition?.title ?? agentId, icon: definition?.icon ?? agentId,
+      registered: definition !== null, availability: 'unverified' as const,
+      capabilities: {
+        textPrompts: true, imagePrompts: false, fileAttachments: false,
+        steering: false, queueWhileBusy: false, modelSelection: true,
+        reasoningEffort: agentId === 'codex', rename: true, archive: true, unarchive: true,
+        pin: false, move: false, fork: false, rewind: false, compact: false,
+        threadGoal: false, contextUsage: false,
+      },
+    }
   }
   private promptTitle(data: unknown): string | undefined {
     const content = (data as { content?: Array<{ type?: string; text?: string }> } | undefined)?.content
@@ -221,7 +236,7 @@ export class ManagedAgentBackend {
     catch (error) { return { ok: false, error: { code: error instanceof Error && error.message === 'workspace/session-active' ? 'workspace/session-active' : 'managed-agent/rejected', message: error instanceof z.ZodError ? 'Invalid managed Agent request.' : error instanceof Error ? error.message : 'Managed Agent request failed.', details: error instanceof Error && error.message === 'workspace/session-active' ? (error as Error & { details: Record<string, unknown> }).details : {} } } }
   }
   private async call(endpoint: string, request: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
-    if (endpoint === 'managedAgent/agents') return { items: this.runtime.registry.definitions().map(definition => ({ id: definition.agent, name: definition.title, available: true })) }
+    if (endpoint === 'managedAgent/agents') return { items: this.runtime.registry.definitions().map(definition => ({ id: definition.agent, ...this.agentIdentity(definition.agent), available: true })) }
     if (endpoint === 'managedAgent/create') {
       const input = createSchema.parse(request)
       if (!this.runtime.registry.definition(input.agentId)) throw new Error('MANAGED_AGENT_UNAVAILABLE')
@@ -270,6 +285,7 @@ export class ManagedAgentBackend {
     }
     if (endpoint === 'session/projections') return this.summary(session).projections
     if (endpoint === 'session/prompt') {
+      if (request.fileReceiptIds !== undefined && (!Array.isArray(request.fileReceiptIds) || request.fileReceiptIds.length > 0)) throw new Error('MANAGED_ATTACHMENTS_NOT_SUPPORTED')
       const input = promptSchema.parse(request)
       const text = input.content.map(item => item.text).join('\n')
       if (!text.trim()) throw new Error('MANAGED_EMPTY_PROMPT')
