@@ -1,6 +1,6 @@
 {
   "name": "xcodex-remote",
-  "version": "0.7.0-xcodex.4",
+  "version": "0.7.0-xcodex.5",
   "description": "P2P-based, end-to-end encrypted remote access to DeepSeek Harness, CodeX, Claude Code, Pi, and other workspaces from web and mobile clients.",
   "keywords": [
     "deepseek",

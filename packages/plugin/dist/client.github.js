@@ -1657,47 +1657,82 @@ Minimum version required to store current data is: ` + bestVersion + `.
       }, []);
     }
     function SessionLogo({ sessionId }) {
-      if (useSnapshots(), !ctx.sessions.list.getSnapshot().byId?.[sessionId]) return null;
-      let id = managedIds.get(sessionId) ?? "dsh", src = id === "codex" ? gptWorkspaceIcon : id === "claude" || id === "claude-code" ? claudeIcon : id === "dsh" ? deepSeekWorkspaceIcon : void 0;
+      useSnapshots();
+      let session = ctx.sessions.list.getSnapshot().byId?.[sessionId];
+      if (!session) return null;
+      let projected = record(session.projections?.values?.managedAgent).agentId, id = typeof projected == "string" ? projected : managedIds.get(sessionId);
+      if (!id || id === "dsh" || id === "deepseek") return null;
+      let src = id === "codex" ? gptWorkspaceIcon : id === "claude" || id === "claude-code" ? claudeIcon : void 0;
       return src ? React.createElement("img", { src, alt: id, title: id, width: 16, height: 16, style: { flexShrink: 0 } }) : React.createElement("span", { title: id, "aria-label": id }, id.slice(0, 1).toUpperCase());
     }
     function NewSession({ wide }) {
       useSnapshots();
-      let [agents, setAgents] = React.useState([]), [expanded, setExpanded] = React.useState(!1), [busy, setBusy] = React.useState(!1), [error, setError] = React.useState(void 0), [attempt, setAttempt] = React.useState(void 0);
-      if (React.useEffect(() => {
+      let [agents, setAgents] = React.useState([]), [expanded, setExpanded] = React.useState(!1), [busy, setBusy] = React.useState(!1), [error, setError] = React.useState(void 0), [attempt, setAttempt] = React.useState(void 0), [loading, setLoading] = React.useState(!0), [reload, setReload] = React.useState(0), [chosenWorkspace, setChosenWorkspace] = React.useState(void 0), mounted = React.useRef(!1), creating = React.useRef(!1);
+      React.useEffect(() => (mounted.current = !0, () => {
+        mounted.current = !1;
+      }), []), React.useEffect(() => {
         let active = !0;
-        return ctx.call("managedAgent/agents", {}).then((value) => {
+        return setLoading(!0), setError(void 0), setAgents([]), ctx.call("managedAgent/agents", {}).then((value) => {
           let values = Array.isArray(value) ? value : record(value).items;
-          active && Array.isArray(values) && setAgents(values.flatMap((item) => {
+          if (!Array.isArray(values)) throw new Error(ctx.chinese ? "Agent \u5217\u8868\u683C\u5F0F\u9519\u8BEF" : "Invalid Agent list");
+          active && setAgents(values.flatMap((item) => {
             let agent = record(item);
             return typeof agent.id == "string" && agent.available !== !1 ? [{ id: agent.id, label: typeof agent.name == "string" ? agent.name : agent.id }] : [];
           }));
-        }).catch(() => {
+        }).catch((reason) => {
+          active && setError(reason instanceof Error ? reason.message : String(reason));
+        }).finally(() => {
+          active && setLoading(!1);
         }), () => {
           active = !1;
         };
-      }, []), !agents.length) return null;
-      let current = Object.values(ctx.sessions.list.getSnapshot().byId ?? {}).find((item) => (item.retainedBy?.mainView ?? 0) > 0), workspace = ctx.workspaces.list.getSnapshot().items.find((item) => current && item.sessionIds?.includes(current.id)), create = async (agentId) => {
-        if (busy || !workspace) return;
+      }, [reload]);
+      let current = Object.values(ctx.sessions.list.getSnapshot().byId ?? {}).find((item) => (item.retainedBy?.mainView ?? 0) > 0), workspaces = ctx.workspaces.list.getSnapshot().items, workspace = chosenWorkspace ? workspaces.find((item) => item.workspaceId === chosenWorkspace) : workspaces.find((item) => current && item.sessionIds?.includes(current.id)) ?? (workspaces.length === 1 ? workspaces[0] : void 0), create = async (agentId) => {
+        if (creating.current || !workspace || !ctx.workspaces.list.getSnapshot().items.some((item) => item.workspaceId === workspace.workspaceId)) return;
+        creating.current = !0;
         let request = attempt?.workspaceId === workspace.workspaceId && attempt.agentId === agentId ? attempt : { workspaceId: workspace.workspaceId, agentId, operationId: crypto.randomUUID() };
         setAttempt(request), setBusy(!0), setError(void 0);
         try {
           let result = record(await ctx.call("managedAgent/create", { request }));
           if (typeof result.sessionId != "string") throw new Error(ctx.chinese ? "\u521B\u5EFA\u4F1A\u8BDD\u5931\u8D25" : "Session creation failed");
-          await ctx.sessions.refresh?.(), ctx.open(result.sessionId), setAttempt(void 0), setExpanded(!1);
+          if (await ctx.sessions.refresh?.(), !mounted.current || !ctx.workspaces.list.getSnapshot().items.some((item) => item.workspaceId === request.workspaceId)) return;
+          ctx.open(result.sessionId), setAttempt(void 0), setExpanded(!1);
         } catch (reason) {
           setError(reason instanceof Error ? reason.message : String(reason));
         } finally {
-          setBusy(!1);
+          creating.current = !1, mounted.current && setBusy(!1);
         }
       };
       return React.createElement(
         "div",
         { className: "xcodexManagedAgentCreate" },
-        React.createElement("button", { className: "xcodexManagedAgentButton", type: "button", "aria-expanded": expanded, disabled: busy || !workspace, title: workspace ? `${ctx.chinese ? "\u5728\u5F53\u524D\u76EE\u5F55\u65B0\u5EFA Agent \u5BF9\u8BDD" : "New Agent session in current workspace"}: ${workspace.path ?? workspace.title}` : ctx.chinese ? "\u8BF7\u5148\u9009\u62E9\u4E00\u4E2A\u5DE5\u4F5C\u533A\u4E2D\u7684\u5BF9\u8BDD" : "Select a conversation in a workspace first", onClick: () => setExpanded((value) => !value) }, wide === !1 ? "+" : ctx.chinese ? "+ Agent \u5BF9\u8BDD" : "+ Agent session"),
-        expanded ? React.createElement("div", { role: "group", className: "xcodexManagedAgentMenu" }, ...agents.map((agent) => React.createElement("button", { className: "xcodexManagedAgentButton", key: agent.id, type: "button", disabled: busy, onClick: () => {
-          create(agent.id);
-        } }, agent.label))) : null,
+        React.createElement("button", { className: "xcodexManagedAgentButton", type: "button", "aria-expanded": expanded, disabled: busy, title: ctx.chinese ? "\u9009\u62E9 Agent \u5E76\u65B0\u5EFA\u5BF9\u8BDD" : "Choose an Agent and create a session", onClick: () => setExpanded((value) => !value) }, wide === !1 ? "+" : ctx.chinese ? "+ Agent \u5BF9\u8BDD" : "+ Agent session"),
+        expanded ? React.createElement(
+          "div",
+          { role: "group", className: "xcodexManagedAgentMenu" },
+          React.createElement(
+            "label",
+            null,
+            ctx.chinese ? "\u5DE5\u4F5C\u533A" : "Workspace",
+            React.createElement(
+              "select",
+              {
+                "aria-label": ctx.chinese ? "\u5DE5\u4F5C\u533A" : "Workspace",
+                value: workspace?.workspaceId ?? "",
+                disabled: busy,
+                onChange: (event) => setChosenWorkspace(event.target.value || void 0)
+              },
+              React.createElement("option", { value: "" }, ctx.chinese ? "\u8BF7\u9009\u62E9\u5DE5\u4F5C\u533A" : "Choose workspace"),
+              ...workspaces.map((item) => React.createElement("option", { key: item.workspaceId, value: item.workspaceId }, item.path ?? item.title ?? item.workspaceId))
+            )
+          ),
+          loading ? React.createElement("div", { role: "status" }, ctx.chinese ? "\u6B63\u5728\u52A0\u8F7D Agent\u2026" : "Loading Agents\u2026") : null,
+          !loading && !agents.length && !error ? React.createElement("div", null, ctx.chinese ? "\u6CA1\u6709\u53EF\u7528 Agent\uFF0C\u8BF7\u68C0\u67E5\u63D2\u4EF6\u914D\u7F6E\u540E\u91CD\u8BD5" : "No Agents available. Check plugin configuration and retry.") : null,
+          ...agents.map((agent) => React.createElement("button", { className: "xcodexManagedAgentButton", key: agent.id, type: "button", disabled: busy || !workspace, onClick: () => {
+            create(agent.id);
+          } }, agent.label)),
+          React.createElement("button", { className: "xcodexManagedAgentButton", type: "button", disabled: busy || loading, onClick: () => setReload((value) => value + 1) }, ctx.chinese ? "\u91CD\u65B0\u52A0\u8F7D Agent" : "Reload Agents")
+        ) : null,
         error ? React.createElement("div", { role: "alert" }, error) : null
       );
     }
@@ -3904,7 +3939,7 @@ If a code was sent, recover the original submission without changing it.`,
   function installStyle(clientModuleId2) {
     let style = document.createElement("style");
     return style.dataset.plugin = clientModuleId2, style.dataset.pluginCss = "xcodex-remote", style.textContent = [
-      ".xcodexManagedAgentCreate{position:relative}.xcodexManagedAgentButton{display:flex;align-items:center;min-height:32px;padding:6px 10px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;text-align:left;cursor:pointer}.xcodexManagedAgentButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}.xcodexManagedAgentButton:disabled{opacity:.45;cursor:default}.xcodexManagedAgentButton:focus-visible{outline:2px solid var(--dsw-alias-label-secondary);outline-offset:2px}.xcodexManagedAgentMenu{position:absolute;bottom:calc(100% + 6px);left:0;min-width:160px;padding:4px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-2,#252525);box-shadow:0 4px 16px #0002;z-index:20}.xcodexManagedAgentMenu .xcodexManagedAgentButton{width:100%}",
+      ".xcodexManagedAgentCreate{position:relative}.xcodexManagedAgentButton{display:flex;align-items:center;min-height:32px;padding:6px 10px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;text-align:left;cursor:pointer}.xcodexManagedAgentButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}.xcodexManagedAgentButton:disabled{opacity:.45;cursor:default}.xcodexManagedAgentButton:focus-visible{outline:2px solid var(--dsw-alias-label-secondary);outline-offset:2px}.xcodexManagedAgentMenu{position:absolute;bottom:calc(100% + 6px);left:0;min-width:200px;max-width:min(320px,calc(100vw - 24px));max-height:70vh;overflow:auto;padding:4px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-2,#252525);box-shadow:0 4px 16px #0002;z-index:20}.xcodexManagedAgentMenu .xcodexManagedAgentButton{width:100%}.xcodexManagedAgentMenu label{display:block;padding:6px;font-size:12px}.xcodexManagedAgentMenu select{display:block;width:100%;max-width:260px;margin-top:4px;color:inherit;background:var(--dsw-alias-bg-layer-2,#252525)}",
       ".xcodexRemoteConnectedPanelHeader{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:6px 12px;margin-bottom:6px}.xcodexRemoteConnectedPanelHeader .xcodexRemoteConnectedPanelTitle{margin-bottom:0}",
       ".xcodexRemoteHostNameLine{display:flex;align-items:center;flex-wrap:wrap;gap:8px}",
       ".xcodexRemoteServerNotice{font-size:12px;line-height:1.5;white-space:normal;overflow-wrap:anywhere}.xcodexRemoteServerNotice.isWarning{color:var(--dsw-alias-state-warning-primary,#946200)}.xcodexRemoteServerNotice.isError{color:var(--dsw-alias-state-error-primary)}.xcodexRemoteServerNotice.isRestored{color:var(--dsw-alias-state-success-primary)}",

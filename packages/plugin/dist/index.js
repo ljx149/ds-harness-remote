@@ -104402,10 +104402,41 @@ var ManagedAgentBackend = class {
       agentId: session2.agentId,
       projections: { kind: "sequenced", asOfSeq: records.length - 1, values: {
         title,
-        managedAgent: { agentId: session2.agentId },
+        managedAgent: this.agentIdentity(session2.agentId),
         modelSelection: { lastUsed: selected ?? null, next: selected ?? null },
         sessionListMetadata: { blank, lastPromptAt: prompts.at(-1)?.event.time ?? null }
       } }
+    };
+  }
+  /** Transport capabilities describe implemented endpoints, not Orca adapter aspirations.
+   * Registration alone does not prove a CLI is installed or its credentials work. */
+  agentIdentity(agentId) {
+    const definition = this.runtime.registry.definition(agentId);
+    return {
+      agentId,
+      name: definition?.title ?? agentId,
+      icon: definition?.icon ?? agentId,
+      registered: definition !== null,
+      availability: "unverified",
+      capabilities: {
+        textPrompts: true,
+        imagePrompts: false,
+        fileAttachments: false,
+        steering: false,
+        queueWhileBusy: false,
+        modelSelection: true,
+        reasoningEffort: agentId === "codex",
+        rename: true,
+        archive: true,
+        unarchive: true,
+        pin: false,
+        move: false,
+        fork: false,
+        rewind: false,
+        compact: false,
+        threadGoal: false,
+        contextUsage: false
+      }
     };
   }
   promptTitle(data2) {
@@ -104551,7 +104582,7 @@ var ManagedAgentBackend = class {
     }
   }
   async call(endpoint, request, signal) {
-    if (endpoint === "managedAgent/agents") return { items: this.runtime.registry.definitions().map((definition) => ({ id: definition.agent, name: definition.title, available: true })) };
+    if (endpoint === "managedAgent/agents") return { items: this.runtime.registry.definitions().map((definition) => ({ id: definition.agent, ...this.agentIdentity(definition.agent), available: true })) };
     if (endpoint === "managedAgent/create") {
       const input4 = createSchema.parse(request);
       if (!this.runtime.registry.definition(input4.agentId)) throw new Error("MANAGED_AGENT_UNAVAILABLE");
@@ -104599,6 +104630,7 @@ var ManagedAgentBackend = class {
     }
     if (endpoint === "session/projections") return this.summary(session2).projections;
     if (endpoint === "session/prompt") {
+      if (request.fileReceiptIds !== void 0 && (!Array.isArray(request.fileReceiptIds) || request.fileReceiptIds.length > 0)) throw new Error("MANAGED_ATTACHMENTS_NOT_SUPPORTED");
       const input4 = promptSchema.parse(request);
       const text = input4.content.map((item) => item.text).join("\n");
       if (!text.trim()) throw new Error("MANAGED_EMPTY_PROMPT");
@@ -105218,7 +105250,7 @@ import { spawn as spawn2 } from "node:child_process";
 import { Buffer as Buffer2 } from "node:buffer";
 
 // packages/plugin/src/version.ts
-var PLUGIN_VERSION = "0.7.0-xcodex.4";
+var PLUGIN_VERSION = "0.7.0-xcodex.5";
 
 // packages/plugin/src/acp/adapters/cursor-process.ts
 var ACP_REQUEST_TIMEOUT_MS = 6e4;
@@ -106809,10 +106841,20 @@ function installManagedAgentGateway(gateway, backend) {
   const dispatch = runtime.dispatchRpc;
   const stream = runtime.stream;
   const open6 = runtime.openWireStream;
+  const owns = async (endpoint, payload, signal, peer) => {
+    if (managedAgentOwnsRequest(backend, endpoint, payload)) return true;
+    const request = requestOf(payload);
+    const id8 = request.sessionId ?? row(request.address)?.sessionId ?? row(request.address)?.id;
+    if (isLiveOwner(peer) && typeof id8 === "string" && (endpoint.startsWith("session/") || endpoint.startsWith("workspace/"))) {
+      await backend.catalog(ownerSignal(signal, peer));
+      return managedAgentOwnsRequest(backend, endpoint, payload);
+    }
+    return false;
+  };
   const merge3 = async (endpoint, result, signal, payload) => globalModelCatalog(endpoint, payload) ? mergeModels(result, backend, signal) : ["session/list", "workspace/list", "workspace/archiveSession", "workspace/unarchiveSession"].includes(endpoint) ? mergeBusiness(result, endpoint, await backend.catalog(signal)) : result;
   runtime.invoke = async (request) => {
     const endpoint = `${request.namespace}/${request.method}`;
-    if (managedAgentOwnsRequest(backend, endpoint, { args: request.args })) {
+    if (await owns(endpoint, { args: request.args }, request.signal ?? new AbortController().signal, request.peer)) {
       if (!isLiveOwner(request.peer)) throw ownerDenied();
       return backend.invoke({ ...request, signal: ownerSignal(request.signal ?? new AbortController().signal, request.peer) });
     }
@@ -106833,7 +106875,7 @@ function installManagedAgentGateway(gateway, backend) {
   if (dispatch) runtime.dispatchRpc = async (...args) => {
     const [endpoint, payload, signal] = args;
     const peer = args[3];
-    if (managedAgentOwnsRequest(backend, endpoint, payload)) {
+    if (await owns(endpoint, payload, signal, peer)) {
       if (!isLiveOwner(peer)) return { ok: false, error: { code: "remote-access/denied", message: ownerDenied().message, details: {} } };
       return backend.dispatch(endpoint, payload, ownerSignal(signal, peer));
     }
@@ -106921,7 +106963,7 @@ function installManagedAgentGateway(gateway, backend) {
   if (stream) runtime.stream = async (request) => {
     const endpoint = `${request.namespace}/${request.method}`;
     const signal = request.signal ?? new AbortController().signal;
-    if (managedAgentOwnsRequest(backend, endpoint, { args: request.args })) {
+    if (await owns(endpoint, { args: request.args }, request.signal ?? new AbortController().signal, request.peer)) {
       if (!isLiveOwner(request.peer)) throw ownerDenied();
       return backend.open(endpoint, { args: request.args }, ownerSignal(signal, request.peer));
     }
@@ -106932,7 +106974,7 @@ function installManagedAgentGateway(gateway, backend) {
     const [endpoint, payload] = args;
     const signal = args.length >= 5 ? args[4] : args[2];
     const peer = args.length >= 5 ? args[3] : void 0;
-    if (managedAgentOwnsRequest(backend, endpoint, payload)) {
+    if (await owns(endpoint, payload, signal, peer)) {
       if (!isLiveOwner(peer)) throw ownerDenied();
       return backend.open(endpoint, payload, ownerSignal(signal, peer));
     }

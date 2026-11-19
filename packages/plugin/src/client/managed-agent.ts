@@ -1,5 +1,5 @@
 import type { ClientReact } from './types.js'
-import { gptWorkspaceIcon, deepSeekWorkspaceIcon } from './icons.js'
+import { gptWorkspaceIcon } from './icons.js'
 
 interface Snapshot<T> { getSnapshot(): T; subscribe(listener: () => void): () => void }
 interface SessionRow { id: string; retainedBy?: Record<string, number>; agentId?: string; projections?: { values?: Record<string, unknown> } }
@@ -49,8 +49,10 @@ export function createManagedAgentUi(React: ClientReact, ctx: ManagedAgentUiCont
     useSnapshots()
     const session = ctx.sessions.list.getSnapshot().byId?.[sessionId]
     if (!session) return null
-    const id = managedIds.get(sessionId) ?? 'dsh'
-    const src = id === 'codex' ? gptWorkspaceIcon : id === 'claude' || id === 'claude-code' ? claudeIcon : id === 'dsh' ? deepSeekWorkspaceIcon : undefined
+    const projected = record(session.projections?.values?.managedAgent).agentId
+    const id = typeof projected === 'string' ? projected : managedIds.get(sessionId)
+    if (!id || id === 'dsh' || id === 'deepseek') return null
+    const src = id === 'codex' ? gptWorkspaceIcon : id === 'claude' || id === 'claude-code' ? claudeIcon : undefined
     return src ? React.createElement('img', { src, alt: id, title: id, width: 16, height: 16, style: { flexShrink: 0 } }) : React.createElement('span', { title: id, 'aria-label': id }, id.slice(0, 1).toUpperCase())
   }
   function NewSession({ wide }: { wide?: boolean }): unknown {
@@ -60,36 +62,58 @@ export function createManagedAgentUi(React: ClientReact, ctx: ManagedAgentUiCont
     const [busy, setBusy] = React.useState(false)
     const [error, setError] = React.useState<string | undefined>(undefined)
     const [attempt, setAttempt] = React.useState<{ workspaceId: string; agentId: string; operationId: string } | undefined>(undefined)
+    const [loading, setLoading] = React.useState(true)
+    const [reload, setReload] = React.useState(0)
+    const [chosenWorkspace, setChosenWorkspace] = React.useState<string | undefined>(undefined)
+    const mounted = React.useRef(false)
+    const creating = React.useRef(false)
+    React.useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
     React.useEffect(() => {
       let active = true
+      setLoading(true); setError(undefined); setAgents([])
       void ctx.call('managedAgent/agents', {}).then(value => {
         const values = Array.isArray(value) ? value : record(value).items
-        if (active && Array.isArray(values)) setAgents(values.flatMap(item => {
+        if (!Array.isArray(values)) throw new Error(ctx.chinese ? 'Agent 列表格式错误' : 'Invalid Agent list')
+        if (active) setAgents(values.flatMap(item => {
           const agent = record(item)
           return typeof agent.id === 'string' && agent.available !== false ? [{ id: agent.id, label: typeof agent.name === 'string' ? agent.name : agent.id }] : []
         }))
-      }).catch(() => undefined)
+      }).catch(reason => { if (active) setError(reason instanceof Error ? reason.message : String(reason)) })
+        .finally(() => { if (active) setLoading(false) })
       return () => { active = false }
-    }, [])
-    if (!agents.length) return null
+    }, [reload])
     const current = Object.values(ctx.sessions.list.getSnapshot().byId ?? {}).find(item => (item.retainedBy?.mainView ?? 0) > 0)
-    const workspace = ctx.workspaces.list.getSnapshot().items.find(item => current && item.sessionIds?.includes(current.id))
+    const workspaces = ctx.workspaces.list.getSnapshot().items
+    const workspace = chosenWorkspace
+      ? workspaces.find(item => item.workspaceId === chosenWorkspace)
+      : workspaces.find(item => current && item.sessionIds?.includes(current.id)) ?? (workspaces.length === 1 ? workspaces[0] : undefined)
     const create = async (agentId: string): Promise<void> => {
-      if (busy || !workspace) return
+      if (creating.current || !workspace || !ctx.workspaces.list.getSnapshot().items.some(item => item.workspaceId === workspace.workspaceId)) return
+      creating.current = true
       const request = attempt?.workspaceId === workspace.workspaceId && attempt.agentId === agentId ? attempt : { workspaceId: workspace.workspaceId, agentId, operationId: crypto.randomUUID() }
       setAttempt(request); setBusy(true); setError(undefined)
       try {
         const result = record(await ctx.call('managedAgent/create', { request }))
         if (typeof result.sessionId !== 'string') throw new Error(ctx.chinese ? '创建会话失败' : 'Session creation failed')
         await ctx.sessions.refresh?.()
+        if (!mounted.current || !ctx.workspaces.list.getSnapshot().items.some(item => item.workspaceId === request.workspaceId)) return
         ctx.open(result.sessionId)
         setAttempt(undefined); setExpanded(false)
       } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)) }
-      finally { setBusy(false) }
+      finally { creating.current = false; if (mounted.current) setBusy(false) }
     }
     return React.createElement('div', { className: 'xcodexManagedAgentCreate' },
-      React.createElement('button', { className: 'xcodexManagedAgentButton', type: 'button', 'aria-expanded': expanded, disabled: busy || !workspace, title: workspace ? `${ctx.chinese ? '在当前目录新建 Agent 对话' : 'New Agent session in current workspace'}: ${workspace.path ?? workspace.title}` : ctx.chinese ? '请先选择一个工作区中的对话' : 'Select a conversation in a workspace first', onClick: () => setExpanded(value => !value) }, wide === false ? '+' : ctx.chinese ? '+ Agent 对话' : '+ Agent session'),
-      expanded ? React.createElement('div', { role: 'group', className: 'xcodexManagedAgentMenu' }, ...agents.map(agent => React.createElement('button', { className: 'xcodexManagedAgentButton', key: agent.id, type: 'button', disabled: busy, onClick: () => { void create(agent.id) } }, agent.label))) : null,
+      React.createElement('button', { className: 'xcodexManagedAgentButton', type: 'button', 'aria-expanded': expanded, disabled: busy, title: ctx.chinese ? '选择 Agent 并新建对话' : 'Choose an Agent and create a session', onClick: () => setExpanded(value => !value) }, wide === false ? '+' : ctx.chinese ? '+ Agent 对话' : '+ Agent session'),
+      expanded ? React.createElement('div', { role: 'group', className: 'xcodexManagedAgentMenu' },
+        React.createElement('label', null, ctx.chinese ? '工作区' : 'Workspace',
+          React.createElement('select', { 'aria-label': ctx.chinese ? '工作区' : 'Workspace', value: workspace?.workspaceId ?? '', disabled: busy,
+            onChange: (event: { target: { value: string } }) => setChosenWorkspace(event.target.value || undefined) },
+            React.createElement('option', { value: '' }, ctx.chinese ? '请选择工作区' : 'Choose workspace'),
+            ...workspaces.map(item => React.createElement('option', { key: item.workspaceId, value: item.workspaceId }, item.path ?? item.title ?? item.workspaceId)))),
+        loading ? React.createElement('div', { role: 'status' }, ctx.chinese ? '正在加载 Agent…' : 'Loading Agents…') : null,
+        !loading && !agents.length && !error ? React.createElement('div', null, ctx.chinese ? '没有可用 Agent，请检查插件配置后重试' : 'No Agents available. Check plugin configuration and retry.') : null,
+        ...agents.map(agent => React.createElement('button', { className: 'xcodexManagedAgentButton', key: agent.id, type: 'button', disabled: busy || !workspace, onClick: () => { void create(agent.id) } }, agent.label)),
+        React.createElement('button', { className: 'xcodexManagedAgentButton', type: 'button', disabled: busy || loading, onClick: () => setReload(value => value + 1) }, ctx.chinese ? '重新加载 Agent' : 'Reload Agents')) : null,
       error ? React.createElement('div', { role: 'alert' }, error) : null)
   }
   return { NewSession, SessionLogo }
