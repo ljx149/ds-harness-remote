@@ -1,3 +1,4 @@
+import { generateManagedTitle } from './managed-agents/title.js'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { ManagedAgentBackend } from './managed-agent-backend.js'
@@ -275,11 +276,7 @@ async function activate(
     const rawGateway = new TypertGatewaySwitch(nativeTypertGateway, () => fallbackPeer).local()
     const scopeKey = createHash('sha256').update(`${config.serverUrl ?? 'local'}:${entryId}`).digest('hex').slice(0, 24)
     const store = ManagedSessionStore.open(join(`${defaultIdentityDirectory}-agent-sessions`, scopeKey))
-    managedBackend = new ManagedAgentBackend(store, createManagedAgentRuntime(), () => {
-      const status = runtime?.hostStatus()
-      if (!status?.authorized || !status.account || !status.deviceId || status.accountRequired) return undefined
-      return { ownerId: createHash('sha256').update(`${config.serverUrl}:${status.account}`).digest('hex'), hostId: status.deviceId }
-    }, async signal => {
+    const workspaceSnapshot = async (signal?: AbortSignal) => {
       // Harness 0.2.2 exposes the directory through its snapshot stream, not workspace/list.
       const lifetime = new AbortController()
       const combined = signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal
@@ -287,14 +284,19 @@ async function activate(
       const iterator = stream[Symbol.asyncIterator]()
       try {
         const first = await iterator.next()
-        const frame = first.value as { type?: string; value?: { items?: Array<{ workspaceId: string; path: string }> } } | undefined
+        const frame = first.value as { type?: string; value?: { items?: Array<{ workspaceId: string; path: string }>; archivedSessionIds?: string[] } } | undefined
         if (first.done || frame?.type !== 'baseline' || !Array.isArray(frame.value?.items)) throw new Error('Managed Agent workspace directory is invalid.')
-        return frame.value.items
+        return frame.value
       } finally {
         lifetime.abort()
         await iterator.return?.()
       }
-    })
+    }
+    managedBackend = new ManagedAgentBackend(store, createManagedAgentRuntime(), () => {
+      const status = runtime?.hostStatus()
+      if (!status?.authorized || !status.account || !status.deviceId || status.accountRequired) return undefined
+      return { ownerId: createHash('sha256').update(`${config.serverUrl}:${status.account}`).digest('hex'), hostId: status.deviceId }
+    }, async signal => (await workspaceSnapshot(signal)).items!, { generateTitle: generateManagedTitle, nativeArchived: async signal => (await workspaceSnapshot(signal)).archivedSessionIds ?? [] })
     removeManagedGateway = installManagedAgentGateway(nativeTypertGateway, managedBackend)
   }
   const hostGateway = new TypertGatewaySwitch(nativeTypertGateway, () => fallbackPeer)

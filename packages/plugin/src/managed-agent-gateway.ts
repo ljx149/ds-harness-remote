@@ -5,6 +5,7 @@ export interface ManagedAgentCatalogEntry {
   sessionId: string
   workspaceId: string
   agentId: string
+  archived?: boolean
   summary: Record<string, unknown>
 }
 export interface ManagedAgentNativeBackend extends RemoteTypertGatewayTarget {
@@ -44,7 +45,7 @@ export function managedAgentOwnsRequest(backend: ManagedAgentNativeBackend, endp
 export function mergeManagedWorkspaces(value: unknown, entries: readonly ManagedAgentCatalogEntry[]): unknown {
   const source = row(value)
   if (!source || !Array.isArray(source.items)) return value
-  return { ...source, items: source.items.map(item => {
+  return { ...source, archivedSessionIds: [...new Set([...(Array.isArray(source.archivedSessionIds) ? source.archivedSessionIds : []), ...entries.filter(entry => entry.archived).map(entry => entry.sessionId)])], items: source.items.map(item => {
     const workspace = row(item)
     if (!workspace || typeof workspace.workspaceId !== 'string' || !Array.isArray(workspace.sessionIds)) return item
     return { ...workspace, sessionIds: [...new Set([...workspace.sessionIds, ...entries.filter(entry => entry.workspaceId === workspace.workspaceId).map(entry => entry.sessionId)])] }
@@ -58,6 +59,10 @@ function mergeSessions(value: unknown, entries: readonly ManagedAgentCatalogEntr
 }
 function mergeBusiness(result: TypertRpcResult, endpoint: string, entries: readonly ManagedAgentCatalogEntry[]): TypertRpcResult {
   if (!result.ok) return result
+  if (endpoint === 'workspace/archiveSession' || endpoint === 'workspace/unarchiveSession') {
+    const value = row(result.value) ?? {}
+    return { ...result, value: { ...value, archivedSessionIds: [...new Set([...(Array.isArray(value.archivedSessionIds) ? value.archivedSessionIds : []), ...entries.filter(entry => entry.archived).map(entry => entry.sessionId)])] } }
+  }
   return { ...result, value: endpoint === 'workspace/list' ? mergeManagedWorkspaces(result.value, entries) : mergeSessions(result.value, entries) }
 }
 
@@ -98,7 +103,7 @@ export function installManagedAgentGateway(gateway: TypertGatewayLike, backend: 
   const stream = runtime.stream
   const open = runtime.openWireStream
   const merge = async (endpoint: string, result: TypertRpcResult, signal: AbortSignal, payload: unknown) => globalModelCatalog(endpoint, payload)
-    ? mergeModels(result, backend, signal) : endpoint === 'session/list' || endpoint === 'workspace/list'
+    ? mergeModels(result, backend, signal) : ['session/list', 'workspace/list', 'workspace/archiveSession', 'workspace/unarchiveSession'].includes(endpoint)
     ? mergeBusiness(result, endpoint, await backend.catalog(signal)) : result
   runtime.invoke = async request => {
     const endpoint = `${request.namespace}/${request.method}`
@@ -177,7 +182,10 @@ export function installManagedAgentGateway(gateway: TypertGatewayLike, backend: 
                 nativeWorkspace = { ...nativeWorkspace, items: item.workspaceIds.flatMap(id => items.filter(value => row(value)?.workspaceId === id)) }
               }
             }
-            queue.push(frame)
+            if (endpoint === 'workspace/follow' && item?.type === 'archived') {
+              const entries = await backend.catalog(combined)
+              queue.push({ ...item, archivedSessionIds: [...new Set([...(Array.isArray(item.archivedSessionIds) ? item.archivedSessionIds : []), ...entries.filter(entry => entry.archived).map(entry => entry.sessionId)])] })
+            } else queue.push(frame)
           }
         }
       } finally { lifetime.abort(); unsubscribe(); queue.close() }

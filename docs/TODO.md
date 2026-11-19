@@ -2,6 +2,8 @@
 
 分支 `feat/orca-agent-management`。详细边界与验收见 [实施记录](design/managed-agent-sessions.md)。
 
+- [x] 外部会话原生归档/恢复、归档集合合并与重启保留；模型摘要标题、手动名称优先、失败回退（0.7.0-xcodex.3）。
+- [ ] 本轮归档/命名真机 UI 验收；Codex 现有环境真实命名、macOS/Windows 验收。
 - [x] 提取统一 Agent 注册/能力、Host 生命周期、Claude SDK 队列与控制面；原生 Claude/Codex 启停。
 - [x] 持久化会话归属、Provider ID、消息游标、操作回执，未知投递禁止自动重复执行。
 - [x] 原生工作区列表合并、侧栏 Logo/新建入口、按会话分发，不导入外部历史。

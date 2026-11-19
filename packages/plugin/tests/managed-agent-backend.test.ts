@@ -16,7 +16,7 @@ import type { ManagedAgentAdapter, ManagedAgentEmit, ManagedAgentDispatch } from
 
 const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup() })
-function fixture(existingDirectory?: string) {
+function fixture(existingDirectory?: string, services: ConstructorParameters<typeof ManagedAgentBackend>[4] = {}) {
   const directory = existingDirectory ?? mkdtempSync(join(tmpdir(), 'managed-backend-'))
   const store = ManagedSessionStore.open(directory)
   let emit: ManagedAgentEmit = () => {}
@@ -35,7 +35,7 @@ function fixture(existingDirectory?: string) {
     rewind: false, compact: false, threadGoal: false, contextUsage: false, imagePrompts: false, steering: 'queue', approvalEnforcement: 'provider',
   } }, adapter: { open } }])
   const runtime = new ManagedAgentRuntime(registry)
-  const backend = new ManagedAgentBackend(store, runtime, () => principal, async () => workspaceResolver())
+  const backend = new ManagedAgentBackend(store, runtime, () => principal, async () => workspaceResolver(), services)
   cleanups.push(async () => { await backend.close(); rmSync(directory, { recursive: true, force: true }) })
   const call = async (endpoint: string, request: Record<string, unknown>) => {
     const result = await backend.dispatch(endpoint, { args: request }, new AbortController().signal)
@@ -53,6 +53,58 @@ function fixture(existingDirectory?: string) {
   }
 }
 describe('managed backend integration', () => {
+  it('archives and restores only the scoped session, preserving native archives and history across restart', async () => {
+    const f = fixture(undefined, { nativeArchived: async () => ['native-archived'] })
+    const sessionId = await f.create()
+    await f.prompt(sessionId)
+    expect(await f.backend.dispatch('workspace/archiveSession', { args: { sessionId } }, new AbortController().signal)).toMatchObject({ ok: false, error: { code: 'workspace/session-active' } })
+    expect(f.cancel).not.toHaveBeenCalled()
+    const result = await f.call('workspace/archiveSession', { sessionId, stopActivity: true })
+    expect(result.archivedSessionIds).toEqual(['native-archived', sessionId])
+    expect(f.cancel).toHaveBeenCalledTimes(1)
+    expect((await f.backend.catalog())[0]).toMatchObject({ archived: true, summary: { blank: false } })
+    await f.backend.close()
+    const restored = fixture(f.directory, { nativeArchived: async () => ['native-archived'] })
+    expect((await restored.backend.catalog())[0]).toMatchObject({ archived: true })
+    expect(await restored.call('workspace/unarchiveSession', { sessionId })).toEqual({ archivedSessionIds: ['native-archived'] })
+    expect((await restored.backend.catalog())[0]).toMatchObject({ archived: false, summary: { blank: false } })
+    restored.setPrincipal({ ownerId: 'other', hostId: 'host' })
+    await expect(restored.call('workspace/archiveSession', { sessionId })).rejects.toThrow('MANAGED_SESSION_NOT_FOUND')
+  })
+  it('generates a model title once without injecting a naming prompt into the chat', async () => {
+    const generateTitle = vi.fn(async () => '登录接口排查')
+    const f = fixture(undefined, { generateTitle }), sessionId = await f.create()
+    await f.call('session/selectModel', { sessionId, provider: 'codex', model: 'gpt-test' })
+    await f.prompt(sessionId, 'first', '请帮我检查这个登录接口为什么不能用了')
+    await vi.waitFor(async () => expect((await f.backend.catalog())[0]!.summary.projections.values.title).toBe('登录接口排查'))
+    expect(generateTitle).toHaveBeenCalledWith(expect.objectContaining({ agent: 'codex', model: 'gpt-test', cwd: '/project/a' }))
+    await f.prompt(sessionId, 'first', '请帮我检查这个登录接口为什么不能用了')
+    expect(generateTitle).toHaveBeenCalledTimes(1)
+    expect(f.send).toHaveBeenCalledTimes(1)
+  })
+  it('keeps manual titles when model generation finishes late, and falls back on failure', async () => {
+    let resolve!: (title: string) => void
+    const f = fixture(undefined, { generateTitle: () => new Promise<string>(done => { resolve = done }) }), sessionId = await f.create()
+    await f.prompt(sessionId)
+    await f.call('session/rename', { sessionId, title: '我的标题' })
+    resolve('不该覆盖')
+    await vi.waitFor(() => expect(f.store.getOperation({ ownerId: 'owner', hostId: 'host', workspaceId: 'a' }, sessionId, 'automatic-title-v1')?.status).toBe('completed'))
+    expect((await f.backend.catalog())[0]!.summary.projections.values.title).toBe('我的标题')
+    const failed = fixture(undefined, { generateTitle: async () => { throw new Error('unavailable') } }), other = await failed.create()
+    await failed.prompt(other, 'first', '备用标题')
+    await vi.waitFor(() => expect(failed.store.getOperation({ ownerId: 'owner', hostId: 'host', workspaceId: 'a' }, other, 'automatic-title-v1')?.status).toBe('failed'))
+    expect((await failed.backend.catalog())[0]!.summary.projections.values.title).toBe('备用标题')
+  })
+  it('discards a model title after the host changes accounts', async () => {
+    let resolve!: (title: string) => void
+    const f = fixture(undefined, { generateTitle: () => new Promise<string>(done => { resolve = done }) }), sessionId = await f.create()
+    await f.prompt(sessionId)
+    f.setPrincipal(undefined)
+    resolve('不该写入')
+    await vi.waitFor(() => expect(f.store.getOperation({ ownerId: 'owner', hostId: 'host', workspaceId: 'a' }, sessionId, 'automatic-title-v1')?.status).toBe('failed'))
+    expect(f.store.getSession({ ownerId: 'owner', hostId: 'host', workspaceId: 'a' }, sessionId).title).toBe('hello')
+  })
+
   it('keeps model-only sessions blank and names the first prompt without overwriting a rename', async () => {
     const f = fixture(), sessionId = await f.create()
     await f.call('session/selectModel', { sessionId, provider: 'codex', model: 'gpt-test' })

@@ -13,11 +13,22 @@ function backend(): ManagedAgentNativeBackend {
   }
 }
 describe('managed Agent native gateway authority', () => {
+  it('unions native and managed archive sets in snapshots and native mutations', async () => {
+    const agent = backend()
+    agent.catalog = async () => entries.map(entry => ({ ...entry, archived: true }))
+    expect(mergeManagedWorkspaces({ items: [], archivedSessionIds: ['native'] }, await agent.catalog(new AbortController().signal))).toMatchObject({ archivedSessionIds: ['native', 'managed:1'] })
+    const gateway = { invoke: vi.fn(async (_request: any): Promise<any> => ({ archivedSessionIds: ['native'] })) }
+    const dispose = installManagedAgentGateway(gateway, agent)
+    const result = await gateway.invoke({ namespace: 'workspace', method: 'archiveSession', args: { sessionId: 'native' }, peer: owner(), signal: new AbortController().signal } as any)
+    expect(result).toEqual({ archivedSessionIds: ['native', 'managed:1'] })
+    dispose()
+  })
+
   it('merges registry membership only into its exact existing workspace without mutating native data', () => {
     const original = { items: [{ workspaceId: 'w1', sessionIds: ['dsh1'] }, { workspaceId: 'w2', sessionIds: ['dsh2'] }] }
     expect(mergeManagedWorkspaces(original, [...entries, { ...entries[0]!, sessionId: 'orphan', workspaceId: 'missing' }])).toEqual({ items: [
       { workspaceId: 'w1', sessionIds: ['dsh1', 'managed:1'] }, { workspaceId: 'w2', sessionIds: ['dsh2'] },
-    ] })
+    ], archivedSessionIds: [] })
     expect(original.items[0]!.sessionIds).toEqual(['dsh1'])
   })
   it('preserves native dispatch peer and uplink while routing only registry-owned sessions', async () => {
@@ -65,6 +76,9 @@ describe('managed Agent native gateway authority', () => {
     expect(received[2]).toBe(uplink)
     expect(received[3]).toBe(peer)
     expect(received[5]).toBe(control)
+    agent.catalog = async () => entries.map(entry => ({ ...entry, archived: true }))
+    source.push({ type: 'archived', archivedSessionIds: ['native-archived'] })
+    expect((await iterator.next()).value).toEqual({ type: 'archived', archivedSessionIds: ['native-archived', 'managed:1'] })
     changed()
     expect((await iterator.next()).value).toMatchObject({ type: 'replace', value: { items: [{ sessionIds: ['dsh1', 'managed:1'] }] } })
     lifetime.abort()

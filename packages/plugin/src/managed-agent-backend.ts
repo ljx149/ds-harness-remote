@@ -1,3 +1,4 @@
+import type { ManagedTitleInput } from './managed-agents/title.js'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { ManagedSessionStore, type ManagedSession, type ManagedSessionScope, type JsonValue } from './managed-session-store/index.js'
@@ -27,11 +28,14 @@ export class ManagedAgentBackend {
   private readonly unsubscribe: () => void
   private readonly turns = new Map<string, number>()
 
+  private readonly titleJobs = new Set<Promise<void>>()
+
   constructor(
     readonly store: ManagedSessionStore,
     readonly runtime: ManagedAgentRuntime,
     private readonly principal: () => Principal | undefined,
     private readonly workspaces: (signal?: AbortSignal) => Promise<readonly Workspace[]>,
+    private readonly services: { nativeArchived?: (signal: AbortSignal) => Promise<string[]>; generateTitle?: (input: ManagedTitleInput) => Promise<string> } = {},
   ) {
     this.unsubscribe = store.subscribe(() => { for (const callback of this.listeners) callback() })
   }
@@ -61,7 +65,7 @@ export class ManagedAgentBackend {
     return rows
   }
   async catalog(signal?: AbortSignal) {
-    return (await this.visible(signal)).map(session => ({ sessionId: session.id, workspaceId: session.workspaceId, agentId: session.agentId, summary: this.summary(session) }))
+    return (await this.visible(signal)).map(session => ({ sessionId: session.id, workspaceId: session.workspaceId, agentId: session.agentId, archived: session.archived === true, summary: this.summary(session) }))
   }
   private async requireSession(sessionId: string, signal?: AbortSignal): Promise<ManagedSession> {
     const session = (await this.visible(signal)).find(item => item.id === sessionId)
@@ -110,10 +114,36 @@ export class ManagedAgentBackend {
     const characters = Array.from(text)
     return characters.length > 72 ? characters.slice(0, 71).join('') + '…' : text
   }
-  private rename(session: ManagedSession, title: string, source: 'user' | 'fallback', messageSeqs: number[] = []): number {
+  private rename(session: ManagedSession, title: string, source: 'user' | 'fallback' | 'provider', messageSeqs: number[] = []): number {
     this.store.renameSession(session, session.id, title)
-    this.append(session, 'session/title', { title, source: { kind: source }, messageSeqs })
+    this.append(session, 'session/title', { title, source: source === 'provider' ? { kind: source, provider: session.agentId } : { kind: source }, messageSeqs })
     return this.records(session).at(-1)!.event.seq
+  }
+  private generateTitle(session: ManagedSession, model?: string): void {
+    const generate = this.services.generateTitle
+    if (!generate || this.closedSignal.signal.aborted) return
+    const records = this.records(session)
+    const prompts = records.filter(record => record.event.type === 'user/message')
+    const previous = records.filter(record => record.event.type === 'session/title').at(-1)
+    if (prompts.length !== 1 || (previous?.event.data as { source?: { kind?: string } })?.source?.kind !== 'fallback') return
+    const operationId = 'automatic-title-v1'
+    if (this.store.getOperation(session, session.id, operationId)) return
+    this.store.beginOperation(session, session.id, { operationId, kind: 'title', input: { messageSeq: prompts[0]!.event.seq } })
+    const content = (prompts[0]!.event.data as { content: Array<{ text?: string }> }).content.map(block => block.text ?? '').join('\n').slice(0, 8000)
+    const job = (async () => {
+      try {
+        const title = await generate({ agent: session.agentId, cwd: session.workspacePath, text: content, model, signal: this.closedSignal.signal })
+        this.assertPrincipal(session, this.closedSignal.signal)
+        const latest = this.records(session).filter(record => record.event.type === 'session/title').at(-1)
+        // Manual renames (even renaming back to the fallback) always win.
+        if (latest?.event.seq === previous?.event.seq && title.trim()) this.rename(session, Array.from(title.trim()).slice(0, 72).join(''), 'provider', [prompts[0]!.event.seq])
+        this.store.completeOperation(session, session.id, operationId, 'completed', { generated: true })
+      } catch {
+        this.store.completeOperation(session, session.id, operationId, 'failed', { code: 'MANAGED_TITLE_UNAVAILABLE' })
+      }
+    })()
+    this.titleJobs.add(job)
+    void job.finally(() => this.titleJobs.delete(job)).catch(() => undefined)
   }
   private append(session: ManagedSession, type: string, data: unknown, eventId: string = randomUUID()): void {
     this.store.appendEvent(session, session.id, { eventId, type: 'native', payload: JSON.parse(JSON.stringify({ type, data })) as JsonValue })
@@ -188,7 +218,7 @@ export class ManagedAgentBackend {
   }
   async dispatch(endpoint: string, payload: unknown, signal: AbortSignal): Promise<TypertRpcResult> {
     try { signal.throwIfAborted(); return { ok: true, value: await this.call(endpoint, requestArg(carrierArgs(payload)), signal) } }
-    catch (error) { return { ok: false, error: { code: 'managed-agent/rejected', message: error instanceof z.ZodError ? 'Invalid managed Agent request.' : error instanceof Error ? error.message : 'Managed Agent request failed.', details: {} } } }
+    catch (error) { return { ok: false, error: { code: error instanceof Error && error.message === 'workspace/session-active' ? 'workspace/session-active' : 'managed-agent/rejected', message: error instanceof z.ZodError ? 'Invalid managed Agent request.' : error instanceof Error ? error.message : 'Managed Agent request failed.', details: error instanceof Error && error.message === 'workspace/session-active' ? (error as Error & { details: Record<string, unknown> }).details : {} } } }
   }
   private async call(endpoint: string, request: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
     if (endpoint === 'managedAgent/agents') return { items: this.runtime.registry.definitions().map(definition => ({ id: definition.agent, name: definition.title, available: true })) }
@@ -219,6 +249,21 @@ export class ManagedAgentBackend {
     }
     const address = request.address as { sessionId?: string; id?: string } | undefined
     const session = await this.requireSession(id.parse(request.sessionId ?? address?.sessionId ?? address?.id), signal)
+    if (endpoint === 'workspace/archiveSession' || endpoint === 'workspace/unarchiveSession') {
+      const archived = endpoint === 'workspace/archiveSession'
+      const native = await this.services.nativeArchived?.(signal) ?? []
+      this.assertPrincipal(session, signal)
+      if (archived && this.busy.has(session.id)) {
+        if (request.stopActivity !== true) throw Object.assign(new Error('workspace/session-active'), { details: { sessionId: session.id, activity: [{ kind: 'turn' }] } })
+        const connection = await this.connect(session)
+        this.assertPrincipal(session, signal)
+        await connection.cancel()
+        this.assertPrincipal(session, signal)
+      }
+      this.store.setArchived(session, session.id, archived)
+      for (const callback of this.listeners) callback()
+      return { archivedSessionIds: [...new Set([...native, ...(await this.visible(signal)).filter(item => item.archived).map(item => item.id)])] }
+    }
     if (endpoint === 'session/rename') {
       const title = z.string().trim().min(1).max(1024).parse(request.title)
       return { title, seq: this.rename(session, title, 'user') }
@@ -263,6 +308,7 @@ export class ManagedAgentBackend {
         }
         if (result.state !== 'accepted') throw new Error('MANAGED_SEND_OUTCOME_UNKNOWN')
         this.store.completeOperation(session, session.id, input.requestId, 'completed', JSON.parse(JSON.stringify(result)))
+        this.generateTitle(session, this.selection(session)?.model ?? connection.defaultModel?.model)
         return { accepted: true }
       } catch (error) {
         if (!dispatched) {
@@ -406,6 +452,7 @@ export class ManagedAgentBackend {
   }
   async close(): Promise<void> {
     this.closedSignal.abort(); this.unsubscribe(); this.listeners.clear()
+    await Promise.allSettled(this.titleJobs)
     await this.runtime.closeAll()
     this.store.close()
   }

@@ -9,6 +9,7 @@ export type JsonValue = null | boolean | number | string | JsonValue[] | { [key:
 export interface ManagedSession extends ManagedSessionScope {
   id: string; agentId: string; providerId: string; providerSessionId: string | null;
   workspacePath: string; title: string; createdAt: number; updatedAt: number;
+  archived?: boolean;
 }
 export interface ManagedEvent { sequence: number; eventId: string; type: string; payload: JsonValue; createdAt: number }
 export interface OperationReceipt {
@@ -151,9 +152,21 @@ export class ManagedSessionStore {
   }
   listSessions(scope: ManagedSessionScope): ManagedSession[] {
     this.assertOpen(); validateScope(scope);
-    return structuredClone(this.state.rows.filter(r => scopeMatches(r.session, scope)).map(r => r.session));
+    return this.state.rows.filter(r => scopeMatches(r.session, scope)).map(r => this.sessionView(r));
   }
-  getSession(scope: ManagedSessionScope, id: string): ManagedSession { return structuredClone(this.row(scope, id).session); }
+  private sessionView(row: Row): ManagedSession {
+    const archive = row.operations.filter(operation => operation.kind === 'archive-state' && operation.status === 'completed').at(-1);
+    return { ...structuredClone(row.session), archived: (archive?.result as { archived?: boolean } | undefined)?.archived === true };
+  }
+  getSession(scope: ManagedSessionScope, id: string): ManagedSession { return this.sessionView(this.row(scope, id)); }
+  setArchived(scope: ManagedSessionScope, id: string, archived: boolean): void {
+    const next = structuredClone(this.state); const row = this.row(scope, id, next);
+    if (this.sessionView(row).archived === archived) return;
+    // Reuse the v1 operation envelope: older plugin versions can still read the
+    // snapshot, and archive state never appears as a chat message.
+    row.operations.push({ operationId: randomUUID(), kind: 'archive-state', fingerprint: fingerprint({ archived }), status: 'completed', result: { archived } });
+    this.persist(next);
+  }
   renameSession(scope: ManagedSessionScope, id: string, title: string): void {
     z.string().max(1024).parse(title);
     const next = structuredClone(this.state); const row = this.row(scope, id, next);
