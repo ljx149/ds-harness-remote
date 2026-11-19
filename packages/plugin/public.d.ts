@@ -21,7 +21,7 @@ export interface Config {
   }
 }
 
-export declare const name: 'xcodex-remote'
+export declare const name: '@xcoder/xagent'
 export declare const Config: unknown
 export declare function apply(ctx: Context, config?: Config | Volatile<Config>): void
 export declare function runCli(args?: readonly string[]): Promise<number>

@@ -1,6 +1,6 @@
 import type { FetchImplementation } from './server-api.js'
 import type { SafeLogger } from './logging.js'
-import { PLUGIN_VERSION } from './version.js'
+import { PLUGIN_VERSION, PLUGIN_PACKAGE_NAME } from './version.js'
 
 import { compareVersions } from './version-compare.js'
 
@@ -9,9 +9,11 @@ export interface PluginUpdateSnapshot {
   currentVersion: string
   latestVersion: string
   checkedAt: number
+  source?: 'npm' | 'github'
 }
 
 const RELEASES_URL = 'https://api.github.com/repos/ljx149/ds-harness-remote/releases?per_page=100'
+export const PLUGIN_REGISTRY_TAGS_URL = `https://registry.npmjs.org/-/package/${encodeURIComponent(PLUGIN_PACKAGE_NAME)}/dist-tags`
 const FETCH_TIMEOUT_MS = 10_000
 const RECHECK_INTERVAL_MS = 60 * 60 * 1000
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/
@@ -22,18 +24,28 @@ export function latestPluginRelease(value: unknown, current = PLUGIN_VERSION): s
   const candidates: string[] = []
   for (const release of value) {
     if (!release || typeof release !== 'object' || release.draft === true || typeof release.tag_name !== 'string') continue
-    if (!release.tag_name.startsWith('xcodex-remote-')) continue
-    const version = release.tag_name.slice('xcodex-remote-'.length)
+    const prefix = release.tag_name.startsWith('xagent-') ? 'xagent-' : 'xcodex-remote-'
+    if (!release.tag_name.startsWith(prefix)) continue
+    const version = release.tag_name.slice(prefix.length)
     if (!SEMVER_PATTERN.test(version)) continue
     // Stable installations never opt into preview builds automatically.
     if ((release.prerelease === true || version.includes('-')) && !current.includes('-')) continue
-    const assetName = `xcodex-remote-${version}.tgz`
+    const assetName = `${prefix === 'xagent-' ? 'xcoder-xagent-' : prefix}${version}.tgz`
     const assetUrl = `https://github.com/ljx149/ds-harness-remote/releases/download/${release.tag_name}/${assetName}`
     if (!Array.isArray(release.assets) || !release.assets.some((asset: { name?: string; browser_download_url?: string; state?: string }) =>
       asset?.name === assetName && asset.browser_download_url === assetUrl && asset.state === 'uploaded')) continue
     candidates.push(version)
   }
   return candidates.sort((a, b) => compareVersions(b, a))[0]
+}
+
+/** Only published distribution channels; never opt stable users into previews. */
+export function latestRegistryVersion(value: unknown, current = PLUGIN_VERSION): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const tags = value as Record<string, unknown>
+  return [tags.latest, ...(current.includes('-') ? [tags.next] : [])]
+    .filter((version): version is string => typeof version === 'string' && SEMVER_PATTERN.test(version) && (current.includes('-') || !version.includes('-')))
+    .sort((a, b) => compareVersions(b, a))[0]
 }
 
 /** Startup/hourly release discovery; failure preserves the last successful snapshot. */
@@ -80,25 +92,34 @@ export class PluginUpdateChecker {
     try {
       const latest = await this.fetchLatestVersion()
       if (latest === undefined || this.stopped) return
-      this.state = { currentVersion: PLUGIN_VERSION, latestVersion: latest, checkedAt: Date.now() }
-      this.logger.debug('plugin update check complete', { current: PLUGIN_VERSION, latest })
+      this.state = { currentVersion: PLUGIN_VERSION, latestVersion: latest.version, source: latest.source, checkedAt: Date.now() }
+      this.logger.debug('plugin update check complete', { current: PLUGIN_VERSION, latest: latest.version })
     } catch {
       // Registry reachability varies by network; a failed check must stay invisible.
       this.logger.debug('plugin update check failed', { code: 'UPDATE_CHECK_FAILED' })
     }
   }
 
-  private async fetchLatestVersion(): Promise<string | undefined> {
+  private async lookup(url: string): Promise<unknown> {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
     timeout.unref?.()
     try {
-      const response = await this.fetchImplementation(RELEASES_URL, {
+      const response = await this.fetchImplementation(url, {
         signal: controller.signal,
-        headers: { accept: 'application/vnd.github+json' },
+        headers: { accept: 'application/json' },
       })
       if (!response.ok) throw new Error('Release lookup failed')
-      return latestPluginRelease(await response.json())
+      return await response.json()
     } finally { clearTimeout(timeout) }
+  }
+  private async fetchLatestVersion(): Promise<{ version: string; source: 'npm' | 'github' } | undefined> {
+    try {
+      const version = latestRegistryVersion(await this.lookup(PLUGIN_REGISTRY_TAGS_URL))
+      if (version) return { version, source: 'npm' }
+    } catch { /* GitHub fallback is discovery only, not a claim of registry installability. */ }
+    if (this.stopped) return undefined
+    const version = latestPluginRelease(await this.lookup(RELEASES_URL))
+    return version ? { version, source: 'github' } : undefined
   }
 }

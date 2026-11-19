@@ -11,7 +11,7 @@ const pluginManifest = JSON.parse(readFileSync(join(root, 'packages/plugin/packa
 const componentManifest = JSON.parse(readFileSync(join(root, 'dsh-plugin.json'), 'utf8'))
 const pluginComponentManifest = JSON.parse(readFileSync(join(root, 'packages/plugin/dsh-plugin.json'), 'utf8'))
 
-assert.equal(manifest.name, 'xcodex-remote', 'root package must use the canonical DSH installation id')
+assert.equal(manifest.name, '@xcoder/xagent', 'root package must use the canonical DSH installation id')
 assert.equal(pluginManifest.name, manifest.name, 'root and npm plugin package ids must stay unified')
 assert.equal(pluginManifest.version, manifest.version, 'root and npm plugin versions must stay unified')
 assert.equal(componentManifest.name, manifest.name, 'root Component manifest must use the canonical plugin id')
@@ -108,7 +108,7 @@ const rootHostEntry = readFileSync(join(root, 'index.js'), 'utf8')
 assert.match(rootHostEntry, /packages\/plugin\/dist\/index\.js/, 'root Host entry must forward to the committed bundle')
 
 const publicTypes = readFileSync(join(root, 'packages/plugin/public.d.ts'), 'utf8')
-assert.match(publicTypes, /name:\s*'xcodex-remote'/, 'public types must expose the canonical plugin id')
+assert.match(publicTypes, /name:\s*'@xcoder\/xagent'/, 'public types must expose the canonical plugin id')
 
 const hostBundle = readFileSync(join(root, 'packages/plugin/dist/index.js'), 'utf8')
 assert.doesNotMatch(hostBundle, /(?:from\s+|require\()['\"]@dsh-remote\//, 'Host bundle must not import unpublished workspace packages')
@@ -186,3 +186,7 @@ runInNewContext(npmClientBundle, {
 assert.equal(npmClient?.id, pluginManifest.name, 'npm client module id must match the nested package name')
 
 console.log(`Verified DSH bundle package ${manifest.name}@${manifest.version}`)
+
+assert.equal(manifest.bin.xagent, manifest.bin['xcodex-remote'])
+assert.equal(pluginManifest.bin.xagent, pluginManifest.bin['xcodex-remote'])
+assert.equal(pluginManifest.publishConfig.access, 'public')

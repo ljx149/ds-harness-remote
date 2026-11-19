@@ -77,8 +77,8 @@ await buildBundle({
 })
 
 for (const [moduleId, outfile] of [
-  ['xcodex-remote', 'client.js'],
-  ['xcodex-remote', 'client.github.js'],
+  ['@xcoder/xagent', 'client.js'],
+  ['@xcoder/xagent', 'client.github.js'],
 ]) {
   await buildBundle({
     entryPoints: [join(root, 'src/client.ts')],

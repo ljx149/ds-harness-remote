@@ -1,3 +1,14 @@
+## Xagent scoped package (2026-11-20)
+
+Package: `@xcoder/xagent`, display name: **Xagent**, preview version: `0.8.1-xagent.1`.
+Publication is pending npm organization access; do not treat this name as an available download yet.
+After publication, install `@xcoder/xagent@next` through DSH's plugin package installer.
+An existing URL/tgz installation needs one migration to the registry package before DSH can update it from npm.
+The Component ID, Cordis instance ID, settings namespace and credential directories remain unchanged to preserve pairing and sessions.
+Finish running tasks before replacing the old installation; do not run both package generations together or delete credentials.
+Update checks offer a notification; they do not silently install or restart running Agents.
+The npm package is shared across platforms, but macOS/Windows recovery and desktop/mobile update acceptance remain pending.
+
 <p align="center">
 
   <img src="docs/logo.svg" alt="DeepSeek Harness Remote" width="600">

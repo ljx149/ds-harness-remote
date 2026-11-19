@@ -2,7 +2,8 @@
 
 - [x] 空闲回收的可配置定时入口，Host 队列/审批/未知操作保护，provider 检查超时与取消；默认关闭。
 - [x] Codex 空闲退出区分前台 idle、后台任务与活跃目标；查询能力不足时不回收。
-- [ ] 最终 npm 包身份待确认：公共 xagent 已被占用；不可覆盖第三方包。
+- [x] 用户确定 npm 包身份 `@xcoder/xagent`，显示 Xagent；保留已有数据身份。
+- [ ] 组织发布权限与真实 npm 发布、匿名下载、DSH 内升级验收。
 - [ ] registry 发布、旧安装来源迁移、原生更新与失败回滚验收。
 - [ ] 跨平台持久恢复、未知结果核对界面和真机矩阵继续待完成。
 - 计划与限制：[Xagent 发布和恢复计划](design/xagent-release-and-recovery-plan.md)。

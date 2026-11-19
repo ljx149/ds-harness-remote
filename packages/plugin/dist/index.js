@@ -106267,7 +106267,8 @@ import { spawn as spawn4 } from "node:child_process";
 import { Buffer as Buffer2 } from "node:buffer";
 
 // packages/plugin/src/version.ts
-var PLUGIN_VERSION = "0.8.0-xcodex.1";
+var PLUGIN_VERSION = "0.8.1-xagent.1";
+var PLUGIN_PACKAGE_NAME = "@xcoder/xagent";
 
 // packages/plugin/src/acp/adapters/cursor-process.ts
 var ACP_REQUEST_TIMEOUT_MS = 6e4;
@@ -143155,7 +143156,7 @@ function filterSessionListProjections(resultOrEndpoint, maybeResult) {
 }
 function filterRemotePluginInventory(endpoint, result) {
   if (!result.ok) return result;
-  const isRemote = (value) => typeof value === "string" && /^(?:xcodex-remote|dsh-remote)(?:\/|$)/.test(value);
+  const isRemote = (value) => typeof value === "string" && /^(?:@xcoder\/xagent|xcodex-remote|dsh-remote)(?:\/|$)/.test(value);
   const filterEntries = (entries) => entries.filter((entry) => !isRecord22(entry) || !isRemote(entry.moduleName));
   if (endpoint === "pluginManager/listPlugins" && Array.isArray(result.value)) {
     return { ...result, value: filterEntries(result.value) };
@@ -143183,7 +143184,7 @@ function isCompactSnapshot(value) {
   return value !== null && typeof value === "object" && value.type === "snapshot";
 }
 function remoteOwnedBundleRow(row2, plugin) {
-  const remoteModule = (value) => typeof value === "string" && /^(?:xcodex-remote|dsh-remote)(?:\/|$)/.test(value);
+  const remoteModule = (value) => typeof value === "string" && /^(?:@xcoder\/xagent|xcodex-remote|dsh-remote)(?:\/|$)/.test(value);
   if (remoteModule(plugin ? row2.moduleName : row2.name)) return true;
   return !plugin && (!Array.isArray(row2.rows) || row2.rows.some((value) => !isRecord22(value) || remoteModule(value.moduleName)) || Array.isArray(row2.overrides) && row2.overrides.some((value) => remoteModule(value)));
 }
@@ -144036,6 +144037,7 @@ function compareVersions(left, right) {
 
 // packages/plugin/src/update-check.ts
 var RELEASES_URL = "https://api.github.com/repos/ljx149/ds-harness-remote/releases?per_page=100";
+var PLUGIN_REGISTRY_TAGS_URL = `https://registry.npmjs.org/-/package/${encodeURIComponent(PLUGIN_PACKAGE_NAME)}/dist-tags`;
 var FETCH_TIMEOUT_MS = 1e4;
 var RECHECK_INTERVAL_MS = 60 * 60 * 1e3;
 var SEMVER_PATTERN = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
@@ -144044,16 +144046,22 @@ function latestPluginRelease(value, current = PLUGIN_VERSION) {
   const candidates = [];
   for (const release of value) {
     if (!release || typeof release !== "object" || release.draft === true || typeof release.tag_name !== "string") continue;
-    if (!release.tag_name.startsWith("xcodex-remote-")) continue;
-    const version2 = release.tag_name.slice("xcodex-remote-".length);
+    const prefix = release.tag_name.startsWith("xagent-") ? "xagent-" : "xcodex-remote-";
+    if (!release.tag_name.startsWith(prefix)) continue;
+    const version2 = release.tag_name.slice(prefix.length);
     if (!SEMVER_PATTERN.test(version2)) continue;
     if ((release.prerelease === true || version2.includes("-")) && !current.includes("-")) continue;
-    const assetName = `xcodex-remote-${version2}.tgz`;
+    const assetName = `${prefix === "xagent-" ? "xcoder-xagent-" : prefix}${version2}.tgz`;
     const assetUrl = `https://github.com/ljx149/ds-harness-remote/releases/download/${release.tag_name}/${assetName}`;
     if (!Array.isArray(release.assets) || !release.assets.some((asset) => asset?.name === assetName && asset.browser_download_url === assetUrl && asset.state === "uploaded")) continue;
     candidates.push(version2);
   }
   return candidates.sort((a, b) => compareVersions(b, a))[0];
+}
+function latestRegistryVersion(value, current = PLUGIN_VERSION) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return void 0;
+  const tags = value;
+  return [tags.latest, ...current.includes("-") ? [tags.next] : []].filter((version2) => typeof version2 === "string" && SEMVER_PATTERN.test(version2) && (current.includes("-") || !version2.includes("-"))).sort((a, b) => compareVersions(b, a))[0];
 }
 var PluginUpdateChecker = class {
   constructor(logger2, fetchImplementation = fetch) {
@@ -144096,26 +144104,36 @@ var PluginUpdateChecker = class {
     try {
       const latest = await this.fetchLatestVersion();
       if (latest === void 0 || this.stopped) return;
-      this.state = { currentVersion: PLUGIN_VERSION, latestVersion: latest, checkedAt: Date.now() };
-      this.logger.debug("plugin update check complete", { current: PLUGIN_VERSION, latest });
+      this.state = { currentVersion: PLUGIN_VERSION, latestVersion: latest.version, source: latest.source, checkedAt: Date.now() };
+      this.logger.debug("plugin update check complete", { current: PLUGIN_VERSION, latest: latest.version });
     } catch {
       this.logger.debug("plugin update check failed", { code: "UPDATE_CHECK_FAILED" });
     }
   }
-  async fetchLatestVersion() {
+  async lookup(url2) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     timeout.unref?.();
     try {
-      const response = await this.fetchImplementation(RELEASES_URL, {
+      const response = await this.fetchImplementation(url2, {
         signal: controller.signal,
-        headers: { accept: "application/vnd.github+json" }
+        headers: { accept: "application/json" }
       });
       if (!response.ok) throw new Error("Release lookup failed");
-      return latestPluginRelease(await response.json());
+      return await response.json();
     } finally {
       clearTimeout(timeout);
     }
+  }
+  async fetchLatestVersion() {
+    try {
+      const version3 = latestRegistryVersion(await this.lookup(PLUGIN_REGISTRY_TAGS_URL));
+      if (version3) return { version: version3, source: "npm" };
+    } catch {
+    }
+    if (this.stopped) return void 0;
+    const version2 = latestPluginRelease(await this.lookup(RELEASES_URL));
+    return version2 ? { version: version2, source: "github" } : void 0;
   }
 };
 
@@ -144270,7 +144288,7 @@ ${helpText()}`);
 }
 async function register(args, runtime) {
   if (args.length !== 1 || args[0] === void 0 || args[0].trim() === "") {
-    throw new CliUsageError("Usage: xcodex-remote register <server-token>");
+    throw new CliUsageError("Usage: xagent register <server-token>");
   }
   const context = await hostContext(runtime);
   await context.api.authorizeHostWithCode(context.identity, args[0]);
@@ -144278,7 +144296,7 @@ async function register(args, runtime) {
   return 0;
 }
 async function login(args, runtime) {
-  if (args.length > 1) throw new CliUsageError("Usage: xcodex-remote login [browser|provider|list]");
+  if (args.length > 1) throw new CliUsageError("Usage: xagent login [browser|provider|list]");
   const context = await hostContext(runtime);
   if (args[0] === void 0 || args[0] === "browser") {
     if (!context.api.startBrowserLogin || !context.api.pollBrowserLogin) throw new CliUsageError("Browser login is unavailable in this version.");
@@ -144308,16 +144326,16 @@ Waiting for login...
   }
   const providers = (await context.api.oauthProviders()).filter((item) => item.qrStartUrl != null);
   if (args[0] === "list") {
-    write2(runtime.stdout, providers.length === 0 ? "No QR sign-in providers are available.\n" : providers.map((item) => `${item.displayName}: xcodex-remote login ${item.id}
+    write2(runtime.stdout, providers.length === 0 ? "No QR sign-in providers are available.\n" : providers.map((item) => `${item.displayName}: xagent login ${item.id}
 `).join(""));
     return 0;
   }
   const selected = args[0] === void 0 ? providers.find((item) => item.id === "zhihu") ?? providers[0] : providers.find((item) => item.id === args[0]);
-  if (selected === void 0) throw new CliUsageError('OAuth provider unavailable. Run "xcodex-remote login list" to see available providers.');
+  if (selected === void 0) throw new CliUsageError('OAuth provider unavailable. Run "xagent login list" to see available providers.');
   const provider = selected.id;
   const session2 = await context.api.startOAuthQrLogin(provider);
   const qr2 = await runtime.renderQr(session2.scanUrl);
-  write2(runtime.stdout, `Using ${selected.displayName} QR login. Run "xcodex-remote login list" for available providers.
+  write2(runtime.stdout, `Using ${selected.displayName} QR login. Run "xagent login list" for available providers.
 `);
   write2(runtime.stdout, "Scan this QR code to authorize this Host:\n\n");
   write2(runtime.stdout, `${qr2.trimEnd()}
@@ -144352,7 +144370,7 @@ Waiting for authorization...
   return 1;
 }
 async function status(args, runtime) {
-  if (args.length !== 0) throw new CliUsageError("Usage: xcodex-remote status");
+  if (args.length !== 0) throw new CliUsageError("Usage: xagent status");
   const serverUrl = selectedServer();
   const root2 = await prepareDefaultIdentityDirectory({ env: runtime.env });
   const directory = serverStorageDirectory(root2, serverUrl, "host");
@@ -144365,7 +144383,7 @@ async function status(args, runtime) {
     lines.push("Device: not initialized", "Authorization: logged out", "Credential: unavailable");
     write2(runtime.stdout, `${lines.join("\n")}
 
-Run "xcodex-remote login" to authorize this Host.
+Run "xagent login" to authorize this Host.
 `);
     return 0;
   }
@@ -144379,7 +144397,7 @@ Run "xcodex-remote login" to authorize this Host.
     lines.push("Authorization: logged out", "Credential: unavailable");
     write2(runtime.stdout, `${lines.join("\n")}
 
-Run "xcodex-remote login" to authorize this Host.
+Run "xagent login" to authorize this Host.
 `);
     return 0;
   }
@@ -144402,7 +144420,7 @@ Run "xcodex-remote login" to authorize this Host.
   }
 }
 async function logout(args, runtime) {
-  if (args.length !== 0) throw new CliUsageError("Usage: xcodex-remote logout");
+  if (args.length !== 0) throw new CliUsageError("Usage: xagent logout");
   const serverUrl = selectedServer();
   const deviceName = runtime.env.XCODEX_REMOTE_DEVICE_NAME ?? hostname5();
   let root2;
@@ -144450,11 +144468,11 @@ async function logout(args, runtime) {
 }
 async function resetIdentity(args, runtime) {
   if (args.length > 1) {
-    throw new CliUsageError("Usage: xcodex-remote reset-identity [host|client|all]");
+    throw new CliUsageError("Usage: xagent reset-identity [host|client|all]");
   }
   const roleArg = args[0];
   if (roleArg !== void 0 && roleArg !== "host" && roleArg !== "client" && roleArg !== "all") {
-    throw new CliUsageError("Usage: xcodex-remote reset-identity [host|client|all]");
+    throw new CliUsageError("Usage: xagent reset-identity [host|client|all]");
   }
   const serverUrl = selectedServer();
   const deviceName = runtime.env.XCODEX_REMOTE_DEVICE_NAME ?? hostname5();
@@ -144531,11 +144549,11 @@ function cliErrorMessage(error62) {
 function helpText() {
   return [
     "Usage:",
-    "  xcodex-remote login [browser|provider|list]",
-    "  xcodex-remote register <server-token>",
-    "  xcodex-remote status",
-    "  xcodex-remote logout",
-    "  xcodex-remote reset-identity [host|client|all]",
+    "  xagent login [browser|provider|list]",
+    "  xagent register <server-token>",
+    "  xagent status",
+    "  xagent logout",
+    "  xagent reset-identity [host|client|all]",
     "",
     "login opens xcodex browser sign-in by default. Use login list for legacy providers.",
     `The Server is ${DEFAULT_REMOTE_SERVER_URL}.`,
@@ -144605,7 +144623,7 @@ var AcpGateway = class {
 };
 
 // packages/plugin/src/index.ts
-var name = "xcodex-remote";
+var name = "@xcoder/xagent";
 var legacyLoaderModuleNames = /* @__PURE__ */ new Set();
 var pluginSettingsNamespace = "xcodex-remote";
 var DEFAULT_ENTRY_ID = "xcodex-remote";

@@ -1,6 +1,6 @@
 {
-  "name": "xcodex-remote",
-  "version": "0.8.0-xcodex.1",
+  "name": "@xcoder/xagent",
+  "version": "0.8.1-xagent.1",
   "description": "P2P-based, end-to-end encrypted remote access to DeepSeek Harness, CodeX, Claude Code, Pi, and other workspaces from web and mobile clients.",
   "keywords": [
     "deepseek",
@@ -25,11 +25,13 @@
   "license": "MIT",
   "publishConfig": {
     "access": "public",
-    "provenance": true
+    "registry": "https://registry.npmjs.org",
+    "tag": "next"
   },
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
+    "xagent": "./bin/ds-harness-remote.js",
     "xcodex-remote": "./bin/ds-harness-remote.js"
   },
   "types": "./public.d.ts",

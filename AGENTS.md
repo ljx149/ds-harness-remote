@@ -1,3 +1,7 @@
+# Xagent package identity (2026-11-20)
+
+Use `@xcoder/xagent` for package/module identity and Xagent for display. Preserve `vip.xcodex.remote`, Cordis instance `xcodex-remote`, settings and credential directories. Preview publication uses tag `next`; publication and real DSH update acceptance must be reported separately.
+
 # Repository Guide for Agents
 
 ## Orca 管理迁移 0.8（2026-11-19）

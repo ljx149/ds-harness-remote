@@ -57,6 +57,7 @@ export interface RemoteStatus {
   update?: {
     currentVersion: string
     latestVersion: string
+    source?: 'npm' | 'github'
     checkedAt: number
   }
   hostAuthorizationAvailable: boolean

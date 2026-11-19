@@ -53,7 +53,7 @@ declare const XCODEX_REMOTE_CLIENT_MODULE_ID: string | undefined
 
 const clientModuleId = typeof XCODEX_REMOTE_CLIENT_MODULE_ID === 'string'
   ? XCODEX_REMOTE_CLIENT_MODULE_ID
-  : 'xcodex-remote'
+  : '@xcoder/xagent'
 const controlRouteBackoffStepsMs = [1_000, 2_000, 5_000, 10_000, 30_000] as const
 
 class ControlRouteUnavailableError extends Error {
@@ -108,7 +108,7 @@ window.__ModuleLoader__.load({
     // section, so this jumps straight to the Remote card instead of requiring a
     // scroll through the whole document.
     function RemotePluginSettingsAction(props: { t: Translate; subject?: unknown }): unknown {
-      if (pluginSubjectPackageName(props.subject) !== 'xcodex-remote') return null
+      if (pluginSubjectPackageName(props.subject) !== '@xcoder/xagent') return null
       const label = props.t('openPluginSettings')
       return React.createElement('button', {
         type: 'button',
@@ -627,7 +627,7 @@ window.__ModuleLoader__.load({
       // (`cordis.patch.yml` row `xcodex-remote`).
       ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
         name: 'plugins.row.config',
-        key: 'xcodex-remote#xcodex-remote',
+        key: '@xcoder/xagent#xcodex-remote',
         locale: localeNamespace,
         inject: () => ({
           control,
@@ -641,7 +641,7 @@ window.__ModuleLoader__.load({
       // package name.
       ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
         name: 'plugins.bundle.config',
-        key: 'xcodex-remote',
+        key: '@xcoder/xagent',
         locale: localeNamespace,
         inject: () => ({
           control,

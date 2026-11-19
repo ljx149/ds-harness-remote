@@ -72,7 +72,7 @@ try {
       join(destination, pack.filename)], generation)
     const modules = join(generation, 'node_modules')
     const count = verifyClosure(modules, generation, installation)
-    const plugin = join(modules, 'xcodex-remote')
+    const plugin = join(modules, '@xcoder', 'xagent')
     const manifest = JSON.parse(readFileSync(join(plugin, 'package.json'), 'utf8'))
     assert.equal(manifest.dependencies?.werift, undefined)
     // An ordinary import tests the untouched package entry. A second import

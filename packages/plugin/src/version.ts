@@ -1,5 +1,5 @@
 /**
- * Version of the `xcodex-remote` distribution.
+ * Version of the `@xcoder/xagent` distribution.
  *
  * This is reported to the Server during device registration (`clientVersion`
  * in the Device Descriptor) and again in the WebSocket `hello` frame. The
@@ -8,4 +8,6 @@
  * If they diverge, `npm scripts` checks in `scripts/verify-version-sync.mjs`
  * will fail fast during build/check/test.
  */
-export const PLUGIN_VERSION = '0.8.0-xcodex.1'
+export const PLUGIN_VERSION = '0.8.1-xagent.1'
+
+export const PLUGIN_PACKAGE_NAME = '@xcoder/xagent'

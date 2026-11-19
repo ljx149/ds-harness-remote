@@ -59,7 +59,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-export const name = 'xcodex-remote'
+export const name = '@xcoder/xagent'
 export { Config }
 
 // The unscoped dsh-remote package belongs to another publisher. A bare name

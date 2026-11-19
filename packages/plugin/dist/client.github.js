@@ -2237,7 +2237,7 @@ If a code was sent, recover the original submission without changing it.`,
     previewPort: "Host port",
     previewLocalOnly: "Preview requires Desktop or a browser connected to Harness on this computer.",
     settings: "Settings",
-    pluginTitle: "Xcodex Remote",
+    pluginTitle: "Xagent",
     pluginDescription: "P2P-based, end-to-end encrypted remote access to DeepSeek Harness, CodeX, Claude Code, Pi, and other workspaces from web and mobile clients.",
     openPluginSettings: "Remote settings",
     expandSettings: "Show settings: {name}",
@@ -2245,7 +2245,7 @@ If a code was sent, recover the original submission without changing it.`,
     unsaved: "Unsaved",
     associated: "Authorized",
     authorizationComplete: "Authorization complete",
-    loadingSettings: "Loading Xcodex Remote settings\u2026",
+    loadingSettings: "Loading Xagent settings\u2026",
     mode: "Mode",
     pluginMode: "Plugin mode",
     host: "Host",
@@ -2349,7 +2349,7 @@ If a code was sent, recover the original submission without changing it.`,
     useRegistrationCode: "Use connection code",
     registering: "Registering\u2026",
     remoteEntry: "Remote",
-    remoteTitle: "Xcodex Remote - Remote Workspace",
+    remoteTitle: "Xagent - Remote Workspace",
     remoteDescription: "Choose one of your Hosts, then select a working directory. The Harness interface stays on this device.",
     starProject: "Open source project, stars welcome~",
     chooseHost: "Host",
@@ -2486,7 +2486,7 @@ If a code was sent, recover the original submission without changing it.`,
     candidateRelay: "TURN address \xB7 relay",
     openLocalWorkspaces: "Open local workspaces",
     clientSignInHint: "Sign in to this Server to list your remote Hosts.",
-    signInClient: "Xcodex Remote:",
+    signInClient: "Xagent:",
     signInClientDescription: "Connect once. Available anytime.",
     startSignIn: "Start sign-in",
     allowControlCurrentDevice: "Allow control of this device",
@@ -2709,7 +2709,7 @@ If a code was sent, recover the original submission without changing it.`,
     useRegistrationCode: "\u4F7F\u7528\u8FDE\u63A5\u7801",
     registering: "\u6B63\u5728\u6CE8\u518C\u2026",
     remoteEntry: "Remote",
-    remoteTitle: "Xcodex Remote - \u8FDC\u7A0B\u5DE5\u4F5C\u53F0",
+    remoteTitle: "Xagent - \u8FDC\u7A0B\u5DE5\u4F5C\u53F0",
     remoteDescription: "\u9009\u62E9\u60F3\u8981\u8FDE\u63A5\u4E3B\u673A\u548C\u5DE5\u4F5C\u76EE\u5F55\u3002",
     starProject: "\u5F00\u6E90\u9879\u76EE\uFF0C\u6B22\u8FCEStar~",
     chooseHost: "\u4E3B\u673A",
@@ -2846,7 +2846,7 @@ If a code was sent, recover the original submission without changing it.`,
     candidateRelay: "TURN \u5730\u5740 \xB7 relay",
     openLocalWorkspaces: "\u6253\u5F00\u672C\u5730\u5DE5\u4F5C\u533A",
     clientSignInHint: "\u767B\u5F55 Server \u540E\u5373\u53EF\u67E5\u770B\u81EA\u5DF1\u7684\u8FDC\u7AEF\u4E3B\u673A\u3002",
-    signInClient: "Xcodex Remote\uFF1A",
+    signInClient: "Xagent\uFF1A",
     signInClientDescription: "\u4E00\u6B21\u8FDE\u63A5\uFF0C\u968F\u65F6\u53EF\u7528\u3002",
     startSignIn: "\u5F00\u59CB\u767B\u5F55",
     allowControlCurrentDevice: "\u5141\u8BB8\u63A7\u5236\u672C\u673A",
@@ -5193,7 +5193,7 @@ If a code was sent, recover the original submission without changing it.`,
                     ),
                     updateNotice === void 0 ? null : React.createElement("a", {
                       className: "xcodexRemoteAccountUpdate",
-                      href: "https://github.com/ljx149/ds-harness-remote/releases",
+                      href: updateInfo?.source === "npm" ? "https://www.npmjs.com/package/@xcoder/xagent" : "https://github.com/ljx149/ds-harness-remote/releases",
                       target: "_blank",
                       rel: "noreferrer",
                       title: updateNotice
@@ -6112,7 +6112,7 @@ If a code was sent, recover the original submission without changing it.`,
   }
 
   // packages/plugin/src/client.ts
-  var clientModuleId = "xcodex-remote", controlRouteBackoffStepsMs = [1e3, 2e3, 5e3, 1e4, 3e4], ControlRouteUnavailableError = class extends Error {
+  var clientModuleId = "@xcoder/xagent", controlRouteBackoffStepsMs = [1e3, 2e3, 5e3, 1e4, 3e4], ControlRouteUnavailableError = class extends Error {
     constructor(message) {
       super(message), this.name = "ControlRouteUnavailableError";
     }
@@ -6145,7 +6145,7 @@ If a code was sent, recover the original submission without changing it.`,
         }
       })(), BrowserLogin = createBrowserLogin(React), RemotePluginOptions = createRemotePluginOptions(React);
       function RemotePluginSettingsAction(props) {
-        if (pluginSubjectPackageName(props.subject) !== "xcodex-remote") return null;
+        if (pluginSubjectPackageName(props.subject) !== "@xcoder/xagent") return null;
         let label = props.t("openPluginSettings");
         return React.createElement("button", {
           type: "button",
@@ -6487,7 +6487,7 @@ If a code was sent, recover the original submission without changing it.`,
           })
         }, RemoteWorkspaceAction)), ctx.slots.inject("plugins.row.config", () => ctx.slots.register({
           name: "plugins.row.config",
-          key: "xcodex-remote#xcodex-remote",
+          key: "@xcoder/xagent#xcodex-remote",
           locale: localeNamespace,
           inject: () => ({
             control,
@@ -6498,7 +6498,7 @@ If a code was sent, recover the original submission without changing it.`,
           })
         }, RemotePluginOptions)), ctx.slots.inject("plugins.bundle.config", () => ctx.slots.register({
           name: "plugins.bundle.config",
-          key: "xcodex-remote",
+          key: "@xcoder/xagent",
           locale: localeNamespace,
           inject: () => ({
             control,

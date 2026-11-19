@@ -31,6 +31,8 @@ describe('HarnessRemoteBridge', () => {
 
   it('rejects plugin-management bypasses before native mutation', async () => {
     await runScenarios([
+      { name: 'Xagent entry', endpoint: 'pluginManager/setPluginEnabled', args: { id: 'remote', enabled: false }, rows: [{ entryId: 'remote', moduleName: '@xcoder/xagent' }] },
+      { name: 'Xagent bundle', endpoint: 'pluginManager/setBundleEnabled', args: { name: '@xcoder/xagent', enabled: false }, rows: [{ name: '@xcoder/xagent', rows: [] }] },
       { name: 'Remote entry', endpoint: 'pluginManager/setPluginEnabled', args: { id: 'remote', enabled: false }, rows: [{ entryId: 'remote', moduleName: 'xcodex-remote' }] },
       { name: 'Remote bundle', endpoint: 'pluginManager/setBundleEnabled', args: { name: 'xcodex-remote', enabled: false }, rows: [{ name: 'xcodex-remote', rows: [] }] },
       { name: 'bundle contains Remote', endpoint: 'pluginManager/setBundleEnabled', args: { name: 'bundle', enabled: true }, rows: [{ name: 'bundle', rows: [{ moduleName: 'xcodex-remote/client' }] }] },
