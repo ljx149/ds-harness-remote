@@ -1,6 +1,6 @@
 ## Xagent scoped package (2026-11-20)
 
-Package: `@xcoder/xagent`, display name: **Xagent**, preview version: `0.8.1-xagent.1`.
+Package: `@xcoder/xagent`, display name: **Xagent**, preview version: `0.8.1-xagent.2`.
 Publication is pending npm organization access; do not treat this name as an available download yet.
 After publication, install `@xcoder/xagent@next` through DSH's plugin package installer.
 An existing URL/tgz installation needs one migration to the registry package before DSH can update it from npm.
@@ -16,7 +16,7 @@ The npm package is shared across platforms, but macOS/Windows recovery and deskt
 安装下载的插件包：
 
 ```sh
-dsh plugin --profile web add -w /path/to/xcoder-xagent-0.8.1-xagent.1.tgz
+dsh plugin --profile web add -w /path/to/xcoder-xagent-0.8.1-xagent.2.tgz
 ```
 
 打开插件设置，选择「使用 Xcodex 账号登录」，填写邮箱、密码，或使用 Google 登录。Google 会打开系统浏览器，完成后自动授权本机。手机使用同一账号即可发现上线的电脑。

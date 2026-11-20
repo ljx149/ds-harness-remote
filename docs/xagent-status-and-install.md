@@ -1,7 +1,9 @@
+> 2026-11-20 修复版：`0.8.1-xagent.2` 修复重启时认证恢复后不刷新会话目录；见 [修复和回归记录](design/xagent-restart-catalog-fix.md)。下文能力验证历史保留，新包安装地址已更新。
+
 # Xagent 当前功能、完成程度与安装
 
-更新：2026-11-20。当前测试包 `@xcoder/xagent@0.8.1-xagent.1`，显示名 **Xagent**。
-代码分支：`feat/orca-agent-management`；包对应提交：`a3f9789556f2a7d8917ffa201109380beeadc989`。
+更新：2026-11-20。当前测试包 `@xcoder/xagent@0.8.1-xagent.2`，显示名 **Xagent**。
+代码分支：`feat/orca-agent-management`；原 0.8.1-xagent.1 基线提交 `a3f9789556f2a7d8917ffa201109380beeadc989`，修复版提交以 Release 标签为准。
 
 ## 当前做到哪里
 
@@ -57,13 +59,13 @@
 ### 1. 下载当前测试包
 
 GitHub 测试发行页：
-https://github.com/ljx149/ds-harness-remote/releases/tag/xagent-0.8.1-xagent.1
+https://github.com/ljx149/ds-harness-remote/releases/tag/xagent-0.8.1-xagent.2
 
 直接下载：
-https://github.com/ljx149/ds-harness-remote/releases/download/xagent-0.8.1-xagent.1/xcoder-xagent-0.8.1-xagent.1.tgz
+https://github.com/ljx149/ds-harness-remote/releases/download/xagent-0.8.1-xagent.2/xcoder-xagent-0.8.1-xagent.2.tgz
 
 SHA-256：
-`2a0c863ecde38a39fb73e687374c47f123598c15a69982a89d118eef5198ede2`
+`9dad5566dea59bdc19ee6a69f769d73d97050573a4ffb399720b87467fca0018`
 
 已从上述地址不带凭据下载，SHA-256 与试装原包一致。
 
@@ -76,12 +78,12 @@ SHA-256：
 在安装了 DSH 的电脑终端执行，替换为实际下载文件路径：
 
 ```sh
-dsh plugin --profile web add -w /完整路径/xcoder-xagent-0.8.1-xagent.1.tgz
+dsh plugin --profile web add -w /完整路径/xcoder-xagent-0.8.1-xagent.2.tgz
 ```
 
 这里 `web` 是既有 Web/桌面实例使用的 profile；使用自定义 profile 时替换为实际值。命令安装到 DSH 插件系统，单独 `npm install -g` 不等于 DSH 已加载该插件。必要时在任务结束后重新打开对应 DSH 实例。
 
-安装后检查插件显示 **Xagent / 0.8.1-xagent.1**，确认已有登录/设备还在；未登录时使用 Xcodex 账号授权。在目标工作区的新建 Agent 入口选择 Claude Code 或 Codex。本机对应 CLI 及其模型配置仍需可用。
+安装后检查插件显示 **Xagent / 0.8.1-xagent.2**，确认已有登录/设备还在；未登录时使用 Xcodex 账号授权。在目标工作区的新建 Agent 入口选择 Claude Code 或 Codex。本机对应 CLI 及其模型配置仍需可用。
 
 ### 4. 后续更新
 

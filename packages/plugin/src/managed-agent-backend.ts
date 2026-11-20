@@ -23,6 +23,8 @@ type NativeRecord = { type: 'event'; event: { type: string; seq: number; time: n
 /** One Host owns execution; callers only own subscriptions and scoped operations. */
 export class ManagedAgentBackend {
   private readonly listeners = new Set<() => void>()
+  private principalTimer?: ReturnType<typeof setInterval>
+  private publishedPrincipal?: string
   private readonly sessions = new Map<string, ManagedSession>()
   private readonly opening = new Map<string, Promise<ManagedAgentConnection>>()
   private readonly busy = new Set<string>()
@@ -60,7 +62,30 @@ export class ManagedAgentBackend {
   }
 
   ownsSession(sessionId: string): boolean { return this.sessions.has(sessionId) }
-  subscribeCatalog(callback: () => void): () => void { this.listeners.add(callback); return () => { this.listeners.delete(callback) } }
+  subscribeCatalog(callback: () => void): () => void {
+    if (this.closedSignal.signal.aborted) return () => {}
+    this.listeners.add(callback)
+    // Server authentication resumes asynchronously after Host startup. Disk
+    // writes alone cannot invalidate the initially empty native sidebar.
+    // One lightweight identity check per backend; no disk/network polling.
+    this.principalTimer ??= setInterval(() => {
+      const principal = this.principal()
+      const key = principal ? JSON.stringify([principal.ownerId, principal.hostId]) : undefined
+      if (key === this.publishedPrincipal) return
+      this.publishedPrincipal = key
+      this.sessions.clear()
+      for (const listener of this.listeners) listener()
+    }, 1000)
+    this.principalTimer.unref?.()
+    return () => {
+      this.listeners.delete(callback)
+      if (!this.listeners.size) {
+        clearInterval(this.principalTimer)
+        this.principalTimer = undefined
+        this.publishedPrincipal = undefined
+      }
+    }
+  }
   private scope(workspaceId: string): ManagedSessionScope {
     const principal = this.principal()
     if (!principal) throw new Error('MANAGED_AUTH_REQUIRED')
@@ -834,6 +859,7 @@ export class ManagedAgentBackend {
   }
   async close(): Promise<void> {
     this.closedSignal.abort(); this.unsubscribe(); this.listeners.clear()
+    clearInterval(this.principalTimer); this.principalTimer = undefined
     await Promise.allSettled(this.titleJobs)
     await this.runtime.closeAll()
     this.store.close()

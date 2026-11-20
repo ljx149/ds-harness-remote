@@ -104872,6 +104872,8 @@ var ManagedAgentBackend = class {
     });
   }
   listeners = /* @__PURE__ */ new Set();
+  principalTimer;
+  publishedPrincipal;
   sessions = /* @__PURE__ */ new Map();
   opening = /* @__PURE__ */ new Map();
   busy = /* @__PURE__ */ new Set();
@@ -104894,9 +104896,25 @@ var ManagedAgentBackend = class {
     return this.sessions.has(sessionId);
   }
   subscribeCatalog(callback) {
+    if (this.closedSignal.signal.aborted) return () => {
+    };
     this.listeners.add(callback);
+    this.principalTimer ??= setInterval(() => {
+      const principal = this.principal();
+      const key = principal ? JSON.stringify([principal.ownerId, principal.hostId]) : void 0;
+      if (key === this.publishedPrincipal) return;
+      this.publishedPrincipal = key;
+      this.sessions.clear();
+      for (const listener of this.listeners) listener();
+    }, 1e3);
+    this.principalTimer.unref?.();
     return () => {
       this.listeners.delete(callback);
+      if (!this.listeners.size) {
+        clearInterval(this.principalTimer);
+        this.principalTimer = void 0;
+        this.publishedPrincipal = void 0;
+      }
     };
   }
   scope(workspaceId) {
@@ -105803,6 +105821,8 @@ var ManagedAgentBackend = class {
     this.closedSignal.abort();
     this.unsubscribe();
     this.listeners.clear();
+    clearInterval(this.principalTimer);
+    this.principalTimer = void 0;
     await Promise.allSettled(this.titleJobs);
     await this.runtime.closeAll();
     this.store.close();
@@ -106267,7 +106287,7 @@ import { spawn as spawn4 } from "node:child_process";
 import { Buffer as Buffer2 } from "node:buffer";
 
 // packages/plugin/src/version.ts
-var PLUGIN_VERSION = "0.8.1-xagent.1";
+var PLUGIN_VERSION = "0.8.1-xagent.2";
 var PLUGIN_PACKAGE_NAME = "@xcoder/xagent";
 
 // packages/plugin/src/acp/adapters/cursor-process.ts
