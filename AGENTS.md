@@ -1,3 +1,7 @@
+## 2026-11-20 范围收敛（当前约定）
+
+用户明确只要会话中间层。0.8.1-xagent.3 选择性撤回高级管理面板和对外操作，保留聊天、持久化、配置、更新检测及重启修复。此前“补齐完整 Orca 高级管理矩阵”不再是当前目标；优先会话稳定性与多端验收。拆分与保留边界见 `docs/design/xagent-conversation-scope-rollback.md`。
+
 # Xagent package identity (2026-11-20)
 
 Use `@xcoder/xagent` for package/module identity and Xagent for display. Preserve `vip.xcodex.remote`, Cordis instance `xcodex-remote`, settings and credential directories. Preview publication uses tag `next`; publication and real DSH update acceptance must be reported separately.

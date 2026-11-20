@@ -461,36 +461,33 @@ describe('managed controls durability', () => {
       managementOperations: ['state', 'compact', 'fork', 'rewind', 'question.answer'], manage }))
     return { ...f, manage }
   }
-  it('deduplicates provider mutations and refuses a different payload for the same operation', async () => {
+  it('rejects retired advanced controls before starting a provider, while keeping basic capabilities', async () => {
     const f = controlled(), sessionId = await f.create()
-    await f.call('managedAgent/management', { sessionId })
-    const request = { sessionId, operation: 'compact', operationId: 'compact-once', payload: {} }
-    expect(await f.call('managedAgent/manage', request)).toEqual({ accepted: true })
-    expect(await f.call('managedAgent/manage', request)).toEqual({ accepted: true })
-    expect(f.manage.mock.calls.filter(call => call[0] === 'compact')).toHaveLength(1)
-    await expect(f.call('managedAgent/manage', { ...request, payload: { instructions: 'different' } })).rejects.toThrow('MANAGED_OPERATION_CONFLICT')
-  })
-  it('retains unknown outcomes and prevents a fresh mutation from duplicating an uncertain effect', async () => {
-    const f = controlled(), sessionId = await f.create()
-    f.manage.mockRejectedValue(new Error('transport closed after write'))
-    await expect(f.call('managedAgent/manage', { sessionId, operation: 'compact', operationId: 'uncertain', payload: {} })).rejects.toThrow('transport closed')
-    await expect(f.call('managedAgent/manage', { sessionId, operation: 'compact', operationId: 'different', payload: {} })).rejects.toThrow('MANAGED_OPERATION_OUTCOME_UNKNOWN')
-    expect(f.manage).toHaveBeenCalledTimes(1)
-  })
-  it('releases definite preflight rejection without allowing an uncertain action to be replayed', async () => {
-    const f = controlled(), sessionId = await f.create()
-    f.manage.mockRejectedValueOnce(Object.assign(new Error('unsupported instructions'), { definiteRejection: true }))
-    await expect(f.call('managedAgent/manage', { sessionId, operation: 'compact', operationId: 'invalid', payload: {} })).rejects.toThrow('unsupported')
-    expect(await f.call('managedAgent/manage', { sessionId, operation: 'compact', operationId: 'valid', payload: {} })).toEqual({ accepted: true })
-  })
-  it('rejects foreign provider IDs before crossing the adapter boundary', async () => {
-    const f = controlled(), sessionId = await f.create()
-    await expect(f.call('managedAgent/manage', { sessionId, operation: 'fork', operationId: 'fork', payload: { threadId: 'foreign' } })).rejects.toThrow('Invalid managed Agent request')
-    await expect(f.call('managedAgent/manage', { sessionId, operation: 'fork', operationId: 'fork', payload: { checkpointId: 'foreign' } })).rejects.toThrow('MANAGED_CHECKPOINT_NOT_FOUND')
+    await expect(f.call('managedAgent/management', { sessionId })).rejects.toThrow('MANAGED_CAPABILITY_UNAVAILABLE')
+    for (const operation of ['context', 'accountUsage', 'commands', 'settings', 'compact', 'fork', 'rewind', 'goal.set', 'mcp.list', 'tasks.stop', 'launch.select', 'option.set']) {
+      await expect(f.call('managedAgent/manage', { sessionId, operation, operationId: 'removed', payload: {} })).rejects.toThrow('Invalid managed Agent request')
+    }
+    expect(f.open).not.toHaveBeenCalled()
     expect(f.manage).not.toHaveBeenCalled()
-    f.setPrincipal({ ownerId: 'other', hostId: 'host' })
-    await expect(f.call('managedAgent/management', { sessionId })).rejects.toThrow('MANAGED_SESSION_NOT_FOUND')
+    expect((await f.backend.catalog())[0]!.summary.projections.values.managedAgent.capabilities).toMatchObject({ modelSelection: true, rename: true, archive: true, fork: false, rewind: false, compact: false, threadGoal: false, contextUsage: false })
+    await f.prompt(sessionId)
+    expect(f.send).toHaveBeenCalledTimes(1)
   })
+  it('still answers Agent questions once and refuses changed replay payloads', async () => {
+    const f = controlled(), sessionId = await f.create()
+    const request = { sessionId, operation: 'question.answer', operationId: 'answer-once', payload: { requestId: 'question-1', answers: { choice: ['yes'] } } }
+    expect(await f.call('managedAgent/manage', request)).toEqual({ accepted: true })
+    expect(await f.call('managedAgent/manage', request)).toEqual({ accepted: true })
+    expect(f.manage).toHaveBeenCalledTimes(1)
+    await expect(f.call('managedAgent/manage', { ...request, payload: { requestId: 'question-1', answers: { choice: ['no'] } } })).rejects.toThrow('MANAGED_OPERATION_CONFLICT')
+  })
+  it('preserves legacy unknown management receipts instead of replaying a message', async () => {
+    const f = controlled(), sessionId = await f.create()
+    f.store.beginOperation({ ownerId: 'owner', hostId: 'host', workspaceId: 'a' }, sessionId, { operationId: 'old', kind: 'manage:rewind', input: {} })
+    await expect(f.prompt(sessionId)).rejects.toThrow('MANAGED_SESSION_BUSY')
+    expect(f.send).not.toHaveBeenCalled()
+  })
+
   it('queues explicitly while running and dispatches once after completion', async () => {
     const f = fixture(), sessionId = await f.create()
     await f.prompt(sessionId)

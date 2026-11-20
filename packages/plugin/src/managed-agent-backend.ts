@@ -2,8 +2,7 @@ import { ManagedLaunchRegistry } from './managed-agents/launch.js'
 import type { AttachmentStore, AdmittedPromptContentPart } from '@deepseek-ai/dsh-attachment'
 import { ManagedAssistantStream } from './managed-agents/stream.js'
 import type { ManagedTitleInput } from './managed-agents/title.js'
-import { managementRequest, managementPayload, managementReads, managementWhileBusy } from './managed-agents/management-validation.js'
-import type { ManagedManagementOperation } from './managed-agents/management.js'
+import { managementRequest, managementPayload } from './managed-agents/management-validation.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { ManagedSessionStore, type ManagedSession, type ManagedSessionScope, type JsonValue } from './managed-session-store/index.js'
@@ -31,7 +30,6 @@ export class ManagedAgentBackend {
   private readonly queuePumps = new Set<string>()
   private readonly steering = new Set<string>()
   private readonly managementFlights = new Set<string>()
-  private readonly liveOperations = new Map<string, readonly ManagedManagementOperation[]>()
   private readonly questions = new Map<string, Map<string, { requestId: string; title: string; questions: unknown }>>()
   private readonly optionFlights = new Set<string>()
   private readonly approvals = new Map<string, { session: ManagedSession; requestId: string; choices: string[]; title: string; data: unknown }>()
@@ -154,7 +152,6 @@ export class ManagedAgentBackend {
   /** Transport capabilities describe implemented endpoints, not Orca adapter aspirations.
    * Registration alone does not prove a CLI is installed or its credentials work. */
   private agentIdentity(agentId: string, sessionId?: string) {
-    const operations = sessionId ? this.liveOperations.get(sessionId) ?? [] : []
     const definition = this.runtime.registry.definition(agentId)
     return { agentId, name: definition?.title ?? agentId, icon: definition?.icon ?? agentId,
       registered: definition !== null, availability: 'unverified' as const,
@@ -162,8 +159,8 @@ export class ManagedAgentBackend {
         textPrompts: true, imagePrompts: Boolean(this.services.attachments), fileAttachments: false,
         steering: sessionId ? this.steering.has(sessionId) : false, queueWhileBusy: true, modelSelection: true,
         reasoningEffort: agentId === 'codex', rename: true, archive: true, unarchive: true,
-        pin: false, move: false, fork: operations.includes('fork'), rewind: operations.includes('rewind'), compact: operations.includes('compact'),
-        threadGoal: operations.includes('goal.set'), contextUsage: operations.includes('context'),
+        pin: false, move: false, fork: false, rewind: false, compact: false,
+        threadGoal: false, contextUsage: false,
       },
     }
   }
@@ -368,7 +365,8 @@ export class ManagedAgentBackend {
     }
     const address = request.address as { sessionId?: string; id?: string } | undefined
     const session = await this.requireSession(id.parse(request.sessionId ?? address?.sessionId ?? address?.id), signal)
-    if (endpoint === 'managedAgent/management' || endpoint === 'managedAgent/manage') return this.management(session, endpoint, request, signal)
+    if (endpoint === 'managedAgent/management') throw new Error('MANAGED_CAPABILITY_UNAVAILABLE')
+    if (endpoint === 'managedAgent/manage') return this.chatControl(session, request, signal)
     if (endpoint === 'workspace/archiveSession' || endpoint === 'workspace/unarchiveSession') {
       const archived = endpoint === 'workspace/archiveSession'
       const native = await this.services.nativeArchived?.(signal) ?? []
@@ -596,47 +594,11 @@ export class ManagedAgentBackend {
   private launchSelection(session: ManagedSession): { profileId: string; locationId: string; ownerFingerprint?: string } {
     return this.records(session).filter(record => record.event.type === 'managed/launch').at(-1)?.event.data as { profileId: string; locationId: string; ownerFingerprint?: string } ?? { profileId: 'host', locationId: 'native' }
   }
-  private async management(session: ManagedSession, endpoint: string, request: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
-    const launches = this.services.launches
-    const selected = this.launchSelection(session)
-    if (launches && !session.providerSessionId && endpoint === 'managedAgent/management') {
-      return { operations: ['launch.options', 'launch.select', 'launch.open'], busy: false, state: { lifecycle: this.runtime.status(session.id), questions: [], checkpoints: [] } }
-    }
-    if (launches && endpoint === 'managedAgent/manage' && ['launch.options', 'launch.select', 'launch.open'].includes(String(request.operation))) {
-      const input = managementRequest.parse(request)
-      const payload = managementPayload(input.operation, input.payload)
-      if (input.operation === 'launch.options') {
-        const options = launches.options(session.agentId as 'claude' | 'codex', session.workspacePath)
-        return { profiles: options.profiles.map(profile => ({ id: profile.id, name: profile.label })), locations: options.locations.map(location => ({ id: location.id, name: location.label })), selectedProfileId: selected.profileId, selectedLocationId: selected.locationId, canSelect: !session.providerSessionId && !this.opening.has(session.id) && !this.managementFlights.has(session.id) }
-      }
-      if (input.operation === 'launch.open') {
-        const operationId = id.parse(input.operationId)
-        const admission = this.store.beginOperation(session, session.id, { operationId, kind: 'launch-open', input: {} })
-        if (!admission.execute) {
-          if (admission.receipt.status === 'completed') return admission.receipt.result
-          throw new Error('MANAGED_OPERATION_OUTCOME_UNKNOWN')
-        }
-        await this.connect(session)
-        this.store.completeOperation(session, session.id, operationId, 'completed', { ready: true })
-        this.assertPrincipal(session, signal)
-        return { ready: true }
-      }
-      if (session.providerSessionId || this.opening.has(session.id) || this.busy.has(session.id) || this.managementFlights.has(session.id)) throw new Error('MANAGED_LAUNCH_ALREADY_BOUND')
-      const selection = { profileId: String(payload.profileId), locationId: String(payload.locationId) }
-      const plan = launches.resolve({ sessionId: session.id, agent: session.agentId, workspacePath: session.workspacePath, selection })
-      const operationId = id.parse(input.operationId)
-      const admission = this.store.beginOperation(session, session.id, { operationId, kind: 'launch-select', input: selection })
-      if (!admission.execute) {
-        if (admission.receipt.status !== 'completed') throw new Error('MANAGED_OPERATION_OUTCOME_UNKNOWN')
-        return admission.receipt.result
-      }
-      this.append(session, 'managed/launch', { ...selection, ownerFingerprint: plan.ownerFingerprint }, `launch:${operationId}`)
-      this.store.completeOperation(session, session.id, operationId, 'completed', selection)
-      return selection
-    }
-    if (endpoint === 'managedAgent/manage' && (request.operation === 'queue.run' || request.operation === 'queue.remove')) {
-      const input = managementRequest.parse(request)
-      const payload = managementPayload(input.operation, input.payload)
+  /** Only message delivery and Agent questions belong to the conversation bridge. */
+  private async chatControl(session: ManagedSession, request: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
+    const input = managementRequest.parse(request)
+    const payload = managementPayload(input.operation, input.payload)
+    if (input.operation === 'queue.run' || input.operation === 'queue.remove') {
       const operationId = id.parse(input.operationId)
       const prior = this.store.getOperation(session, session.id, operationId)
       if (!prior) {
@@ -656,103 +618,23 @@ export class ManagedAgentBackend {
     }
     const connection = await this.connect(session)
     this.assertPrincipal(session, signal)
-    const operations: ManagedManagementOperation[] = ['queue.run', 'queue.remove', ...(connection.managementOperations ?? []), ...(launches ? ['launch.options' as const] : [])]
-    const checkpoints = this.records(session).filter(record => record.event.type === 'managed/checkpoint').map(record => record.event.data as { checkpointId: string; throughSeq: number })
-    this.liveOperations.set(session.id, operations)
-    if (endpoint === 'managedAgent/management') {
-      const state = operations.includes('state') ? await connection.manage?.('state', {}) : {}
-      this.assertPrincipal(session, signal)
-      return { operations, busy: this.busy.has(session.id) || (state as { idle?: string } | null)?.idle === 'busy', state: {
-        ...(state && typeof state === 'object' ? state : {}),
-        queued: this.queued(session).map(item => ({ requestId: item.requestId, state: item.state, text: item.content.filter(part => part.type === 'text').map(part => part.text).join('\n').slice(0, 1000) })),
-        lifecycle: this.runtime.status(session.id),
-        unresolvedOperations: this.store.listOperations(session, session.id).filter(receipt => (receipt.status === 'pending' || receipt.status === 'unknown') && (receipt.kind.startsWith('manage:') || ['send', 'steer', 'create-provider', 'launch-open'].includes(receipt.kind))).map(receipt => ({ operationId: receipt.operationId, operation: receipt.kind, status: receipt.status })),
-        checkpoints: checkpoints.filter(point => !Array.isArray((state as { checkpoints?: unknown[] } | null)?.checkpoints) || ((state as { checkpoints: Array<{ id?: string }> }).checkpoints).some(provider => provider.id === point.checkpointId)).map((point, index) => ({ id: point.checkpointId, title: `Checkpoint ${index + 1}` })),
-        questions: [...(this.questions.get(session.id)?.values() ?? [])],
-      } }
-    }
-    const input = managementRequest.parse(request)
-    const payload = managementPayload(input.operation, input.payload)
-    if (!operations.includes(input.operation) || !connection.manage) throw new Error('MANAGED_CAPABILITY_UNAVAILABLE')
-    if (input.operation === 'state') return this.management(session, 'managedAgent/management', { sessionId: session.id }, signal)
-    if (managementReads.has(input.operation)) {
-      const result = await connection.manage(input.operation, payload)
-      this.assertPrincipal(session, signal)
-      return result
-    }
-    if ((input.operation === 'rewind' || input.operation === 'fork') && payload.checkpointId !== undefined && !checkpoints.some(point => point.checkpointId === payload.checkpointId)) throw new Error('MANAGED_CHECKPOINT_NOT_FOUND')
+    if (!connection.manage || !connection.managementOperations?.includes('question.answer')) throw new Error('MANAGED_CAPABILITY_UNAVAILABLE')
     const operationId = id.parse(input.operationId)
     if (this.managementFlights.has(session.id) || this.optionFlights.has(session.id)) throw new Error('MANAGED_SESSION_BUSY')
-    if (!managementWhileBusy.has(input.operation) && this.busy.has(session.id)) throw new Error('MANAGED_SESSION_BUSY')
-    // Any unresolved mutation blocks a second mutation. An uncertain provider
-    // outcome must be reconciled, never guessed from a disconnected requester.
+    // Keep legacy unknown advanced receipts blocking mutations: removing the UI
+    // does not prove an earlier provider operation failed or permit replay.
     if (this.store.listOperations(session, session.id).some(receipt => receipt.operationId !== operationId && receipt.kind.startsWith('manage:') && (receipt.status === 'pending' || receipt.status === 'unknown'))) throw new Error('MANAGED_OPERATION_OUTCOME_UNKNOWN')
     this.managementFlights.add(session.id)
     try {
-      const admission = this.store.beginOperation(session, session.id, { operationId, kind: `manage:${input.operation}`, input: payload as JsonValue })
+      const admission = this.store.beginOperation(session, session.id, { operationId, kind: 'manage:question.answer', input: payload as JsonValue })
       if (!admission.execute) {
         if (admission.receipt.status === 'completed') return admission.receipt.result
-        throw new Error(admission.receipt.status === 'failed' ? 'MANAGED_OPERATION_REJECTED' : 'MANAGED_OPERATION_OUTCOME_UNKNOWN')
+        throw new Error('MANAGED_OPERATION_OUTCOME_UNKNOWN')
       }
-      this.assertPrincipal(session, signal)
-      const raw = await connection.manage(input.operation, { ...payload, operationId })
-      // A provider may already have acted even if the caller disconnected. Finish
-      // the Host journal; transport authorization still controls response delivery.
-      let result = JSON.parse(JSON.stringify(raw ?? { accepted: true })) as JsonValue
-      if (input.operation === 'fork') {
-        const providerSessionId = id.parse((raw as { providerSessionId?: unknown })?.providerSessionId)
-        if (providerSessionId === session.providerSessionId) throw new Error('MANAGED_FORK_ID_CONFLICT')
-        const entries: Array<{ eventId: string; payload: JsonValue }> = [{ eventId: 'fork-launch', payload: { type: 'managed/launch', data: this.launchSelection(session) } }]
-        const permission = this.records(session).filter(record => record.event.type === 'managed/permission').at(-1)
-        if (permission) entries.push({ eventId: 'fork-permission', payload: JSON.parse(JSON.stringify({ type: permission.event.type, data: permission.event.data })) as JsonValue })
-        const cutoff = payload.checkpointId === undefined ? Infinity : checkpoints.find(point => point.checkpointId === payload.checkpointId)!.throughSeq
-        let active = [] as NativeRecord[]
-        for (const record of this.records(session)) {
-          if (record.event.seq > cutoff) break
-          if (record.event.type === 'managed/rewind') active = active.filter(prior => prior.event.seq <= (record.event.data as { throughSeq: number }).throughSeq)
-          else if (!record.event.type.startsWith('managed/')) active.push(record)
-        }
-        const mapping = new Map<number, number>()
-        for (const record of active) {
-          entries.push({ eventId: `fork-record:${record.event.seq}`, payload: JSON.parse(JSON.stringify({ type: record.event.type, data: record.event.data })) as JsonValue })
-          mapping.set(record.event.seq, entries.length - 1)
-        }
-        for (const point of checkpoints.filter(point => point.throughSeq <= cutoff)) {
-          const preceding = active.filter(record => record.event.seq <= point.throughSeq).at(-1)
-          if (preceding || point.throughSeq === -1) entries.push({ eventId: `checkpoint:${point.checkpointId}`, payload: { type: 'managed/checkpoint', data: { checkpointId: point.checkpointId, throughSeq: preceding ? mapping.get(preceding.event.seq)! : -1 } } })
-        }
-        const selected = this.selection(session)
-        if (selected) entries.push({ eventId: 'fork-model', payload: { type: 'model/selection', data: selected } })
-        const child = this.store.commitFork(session, session.id, operationId, providerSessionId, entries)
-        this.sessions.set(child.id, child)
-        result = { sessionId: child.id, providerSessionId }
-      } else if (input.operation === 'rewind') {
-        const value = raw as { providerSessionId?: unknown; replacesProviderSessionId?: unknown }
-        const replacement = id.parse(value.providerSessionId ?? session.providerSessionId)
-        if (value.replacesProviderSessionId !== undefined && value.replacesProviderSessionId !== session.providerSessionId) throw new Error('MANAGED_PROVIDER_SESSION_CONFLICT')
-        await this.runtime.close(session.id)
-        this.store.commitProviderReplacement(session, session.id, operationId, session.providerSessionId!, replacement, result, {
-          eventId: `rewind:${operationId}`, payload: { type: 'managed/rewind', data: { checkpointId: String(payload.checkpointId), throughSeq: checkpoints.find(point => point.checkpointId === payload.checkpointId)!.throughSeq, operationId } },
-        })
-        this.questions.delete(session.id)
-        this.liveOperations.delete(session.id)
-        return result
-      } else if (input.operation === 'question.answer') {
-        this.questions.get(session.id)?.delete(String(payload.requestId))
-      } else if (input.operation === 'rename') {
-        this.rename(session, String(payload.title), 'user')
-      } else if (input.operation === 'option.set') {
-        if (payload.key === 'permissionMode') {
-          this.append(session, 'managed/permission', { permissionMode: payload.value }, `permission:${operationId}`)
-          if (session.agentId === 'codex') { await this.runtime.close(session.id); await this.connect(session) }
-        }
-        if (payload.key === 'model' || payload.key === 'reasoningEffort') {
-          const selected = this.selection(session) ?? (connection.defaultModel ? { provider: session.agentId, ...connection.defaultModel } : undefined)
-          if (selected) this.append(session, 'model/selection', { ...selected, [String(payload.key)]: payload.value })
-        }
-      }
+      const raw = await connection.manage('question.answer', { ...payload, operationId })
+      const result = JSON.parse(JSON.stringify(raw ?? { accepted: true })) as JsonValue
+      this.questions.get(session.id)?.delete(String(payload.requestId))
       this.store.completeOperation(session, session.id, operationId, 'completed', result)
-      for (const callback of this.listeners) callback()
       return result
     } catch (error) {
       if ((error as { definiteRejection?: boolean } | null)?.definiteRejection === true) this.store.completeOperation(session, session.id, operationId, 'failed', { code: 'MANAGED_OPERATION_REJECTED' })

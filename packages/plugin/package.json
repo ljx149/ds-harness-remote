@@ -1,6 +1,6 @@
 {
   "name": "@xcoder/xagent",
-  "version": "0.8.1-xagent.2",
+  "version": "0.8.1-xagent.3",
   "description": "P2P-based, end-to-end encrypted remote access to DeepSeek Harness, CodeX, Claude Code, Pi, and other workspaces from web and mobile clients.",
   "keywords": [
     "deepseek",

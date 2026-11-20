@@ -2,7 +2,7 @@
 
 ## Xagent scoped package (2026-11-20)
 
-Package: `@xcoder/xagent`, display name: **Xagent**, preview version: `0.8.1-xagent.2`.
+Package: `@xcoder/xagent`, display name: **Xagent**, preview version: `0.8.1-xagent.3`.
 Publication is pending npm organization access; do not treat this name as an available download yet.
 After publication, install `@xcoder/xagent@next` through DSH's plugin package installer.
 An existing URL/tgz installation needs one migration to the registry package before DSH can update it from npm.

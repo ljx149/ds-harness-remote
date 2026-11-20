@@ -1,102 +1,45 @@
-> 2026-11-20 修复版：`0.8.1-xagent.2` 修复重启时认证恢复后不刷新会话目录；见 [修复和回归记录](design/xagent-restart-catalog-fix.md)。下文能力验证历史保留，新包安装地址已更新。
+# Xagent 当前范围与安装
 
-# Xagent 当前功能、完成程度与安装
+更新：2026-11-20。测试版 `@xcoder/xagent@0.8.1-xagent.3`；分支 `feat/orca-agent-management`，源码提交以 Release 标签为准。
 
-更新：2026-11-20。当前测试包 `@xcoder/xagent@0.8.1-xagent.2`，显示名 **Xagent**。
-代码分支：`feat/orca-agent-management`；原 0.8.1-xagent.1 基线提交 `a3f9789556f2a7d8917ffa201109380beeadc989`，修复版提交以 Release 标签为准。
+## 现在做什么
 
-## 当前做到哪里
+Xagent 是 DSH 的多 Agent 会话中间层，不是另一套 Agent 控制台，也不需要运行 Orca 桌面应用。
 
-已经把 Agent 管理代码放入 DSH 插件，使用 Claude SDK 和 Codex app-server 管理会话，无需安装或运行 Orca 桌面应用。原生侧栏承载会话，插件页面负责登录和设备管理。
+- 当前工作目录新建和继续 Claude Code/Codex 会话，与 DSH 会话并列，按 Agent 显示标识。
+- 会话按工作区隔离，不导入插件之外的历史；支持自动命名、重命名、归档/恢复。
+- 使用电脑上的 CLI 配置，保留原生模型/推理强度选择、发送、停止及权限审批接口。
+- 保存 Provider 会话身份、消息和操作回执；队列、去重、防重复启动和身份隔离继续保留。
+- 沿用账号登录、设备管理和多端通信；保留重启后登录恢复触发会话目录刷新的修复。
 
-当前是**主要能力已实现的测试版本**，不是完整 Orca 框架迁移及所有平台验收完成。下面严格区分源码实现、真实验证和未完成项，不用单一百分比表示进度。
+## 这版回退了什么
 
-## 已实现的功能
+删除 Agent 管理面板，收回手动上下文/额度/命令查询、压缩、回退/分叉、线程目标、MCP 和后台任务管理等对外操作。Agent 自身仍可执行其内部行为。
 
-| 功能 | 当前状态及边界 |
-| --- | --- |
-| 登录和设备 | 沿用 Xcodex 账号、浏览器授权、设备管理及加密通信；默认服务 `https://agent.xcodex.vip`。本次包更名不更改服务端协议。 |
-| 原生多 Agent 会话 | 当前工作区新建 Claude Code/Codex 会话，与 DSH 会话并列；不同工作区隔离，不导入插件外的 Agent 历史。外部 Agent 显示 Logo，电脑上的原生 DSH 会话不显示 Logo。 |
-| 会话整理 | 未发送的空会话处理、模型摘要命名、手动名称保护、归档及恢复已实现；命名失败有回退。归档不等于物理删除数据。 |
-| 本机配置 | 本机 profile、Claude/Codex home 与账号身份绑定；按实际 Provider 能力提供模型/配置选项，不保证所有 CLI 版本具有相同选项。 |
-| 消息与续聊 | 流式回复、增量/最终块去重、图片输入路径、追加指令、结构化问题、持久队列及历史重放；固定 Provider 会话身份。结果未知时禁止自动重复发送。 |
-| 管理界面 | 原生会话标题区管理入口；上下文、配置、压缩、检查点、回退/分叉、目标、MCP、后台任务等按能力显示或拒绝不支持的操作。不是每个 Agent 都支持所有动作。 |
-| 一致性 | 分叉的子会话身份/历史/回执原子保存；回退身份/审计标记/回执原子保存。回退保留原消息审计历史。 |
-| 生命周期 | 防并发重复启动、过期实例隔离、等待进程退出证据；Linux 持久进程归属保护。不能证明旧进程已退出时阻止重复启动。 |
-| 空闲维护 | 可配置定时空闲回收，默认关闭；保护队列、审批、未知操作和后台任务。能力不足或状态不确定时不回收。 |
-| 包与更新检查 | 包名 `@xcoder/xagent`，新增 `xagent` 命令并保留旧别名；优先检查 npm next/latest，回退本仓库 GitHub Release。更新提示已实现，不是无人值守自动安装。 |
+不是整笔撤销混合提交：聊天依赖的底层适配与持久化兼容保留。详见 [逐提交拆分说明](design/xagent-conversation-scope-rollback.md)。
 
-## 实际验证到了哪里
+## 仍需完成
 
-- Linux x86_64、Node.js 24.9.0；Claude Code 2.1.179、Codex 0.153.4。
-- 真实 Claude/Codex 启动、发送和回复、设置/命令读取、检查点、新测试会话分叉及正常退出通过；Codex 上下文读取通过。
-- 本机 Claude CLI 对部分新 SDK 控制请求不响应，已加短超时及兼容降级；上下文明确显示不可用，不冒充成功。
-- 早期隔离 DSH 0.2.2 页面验证过侧栏、工作区隔离、Logo、新建/发送/回复及模型菜单，但使用测试 Provider，不能替代当前包在用户电脑上的真实验收。
-- 当前版本全量 94 文件 / 801 项测试通过；随后新增包名自保护场景，相关 37 项测试单独复验通过。类型检查、构建、包校验通过。
-- 当前 tgz 仓库外 npm 试装、命令帮助、Host 模块加载和发布 dry-run 通过。试装禁用了安装脚本与可选原生依赖；不算原生 WebRTC 或完整 DSH 安装验收。
-- 这次没有改动生产服务、Nginx、DNS、证书或用户正在运行的任务。
+- 用户电脑真实安装升级、退出重开后旧会话显示及继续聊天验证；本机测试不等于用户数据已恢复。
+- 手机/电脑同会话双向消息、断网恢复、单设备撤权真实联调。
+- 跨平台进程恢复及未知操作结果的安全核对流程。
+- npm 发布及 DSH 内更新。当前只有版本检测，不能保证点一下完成安装。
+- 结构化问题回答协议保留，但本轮没有新增专用问题界面或完成其真机验收。
 
-## 还差什么
+此前 Linux Node 24.9.0 上的 Claude/Codex 真实启动/回复已通过；不等于 macOS/Windows 和全部多端场景通过。高级面板不再作为后续待补全目标。
 
-### 仍需开发
+## 安装测试版
 
-1. macOS/Windows 持久进程身份与退出证明；崩溃后仍在运行进程的安全接管。Linux 现有防重启保护也不等于完整崩溃恢复。
-2. 发送/修改结果未知时的核对和恢复界面。当前保守阻断，不能直接清除回执重发。
-3. 完成包来源迁移和发布链路，使旧 tgz 安装迁移后可使用 DSH 原生 npm 更新；验证升级失败回滚与运行任务保护。
+[发行页](https://github.com/ljx149/ds-harness-remote/releases/tag/xagent-0.8.1-xagent.3)
 
-### 已有实现，但还没完整验收
+[下载 tgz](https://github.com/ljx149/ds-harness-remote/releases/download/xagent-0.8.1-xagent.3/xcoder-xagent-0.8.1-xagent.3.tgz)
 
-- 用户电脑真实 DSH 中的 Agent 选择、模型菜单、命名/归档和管理面板。
-- 手机/平板接回同一会话、双向消息、断网重连不重复、跨工作区隔离、撤销单设备且其他设备/任务不受影响。
-- 真实图片、工具审批、回退后多端续聊、目标自主执行、MCP OAuth、运行任务的停止/后台化、额度限制触发。
-- macOS/Windows 实装与跨平台完整能力矩阵。一个 npm 包可跨平台分发，不等于所有平台已经验收。
-- npm 组织发布权限尚未取得，未在 npm 公开发布；不能声称已支持直接按包名下载安装或已验证自动升级。
-
-旧文档中的“尚未接自动空闲维护”和“Codex 未成功启动”是之前版本的记录，已由上面的新结果更新；其余未完成项仍然保留。
-
-## 现在如何安装
-
-### 1. 下载当前测试包
-
-GitHub 测试发行页：
-https://github.com/ljx149/ds-harness-remote/releases/tag/xagent-0.8.1-xagent.2
-
-直接下载：
-https://github.com/ljx149/ds-harness-remote/releases/download/xagent-0.8.1-xagent.2/xcoder-xagent-0.8.1-xagent.2.tgz
-
-SHA-256：
-`9dad5566dea59bdc19ee6a69f769d73d97050573a4ffb399720b87467fca0018`
-
-已从上述地址不带凭据下载，SHA-256 与试装原包一致。
-
-### 2. 处理旧测试插件
-
-先结束自己电脑上正在运行的 Agent 任务，再在 DSH 插件管理器停用旧 Xcodex 测试插件，避免新旧包同时加载。保留 `~/.dsh/xcodex-remote/`（或自定义 DSH_HOME 下对应目录）和已有配置，不删除配对数据。此次保留 Component、Cordis 实例和设置标识，目标是沿用已有身份；真实升级仍需本机验证。
-
-### 3. 安装下载的文件
-
-在安装了 DSH 的电脑终端执行，替换为实际下载文件路径：
+先结束本机正在运行的 Agent 任务，再更新插件；不要清理账号和会话数据。若仍使用旧包名 Xcodex Remote，先停用旧测试插件，避免同时加载。
 
 ```sh
-dsh plugin --profile web add -w /完整路径/xcoder-xagent-0.8.1-xagent.2.tgz
+dsh plugin --profile web add -w /完整路径/xcoder-xagent-0.8.1-xagent.3.tgz
 ```
 
-这里 `web` 是既有 Web/桌面实例使用的 profile；使用自定义 profile 时替换为实际值。命令安装到 DSH 插件系统，单独 `npm install -g` 不等于 DSH 已加载该插件。必要时在任务结束后重新打开对应 DSH 实例。
+自定义 profile 请替换 `web`；更新后必要时重开对应 DSH 实例。此包还未发布 npm，不能按 npm 包名下载。单独 npm 全局安装也不等于注册进 DSH。
 
-安装后检查插件显示 **Xagent / 0.8.1-xagent.2**，确认已有登录/设备还在；未登录时使用 Xcodex 账号授权。在目标工作区的新建 Agent 入口选择 Claude Code 或 Codex。本机对应 CLI 及其模型配置仍需可用。
-
-### 4. 后续更新
-
-当前 npm 未发布，所以现在不要使用 `npm install @xcoder/xagent`。取得组织权限并发布后，目标是在 DSH 中按包名安装：
-
-```sh
-dsh plugin --profile web add -w @xcoder/xagent@next
-```
-
-这条是**发布完成后的方式**，不是当前已验证可下载的命令。旧 URL/tgz 用户需要一次来源迁移；之后 DSH 原生更新还需真实验证。预览版使用 next，不会把它自动当作稳定 latest。
-
-## 详细记录
-
-- [0.8 管理能力与真实 CLI 验证](design/orca-management-0.8-validation.md)
-- [发布和恢复计划、当前包验证](design/xagent-release-and-recovery-plan.md)
-- [统一待办](TODO.md)
+本轮测试、校验值及发布记录见上述拆分文档；历史验收见 [0.8 记录](design/orca-management-0.8-validation.md) 和 [重启修复记录](design/xagent-restart-catalog-fix.md)。

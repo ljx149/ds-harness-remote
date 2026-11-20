@@ -40168,10 +40168,10 @@ var require_websocket_server = __commonJS({
             process.nextTick(emitClose, this);
           }
         } else {
-          const server2 = this._server;
+          const server = this._server;
           this._removeListeners();
           this._removeListeners = this._server = null;
-          server2.close(() => {
+          server.close(() => {
             emitClose(this);
           });
         }
@@ -40356,17 +40356,17 @@ var require_websocket_server = __commonJS({
       }
     };
     module.exports = WebSocketServer2;
-    function addListeners(server2, map2) {
-      for (const event of Object.keys(map2)) server2.on(event, map2[event]);
+    function addListeners(server, map2) {
+      for (const event of Object.keys(map2)) server.on(event, map2[event]);
       return function removeListeners() {
         for (const event of Object.keys(map2)) {
-          server2.removeListener(event, map2[event]);
+          server.removeListener(event, map2[event]);
         }
       };
     }
-    function emitClose(server2) {
-      server2._state = CLOSED;
-      server2.emit("close");
+    function emitClose(server) {
+      server._state = CLOSED;
+      server.emit("close");
     }
     function socketOnError() {
       this.destroy();
@@ -40385,11 +40385,11 @@ var require_websocket_server = __commonJS({
 ` + Object.keys(headers).map((h10) => `${h10}: ${headers[h10]}`).join("\r\n") + "\r\n\r\n" + message
       );
     }
-    function abortHandshakeOrEmitwsClientError(server2, req, socket, code, message, headers) {
-      if (server2.listenerCount("wsClientError")) {
+    function abortHandshakeOrEmitwsClientError(server, req, socket, code, message, headers) {
+      if (server.listenerCount("wsClientError")) {
         const err5 = new Error(message);
         Error.captureStackTrace(err5, abortHandshakeOrEmitwsClientError);
-        server2.emit("wsClientError", err5, socket, req);
+        server.emit("wsClientError", err5, socket, req);
       } else {
         abortHandshake(socket, code, message, headers);
       }
@@ -45459,19 +45459,19 @@ function addressFromSocket(socket) {
   }
   return [socket.remoteAddress, socket.remotePort];
 }
-async function waitForListening(server2, host, port) {
+async function waitForListening(server, host, port) {
   return await new Promise((resolve12, reject) => {
     const onError = (error62) => {
-      server2.off("listening", onListening);
+      server.off("listening", onListening);
       reject(error62);
     };
     const onListening = () => {
-      server2.off("error", onError);
+      server.off("error", onError);
       resolve12();
     };
-    server2.once("error", onError);
-    server2.once("listening", onListening);
-    server2.listen({
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen({
       host,
       port: port ?? 0,
       exclusive: true
@@ -46586,9 +46586,9 @@ function clonePeerConfiguration(config2) {
       audio: config2.headerExtensions.audio ? [...config2.headerExtensions.audio] : void 0,
       video: config2.headerExtensions.video ? [...config2.headerExtensions.video] : void 0
     },
-    iceServers: config2.iceServers.map((server2) => ({
-      ...server2,
-      urls: Array.isArray(server2.urls) ? [...server2.urls] : server2.urls
+    iceServers: config2.iceServers.map((server) => ({
+      ...server,
+      urls: Array.isArray(server.urls) ? [...server.urls] : server.urls
     })),
     icePortRange: config2.icePortRange ? [...config2.icePortRange] : void 0,
     iceAdditionalHostAddresses: config2.iceAdditionalHostAddresses ? [...config2.iceAdditionalHostAddresses] : void 0,
@@ -55132,13 +55132,13 @@ var init_lib = __esm({
       socketFamily;
     };
     TurnRedirectError = class extends Error {
-      constructor(reason, server2, alternate, cause) {
+      constructor(reason, server, alternate, cause) {
         super(
-          `TURN Allocate to ${server2[0]}:${server2[1]} returned 300 (Try Alternate)` + (alternate ? ` to ${alternate[0]}:${alternate[1]}` : "") + `; redirect not followed: ${reason}`,
+          `TURN Allocate to ${server[0]}:${server[1]} returned 300 (Try Alternate)` + (alternate ? ` to ${alternate[0]}:${alternate[1]}` : "") + `; redirect not followed: ${reason}`,
           { cause }
         );
         this.reason = reason;
-        this.server = server2;
+        this.server = server;
         this.alternate = alternate;
       }
       reason;
@@ -56209,14 +56209,14 @@ var init_lib = __esm({
       }
     };
     TurnProtocol = class _TurnProtocol {
-      constructor(server2, username, password, lifetime, transport, options = {}) {
-        this.server = server2;
+      constructor(server, username, password, lifetime, transport, options = {}) {
+        this.server = server;
         this.username = username;
         this.password = password;
         this.lifetime = lifetime;
         this.transport = transport;
         this.options = options;
-        this.configuredServer = server2;
+        this.configuredServer = server;
         this.channelRefreshTime = this.options.channelRefreshTime ?? DEFAULT_CHANNEL_REFRESH_TIME;
       }
       server;
@@ -56346,14 +56346,14 @@ var init_lib = __esm({
        * unauthenticated Allocate and its own 401 realm/nonce; username and
        * password are kept.
        */
-      async switchServer({ server: server2, domain: domain2 }) {
+      async switchServer({ server, domain: domain2 }) {
         let endpoint;
         if (isStreamTransport(this.transport)) {
           const previous = this.transport;
           previous.onData = () => {
           };
           await previous.close();
-          const reconnected = await this.options.reconnect(server2, domain2);
+          const reconnected = await this.options.reconnect(server, domain2);
           if (this.closed) {
             reconnected.onData = () => {
             };
@@ -56363,14 +56363,14 @@ var init_lib = __esm({
           this.transport = reconnected;
           this.tcpBuffer = Buffer.alloc(0);
           this.attachTransport();
-          endpoint = this.transport.remoteAddress ?? server2;
+          endpoint = this.transport.remoteAddress ?? server;
         } else {
           endpoint = await resolveRequestAddress(
-            server2,
+            server,
             this.transport.addressFamily ?? 0
           );
         }
-        this.server = server2;
+        this.server = server;
         this.pinnedServerEndpoint = endpoint;
         this.serverEndpointSelection = Promise.resolve(endpoint);
         this.nonce = void 0;
@@ -68175,11 +68175,11 @@ var init_lib = __esm({
         return { state: this.capture(), resources: this.resources.copy() };
       }
       /** Undo one failed description operation back to its checkpoint. */
-      async restoreCheckpoint(checkpoint2) {
-        const before = checkpoint2.resources;
+      async restoreCheckpoint(checkpoint) {
+        const before = checkpoint.resources;
         const kept = new Set(before.speculativeTransports);
         await this.restoreState(
-          checkpoint2.state,
+          checkpoint.state,
           [...this.resources.remoteCreated].filter(
             (transceiver) => !before.remoteCreated.has(transceiver)
           ),
@@ -71100,7 +71100,7 @@ var init_lib = __esm({
           this.negotiation.validate();
           this.negotiation.prepare();
           const openedHere = remoteSdp.type === "offer";
-          const checkpoint2 = this.negotiation.checkpoint();
+          const checkpoint = this.negotiation.checkpoint();
           try {
             if (remoteSdp.type === "answer" || remoteSdp.type === "pranswer") {
               this.negotiation.discardStagedRemoteAnswer();
@@ -71173,7 +71173,7 @@ var init_lib = __esm({
               if (this.signalingState !== "stable")
                 this.setSignalingState("stable");
             } else {
-              await this.negotiation.restoreCheckpoint(checkpoint2);
+              await this.negotiation.restoreCheckpoint(checkpoint);
             }
             throw error62;
           }
@@ -86610,15 +86610,15 @@ function bucketFor(state2, inst) {
 var handoff;
 var open = [];
 var memo = {
-  alloc(_inst, payload, empty2) {
+  alloc(_inst, payload, empty) {
     const bucket = handoff;
     if (!bucket)
-      return empty2;
+      return empty;
     handoff = void 0;
-    const entry = { value: empty2, issues: null };
+    const entry = { value: empty, issues: null };
     bucket.set(payload.value, entry);
     open.push(entry);
-    return empty2;
+    return empty;
   },
   guard(inst) {
     var _a4;
@@ -101672,79 +101672,18 @@ var ManagedAssistantStream = class {
   }
 };
 
-// packages/plugin/src/managed-agents/management.ts
-var managedManagementOperations = [
-  "queue.run",
-  "queue.remove",
-  "state",
-  "context",
-  "accountUsage",
-  "commands",
-  "settings",
-  "option.set",
-  "launch.options",
-  "launch.select",
-  "launch.open",
-  "compact",
-  "rewind",
-  "fork",
-  "rename",
-  "goal.read",
-  "goal.set",
-  "goal.clear",
-  "mcp.list",
-  "mcp.reconnect",
-  "mcp.toggle",
-  "mcp.authenticate",
-  "mcp.callback",
-  "mcp.reload",
-  "tasks.list",
-  "tasks.stop",
-  "tasks.background",
-  "question.answer"
-];
-
 // packages/plugin/src/managed-agents/management-validation.ts
 var id2 = external_exports.string().min(1).max(512);
-var empty = external_exports.object({}).strict();
-var checkpoint = external_exports.object({ checkpointId: id2 }).strict();
-var server = external_exports.object({ name: id2 }).strict();
+var operations = ["queue.run", "queue.remove", "question.answer"];
 var payloads = {
-  "queue.run": empty,
+  "queue.run": external_exports.object({}).strict(),
   "queue.remove": external_exports.object({ requestId: id2 }).strict(),
-  state: empty,
-  context: empty,
-  accountUsage: empty,
-  commands: empty,
-  settings: empty,
-  "launch.options": empty,
-  "launch.open": empty,
-  "launch.select": external_exports.object({ profileId: id2, locationId: id2 }).strict(),
-  "option.set": external_exports.object({ key: external_exports.enum(["model", "reasoningEffort", "permissionMode", "fastMode"]), value: id2 }).strict(),
-  compact: external_exports.object({ instructions: external_exports.string().max(16384).optional() }).strict(),
-  rewind: checkpoint,
-  fork: external_exports.object({ checkpointId: id2.optional() }).strict(),
-  rename: external_exports.object({ title: external_exports.string().trim().min(1).max(1024) }).strict(),
-  "goal.read": empty,
-  "goal.set": external_exports.object({ objective: external_exports.string().trim().min(1).max(16384).optional(), tokenBudget: external_exports.number().int().positive().optional(), status: external_exports.enum(["active", "paused"]).optional() }).strict(),
-  "goal.clear": empty,
-  "mcp.list": empty,
-  "mcp.reconnect": server,
-  "mcp.toggle": external_exports.object({ name: id2, enabled: external_exports.boolean() }).strict(),
-  "mcp.authenticate": server,
-  "mcp.callback": external_exports.object({ name: id2, callbackUrl: external_exports.string().url().max(8192) }).strict(),
-  "mcp.reload": empty,
-  "tasks.list": empty,
-  "tasks.stop": external_exports.object({ taskId: id2 }).strict(),
-  "tasks.background": external_exports.object({ toolUseId: id2 }).strict(),
   "question.answer": external_exports.object({ requestId: id2, answers: external_exports.record(external_exports.string().min(1).max(512), external_exports.array(external_exports.string().max(16384)).max(64)) }).strict()
 };
-var managementRequest = external_exports.object({ sessionId: id2, operation: external_exports.enum(managedManagementOperations), operationId: id2.optional(), payload: external_exports.record(external_exports.string(), external_exports.unknown()).default({}) }).strict();
+var managementRequest = external_exports.object({ sessionId: id2, operation: external_exports.enum(operations), operationId: id2.optional(), payload: external_exports.record(external_exports.string(), external_exports.unknown()).default({}) }).strict();
 function managementPayload(operation, payload) {
   return payloads[operation].parse(payload);
 }
-var managementReads = /* @__PURE__ */ new Set(["state", "context", "accountUsage", "commands", "settings", "goal.read", "mcp.list", "tasks.list", "launch.options"]);
-var managementWhileBusy = /* @__PURE__ */ new Set([...managementReads, "question.answer", "tasks.stop", "tasks.background", "mcp.callback", "goal.clear"]);
 
 // packages/plugin/src/managed-agent-backend.ts
 import { createHash as createHash3, randomUUID as randomUUID3 } from "node:crypto";
@@ -104880,7 +104819,6 @@ var ManagedAgentBackend = class {
   queuePumps = /* @__PURE__ */ new Set();
   steering = /* @__PURE__ */ new Set();
   managementFlights = /* @__PURE__ */ new Set();
-  liveOperations = /* @__PURE__ */ new Map();
   questions = /* @__PURE__ */ new Map();
   optionFlights = /* @__PURE__ */ new Set();
   approvals = /* @__PURE__ */ new Map();
@@ -104996,7 +104934,6 @@ var ManagedAgentBackend = class {
   /** Transport capabilities describe implemented endpoints, not Orca adapter aspirations.
    * Registration alone does not prove a CLI is installed or its credentials work. */
   agentIdentity(agentId, sessionId) {
-    const operations = sessionId ? this.liveOperations.get(sessionId) ?? [] : [];
     const definition = this.runtime.registry.definition(agentId);
     return {
       agentId,
@@ -105017,11 +104954,11 @@ var ManagedAgentBackend = class {
         unarchive: true,
         pin: false,
         move: false,
-        fork: operations.includes("fork"),
-        rewind: operations.includes("rewind"),
-        compact: operations.includes("compact"),
-        threadGoal: operations.includes("goal.set"),
-        contextUsage: operations.includes("context")
+        fork: false,
+        rewind: false,
+        compact: false,
+        threadGoal: false,
+        contextUsage: false
       }
     };
   }
@@ -105268,7 +105205,8 @@ var ManagedAgentBackend = class {
     }
     const address2 = request.address;
     const session2 = await this.requireSession(id4.parse(request.sessionId ?? address2?.sessionId ?? address2?.id), signal);
-    if (endpoint === "managedAgent/management" || endpoint === "managedAgent/manage") return this.management(session2, endpoint, request, signal);
+    if (endpoint === "managedAgent/management") throw new Error("MANAGED_CAPABILITY_UNAVAILABLE");
+    if (endpoint === "managedAgent/manage") return this.chatControl(session2, request, signal);
     if (endpoint === "workspace/archiveSession" || endpoint === "workspace/unarchiveSession") {
       const archived = endpoint === "workspace/archiveSession";
       const native = await this.services.nativeArchived?.(signal) ?? [];
@@ -105518,163 +105456,45 @@ var ManagedAgentBackend = class {
   launchSelection(session2) {
     return this.records(session2).filter((record12) => record12.event.type === "managed/launch").at(-1)?.event.data ?? { profileId: "host", locationId: "native" };
   }
-  async management(session2, endpoint, request, signal) {
-    const launches = this.services.launches;
-    const selected = this.launchSelection(session2);
-    if (launches && !session2.providerSessionId && endpoint === "managedAgent/management") {
-      return { operations: ["launch.options", "launch.select", "launch.open"], busy: false, state: { lifecycle: this.runtime.status(session2.id), questions: [], checkpoints: [] } };
-    }
-    if (launches && endpoint === "managedAgent/manage" && ["launch.options", "launch.select", "launch.open"].includes(String(request.operation))) {
-      const input5 = managementRequest.parse(request);
-      const payload2 = managementPayload(input5.operation, input5.payload);
-      if (input5.operation === "launch.options") {
-        const options = launches.options(session2.agentId, session2.workspacePath);
-        return { profiles: options.profiles.map((profile2) => ({ id: profile2.id, name: profile2.label })), locations: options.locations.map((location) => ({ id: location.id, name: location.label })), selectedProfileId: selected.profileId, selectedLocationId: selected.locationId, canSelect: !session2.providerSessionId && !this.opening.has(session2.id) && !this.managementFlights.has(session2.id) };
-      }
-      if (input5.operation === "launch.open") {
-        const operationId4 = id4.parse(input5.operationId);
-        const admission2 = this.store.beginOperation(session2, session2.id, { operationId: operationId4, kind: "launch-open", input: {} });
-        if (!admission2.execute) {
-          if (admission2.receipt.status === "completed") return admission2.receipt.result;
-          throw new Error("MANAGED_OPERATION_OUTCOME_UNKNOWN");
-        }
-        await this.connect(session2);
-        this.store.completeOperation(session2, session2.id, operationId4, "completed", { ready: true });
-        this.assertPrincipal(session2, signal);
-        return { ready: true };
-      }
-      if (session2.providerSessionId || this.opening.has(session2.id) || this.busy.has(session2.id) || this.managementFlights.has(session2.id)) throw new Error("MANAGED_LAUNCH_ALREADY_BOUND");
-      const selection = { profileId: String(payload2.profileId), locationId: String(payload2.locationId) };
-      const plan = launches.resolve({ sessionId: session2.id, agent: session2.agentId, workspacePath: session2.workspacePath, selection });
-      const operationId3 = id4.parse(input5.operationId);
-      const admission = this.store.beginOperation(session2, session2.id, { operationId: operationId3, kind: "launch-select", input: selection });
-      if (!admission.execute) {
-        if (admission.receipt.status !== "completed") throw new Error("MANAGED_OPERATION_OUTCOME_UNKNOWN");
-        return admission.receipt.result;
-      }
-      this.append(session2, "managed/launch", { ...selection, ownerFingerprint: plan.ownerFingerprint }, `launch:${operationId3}`);
-      this.store.completeOperation(session2, session2.id, operationId3, "completed", selection);
-      return selection;
-    }
-    if (endpoint === "managedAgent/manage" && (request.operation === "queue.run" || request.operation === "queue.remove")) {
-      const input5 = managementRequest.parse(request);
-      const payload2 = managementPayload(input5.operation, input5.payload);
-      const operationId3 = id4.parse(input5.operationId);
+  /** Only message delivery and Agent questions belong to the conversation bridge. */
+  async chatControl(session2, request, signal) {
+    const input4 = managementRequest.parse(request);
+    const payload = managementPayload(input4.operation, input4.payload);
+    if (input4.operation === "queue.run" || input4.operation === "queue.remove") {
+      const operationId3 = id4.parse(input4.operationId);
       const prior = this.store.getOperation(session2, session2.id, operationId3);
       if (!prior) {
-        if (input5.operation === "queue.run" && this.busy.has(session2.id)) throw new Error("MANAGED_SESSION_BUSY");
-        if (input5.operation === "queue.remove" && this.queued(session2).find((item) => item.requestId === payload2.requestId)?.state !== "queued") throw new Error("MANAGED_QUEUE_ITEM_UNAVAILABLE");
+        if (input4.operation === "queue.run" && this.busy.has(session2.id)) throw new Error("MANAGED_SESSION_BUSY");
+        if (input4.operation === "queue.remove" && this.queued(session2).find((item) => item.requestId === payload.requestId)?.state !== "queued") throw new Error("MANAGED_QUEUE_ITEM_UNAVAILABLE");
       }
-      const admission = this.store.beginOperation(session2, session2.id, { operationId: operationId3, kind: `manage:${input5.operation}`, input: payload2 });
+      const admission = this.store.beginOperation(session2, session2.id, { operationId: operationId3, kind: `manage:${input4.operation}`, input: payload });
       if (!admission.execute) {
         if (admission.receipt.status === "completed") return admission.receipt.result;
         throw new Error("MANAGED_OPERATION_OUTCOME_UNKNOWN");
       }
-      if (input5.operation === "queue.run") await this.drainQueue(session2);
-      else this.append(session2, "managed/queue-status", { requestId: payload2.requestId, state: "removed" }, `queue-removed:${String(payload2.requestId)}`);
-      const result = input5.operation === "queue.run" ? { accepted: true } : { removed: true };
+      if (input4.operation === "queue.run") await this.drainQueue(session2);
+      else this.append(session2, "managed/queue-status", { requestId: payload.requestId, state: "removed" }, `queue-removed:${String(payload.requestId)}`);
+      const result = input4.operation === "queue.run" ? { accepted: true } : { removed: true };
       this.store.completeOperation(session2, session2.id, operationId3, "completed", result);
       return result;
     }
     const connection = await this.connect(session2);
     this.assertPrincipal(session2, signal);
-    const operations = ["queue.run", "queue.remove", ...connection.managementOperations ?? [], ...launches ? ["launch.options"] : []];
-    const checkpoints = this.records(session2).filter((record12) => record12.event.type === "managed/checkpoint").map((record12) => record12.event.data);
-    this.liveOperations.set(session2.id, operations);
-    if (endpoint === "managedAgent/management") {
-      const state2 = operations.includes("state") ? await connection.manage?.("state", {}) : {};
-      this.assertPrincipal(session2, signal);
-      return { operations, busy: this.busy.has(session2.id) || state2?.idle === "busy", state: {
-        ...state2 && typeof state2 === "object" ? state2 : {},
-        queued: this.queued(session2).map((item) => ({ requestId: item.requestId, state: item.state, text: item.content.filter((part) => part.type === "text").map((part) => part.text).join("\n").slice(0, 1e3) })),
-        lifecycle: this.runtime.status(session2.id),
-        unresolvedOperations: this.store.listOperations(session2, session2.id).filter((receipt) => (receipt.status === "pending" || receipt.status === "unknown") && (receipt.kind.startsWith("manage:") || ["send", "steer", "create-provider", "launch-open"].includes(receipt.kind))).map((receipt) => ({ operationId: receipt.operationId, operation: receipt.kind, status: receipt.status })),
-        checkpoints: checkpoints.filter((point) => !Array.isArray(state2?.checkpoints) || state2.checkpoints.some((provider) => provider.id === point.checkpointId)).map((point, index) => ({ id: point.checkpointId, title: `Checkpoint ${index + 1}` })),
-        questions: [...this.questions.get(session2.id)?.values() ?? []]
-      } };
-    }
-    const input4 = managementRequest.parse(request);
-    const payload = managementPayload(input4.operation, input4.payload);
-    if (!operations.includes(input4.operation) || !connection.manage) throw new Error("MANAGED_CAPABILITY_UNAVAILABLE");
-    if (input4.operation === "state") return this.management(session2, "managedAgent/management", { sessionId: session2.id }, signal);
-    if (managementReads.has(input4.operation)) {
-      const result = await connection.manage(input4.operation, payload);
-      this.assertPrincipal(session2, signal);
-      return result;
-    }
-    if ((input4.operation === "rewind" || input4.operation === "fork") && payload.checkpointId !== void 0 && !checkpoints.some((point) => point.checkpointId === payload.checkpointId)) throw new Error("MANAGED_CHECKPOINT_NOT_FOUND");
+    if (!connection.manage || !connection.managementOperations?.includes("question.answer")) throw new Error("MANAGED_CAPABILITY_UNAVAILABLE");
     const operationId2 = id4.parse(input4.operationId);
     if (this.managementFlights.has(session2.id) || this.optionFlights.has(session2.id)) throw new Error("MANAGED_SESSION_BUSY");
-    if (!managementWhileBusy.has(input4.operation) && this.busy.has(session2.id)) throw new Error("MANAGED_SESSION_BUSY");
     if (this.store.listOperations(session2, session2.id).some((receipt) => receipt.operationId !== operationId2 && receipt.kind.startsWith("manage:") && (receipt.status === "pending" || receipt.status === "unknown"))) throw new Error("MANAGED_OPERATION_OUTCOME_UNKNOWN");
     this.managementFlights.add(session2.id);
     try {
-      const admission = this.store.beginOperation(session2, session2.id, { operationId: operationId2, kind: `manage:${input4.operation}`, input: payload });
+      const admission = this.store.beginOperation(session2, session2.id, { operationId: operationId2, kind: "manage:question.answer", input: payload });
       if (!admission.execute) {
         if (admission.receipt.status === "completed") return admission.receipt.result;
-        throw new Error(admission.receipt.status === "failed" ? "MANAGED_OPERATION_REJECTED" : "MANAGED_OPERATION_OUTCOME_UNKNOWN");
+        throw new Error("MANAGED_OPERATION_OUTCOME_UNKNOWN");
       }
-      this.assertPrincipal(session2, signal);
-      const raw = await connection.manage(input4.operation, { ...payload, operationId: operationId2 });
-      let result = JSON.parse(JSON.stringify(raw ?? { accepted: true }));
-      if (input4.operation === "fork") {
-        const providerSessionId = id4.parse(raw?.providerSessionId);
-        if (providerSessionId === session2.providerSessionId) throw new Error("MANAGED_FORK_ID_CONFLICT");
-        const entries = [{ eventId: "fork-launch", payload: { type: "managed/launch", data: this.launchSelection(session2) } }];
-        const permission = this.records(session2).filter((record12) => record12.event.type === "managed/permission").at(-1);
-        if (permission) entries.push({ eventId: "fork-permission", payload: JSON.parse(JSON.stringify({ type: permission.event.type, data: permission.event.data })) });
-        const cutoff = payload.checkpointId === void 0 ? Infinity : checkpoints.find((point) => point.checkpointId === payload.checkpointId).throughSeq;
-        let active2 = [];
-        for (const record12 of this.records(session2)) {
-          if (record12.event.seq > cutoff) break;
-          if (record12.event.type === "managed/rewind") active2 = active2.filter((prior) => prior.event.seq <= record12.event.data.throughSeq);
-          else if (!record12.event.type.startsWith("managed/")) active2.push(record12);
-        }
-        const mapping = /* @__PURE__ */ new Map();
-        for (const record12 of active2) {
-          entries.push({ eventId: `fork-record:${record12.event.seq}`, payload: JSON.parse(JSON.stringify({ type: record12.event.type, data: record12.event.data })) });
-          mapping.set(record12.event.seq, entries.length - 1);
-        }
-        for (const point of checkpoints.filter((point2) => point2.throughSeq <= cutoff)) {
-          const preceding = active2.filter((record12) => record12.event.seq <= point.throughSeq).at(-1);
-          if (preceding || point.throughSeq === -1) entries.push({ eventId: `checkpoint:${point.checkpointId}`, payload: { type: "managed/checkpoint", data: { checkpointId: point.checkpointId, throughSeq: preceding ? mapping.get(preceding.event.seq) : -1 } } });
-        }
-        const selected2 = this.selection(session2);
-        if (selected2) entries.push({ eventId: "fork-model", payload: { type: "model/selection", data: selected2 } });
-        const child = this.store.commitFork(session2, session2.id, operationId2, providerSessionId, entries);
-        this.sessions.set(child.id, child);
-        result = { sessionId: child.id, providerSessionId };
-      } else if (input4.operation === "rewind") {
-        const value = raw;
-        const replacement = id4.parse(value.providerSessionId ?? session2.providerSessionId);
-        if (value.replacesProviderSessionId !== void 0 && value.replacesProviderSessionId !== session2.providerSessionId) throw new Error("MANAGED_PROVIDER_SESSION_CONFLICT");
-        await this.runtime.close(session2.id);
-        this.store.commitProviderReplacement(session2, session2.id, operationId2, session2.providerSessionId, replacement, result, {
-          eventId: `rewind:${operationId2}`,
-          payload: { type: "managed/rewind", data: { checkpointId: String(payload.checkpointId), throughSeq: checkpoints.find((point) => point.checkpointId === payload.checkpointId).throughSeq, operationId: operationId2 } }
-        });
-        this.questions.delete(session2.id);
-        this.liveOperations.delete(session2.id);
-        return result;
-      } else if (input4.operation === "question.answer") {
-        this.questions.get(session2.id)?.delete(String(payload.requestId));
-      } else if (input4.operation === "rename") {
-        this.rename(session2, String(payload.title), "user");
-      } else if (input4.operation === "option.set") {
-        if (payload.key === "permissionMode") {
-          this.append(session2, "managed/permission", { permissionMode: payload.value }, `permission:${operationId2}`);
-          if (session2.agentId === "codex") {
-            await this.runtime.close(session2.id);
-            await this.connect(session2);
-          }
-        }
-        if (payload.key === "model" || payload.key === "reasoningEffort") {
-          const selected2 = this.selection(session2) ?? (connection.defaultModel ? { provider: session2.agentId, ...connection.defaultModel } : void 0);
-          if (selected2) this.append(session2, "model/selection", { ...selected2, [String(payload.key)]: payload.value });
-        }
-      }
+      const raw = await connection.manage("question.answer", { ...payload, operationId: operationId2 });
+      const result = JSON.parse(JSON.stringify(raw ?? { accepted: true }));
+      this.questions.get(session2.id)?.delete(String(payload.requestId));
       this.store.completeOperation(session2, session2.id, operationId2, "completed", result);
-      for (const callback of this.listeners) callback();
       return result;
     } catch (error62) {
       if (error62?.definiteRejection === true) this.store.completeOperation(session2, session2.id, operationId2, "failed", { code: "MANAGED_OPERATION_REJECTED" });
@@ -106287,7 +106107,7 @@ import { spawn as spawn4 } from "node:child_process";
 import { Buffer as Buffer2 } from "node:buffer";
 
 // packages/plugin/src/version.ts
-var PLUGIN_VERSION = "0.8.1-xagent.2";
+var PLUGIN_VERSION = "0.8.1-xagent.3";
 var PLUGIN_PACKAGE_NAME = "@xcoder/xagent";
 
 // packages/plugin/src/acp/adapters/cursor-process.ts
@@ -107549,8 +107369,8 @@ var ManagedClaudeAdapter = class {
       const applied = claudeRecord(settings.applied);
       if (typeof applied.model === "string" && applied.model) defaultModel = { model: applied.model, ...typeof applied.effort === "string" && applied.effort ? { reasoningEffort: applied.effort } : {} };
       const tasks = () => [...projection.tasks.values()].map((task) => ({ ...task, id: task.task_id, title: task.description ?? task.task_id, ...typeof task.tool_use_id === "string" ? { toolUseId: task.tool_use_id } : {} }));
-      const operations = ["state", "question.answer", "tasks.list"];
-      if (has("setModel") || has("applyFlagSettings") || has("setPermissionMode")) operations.push("option.set");
+      const operations2 = ["state", "question.answer", "tasks.list"];
+      if (has("setModel") || has("applyFlagSettings") || has("setPermissionMode")) operations2.push("option.set");
       const advertised = [
         ["getContextUsage", "context"],
         ["supportedCommands", "commands"],
@@ -107564,19 +107384,19 @@ var ManagedClaudeAdapter = class {
         ["stopTask", "tasks.stop"],
         ["backgroundTasks", "tasks.background"]
       ];
-      for (const [method, operation] of advertised) if (has(method)) operations.push(operation);
+      for (const [method, operation] of advertised) if (has(method)) operations2.push(operation);
       if (has("supportedCommands")) {
         const commands = await runClaudeControl("supported_commands", () => session2.supportedCommands(), 5e3).catch(() => []);
-        if (commands.some((command) => command.name === "compact")) operations.push("compact");
+        if (commands.some((command) => command.name === "compact")) operations2.push("compact");
       }
-      if (history) operations.push("fork", "rewind");
+      if (history) operations2.push("fork", "rewind");
       const connection = {
         providerSessionId: sessionId,
         get defaultModel() {
           return defaultModel;
         },
         get managementOperations() {
-          return [...operations, ...projection.accountUsage === void 0 ? [] : ["accountUsage"]];
+          return [...operations2, ...projection.accountUsage === void 0 ? [] : ["accountUsage"]];
         },
         isIdle: async () => closed || managementUncertain ? "unknown" : busy || managementInFlight || projection.providerState === "running" || projection.providerState === "requires_action" || projection.compacting || projection.hasActiveTasks || approvals.size || questions.size ? "busy" : "idle",
         send: (message) => dispatch(message),
@@ -107632,7 +107452,7 @@ var ManagedClaudeAdapter = class {
                 providerSessionId: sessionId,
                 checkpoints: [...projection.checkpoints].map((id10) => ({ id: id10, title: id10 })),
                 tasks: { tasks: tasks() },
-                compactInstructions: operations.includes("compact"),
+                compactInstructions: operations2.includes("compact"),
                 questions: [...questions].map(([requestId, pending]) => ({ requestId, title: "Claude Code", questions: pending.input.questions.map((question, index) => ({ ...claudeRecord(question), id: `q${index + 1}` })) }))
               };
             case "context": {
@@ -108299,7 +108119,7 @@ var CodexManagement = class {
           const reply = object2(await this.rpc("mcpServerStatus/list", { threadId, detail: "toolsAndAuthOnly", ...cursor3 ? { cursor: cursor3 } : {} }));
           if (!Array.isArray(reply.data)) throw new Error("Invalid MCP server list.");
           items.push(...reply.data);
-          if (reply.nextCursor == null) return { servers: items.map(object2).map((server2) => ({ ...server2, status: server2.status ?? server2.authStatus ?? "unknown" })) };
+          if (reply.nextCursor == null) return { servers: items.map(object2).map((server) => ({ ...server, status: server.status ?? server.authStatus ?? "unknown" })) };
           cursor3 = string6(reply.nextCursor, "cursor");
           if (seen.has(cursor3)) throw new Error("Invalid MCP server cursor.");
           seen.add(cursor3);
@@ -112126,12 +111946,12 @@ function summarizeAddress(address2) {
 }
 function stunOnlyIceServers(iceServers) {
   const direct = [];
-  for (const server2 of iceServers) {
-    const sourceUrls = Array.isArray(server2.urls) ? server2.urls : [server2.urls];
+  for (const server of iceServers) {
+    const sourceUrls = Array.isArray(server.urls) ? server.urls : [server.urls];
     const urls = sourceUrls.filter(isStunUrl);
     if (urls.length === 0)
       continue;
-    direct.push({ urls: Array.isArray(server2.urls) ? urls : urls[0] });
+    direct.push({ urls: Array.isArray(server.urls) ? urls : urls[0] });
   }
   return direct;
 }
@@ -122093,7 +121913,7 @@ var LoopbackPreview = class {
     const hostname6 = `dsh-${randomBytes6(24).toString("hex")}.localhost`;
     let authority = "";
     const accepted = (req) => req.headers.host === authority && (req.headers.origin === void 0 || req.headers.origin === `http://${authority}`) && req.headers["service-worker"] === void 0;
-    const server2 = createServer((req, res) => {
+    const server = createServer((req, res) => {
       if (!accepted(req)) {
         res.writeHead(403);
         res.end("Preview origin denied.");
@@ -122101,10 +121921,10 @@ var LoopbackPreview = class {
       }
       void this.http(port, authority, req, res);
     });
-    server2.requestTimeout = 3e4;
-    server2.headersTimeout = 15e3;
-    server2.maxHeadersCount = 64;
-    server2.on("connection", (socket) => {
+    server.requestTimeout = 3e4;
+    server.headersTimeout = 15e3;
+    server.maxHeadersCount = 64;
+    server.on("connection", (socket) => {
       if (this.sockets.size >= 64 || this.lifetime.signal.aborted) {
         socket.destroy();
         return;
@@ -122119,7 +121939,7 @@ var LoopbackPreview = class {
       perMessageDeflate: false,
       handleProtocols: (_protocols, req) => selectedProtocols.get(req) || false
     });
-    server2.on("upgrade", (req, socket, head) => {
+    server.on("upgrade", (req, socket, head) => {
       if (!accepted(req)) {
         socket.destroy();
         return;
@@ -122141,24 +121961,24 @@ var LoopbackPreview = class {
       });
     });
     await new Promise((resolve12, reject) => {
-      server2.once("error", reject);
-      server2.listen(0, "127.0.0.1", () => {
-        server2.off("error", reject);
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", () => {
+        server.off("error", reject);
         resolve12();
       });
     });
-    const address2 = server2.address();
+    const address2 = server.address();
     if (address2 === null || typeof address2 === "string") {
-      server2.close();
+      server.close();
       throw new Error("Preview listener unavailable");
     }
     authority = `${hostname6}:${address2.port}`;
     if (this.lifetime.signal.aborted) {
-      server2.close();
+      server.close();
       ws2.close();
       throw new Error("Preview closed");
     }
-    return { server: server2, ws: ws2, url: `http://${authority}/` };
+    return { server, ws: ws2, url: `http://${authority}/` };
   }
   headers(req, port) {
     return cleanHeaders(headerPairs(req.headers)).filter(([name2]) => !["origin", "referer"].includes(name2.toLowerCase())).concat(req.headers.origin === void 0 ? [] : [["origin", `http://127.0.0.1:${port}`]]);
@@ -129344,10 +129164,10 @@ function summarizeWeriftCandidate(candidate) {
   };
 }
 function orderIceServersForWerift(iceServers) {
-  return iceServers.map((server2) => {
-    const urls = Array.isArray(server2.urls) ? [...server2.urls] : [server2.urls];
+  return iceServers.map((server) => {
+    const urls = Array.isArray(server.urls) ? [...server.urls] : [server.urls];
     urls.sort((left, right) => iceUrlScore(left) - iceUrlScore(right));
-    return { ...server2, urls: Array.isArray(server2.urls) ? urls : urls[0] ?? server2.urls };
+    return { ...server, urls: Array.isArray(server.urls) ? urls : urls[0] ?? server.urls };
   });
 }
 function iceUrlScore(url2) {
@@ -129448,10 +129268,10 @@ function isPrivate(ip) {
 
 // packages/plugin/src/client-runtime.ts
 var ClientModeRuntime = class {
-  constructor(config2, identities, server2, typertGateway, logger2, host, rtcFactoryProvider = loadNodeRtcFactory) {
+  constructor(config2, identities, server, typertGateway, logger2, host, rtcFactoryProvider = loadNodeRtcFactory) {
     this.config = config2;
     this.identities = identities;
-    this.server = server2;
+    this.server = server;
     this.logger = logger2;
     this.host = host;
     this.rtcFactoryProvider = rtcFactoryProvider;
@@ -135900,13 +135720,13 @@ var OpencodeNativeApi = class {
   }
 };
 async function opencodeLoopbackPort() {
-  const server2 = createServer3();
+  const server = createServer3();
   await new Promise((resolve12, reject) => {
-    server2.once("error", reject);
-    server2.listen(0, "127.0.0.1", () => resolve12());
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => resolve12());
   });
-  const address2 = server2.address();
-  await new Promise((resolve12, reject) => server2.close((error62) => error62 ? reject(error62) : resolve12()));
+  const address2 = server.address();
+  await new Promise((resolve12, reject) => server.close((error62) => error62 ? reject(error62) : resolve12()));
   if (!address2 || typeof address2 === "string") throw unavailable();
   return address2.port;
 }
@@ -138914,7 +138734,7 @@ var PluginControlRuntime = class {
   async handle(endpoint, payload, signal) {
     try {
       if (endpoint !== "settings.server.set" && endpoint !== "settings.identity.reset" && endpoint !== "settings.startup.retry") await this.serverSwitchFlight;
-      if (endpoint === "managedAgent.agents" || endpoint === "managedAgent.create" || endpoint === "managedAgent.catalog" || endpoint === "managedAgent.management" || endpoint === "managedAgent.manage") {
+      if (endpoint === "managedAgent.agents" || endpoint === "managedAgent.create" || endpoint === "managedAgent.catalog" || endpoint === "managedAgent.manage") {
         if (!this.managedAgents) throw new ClientModeError("METHOD_NOT_ALLOWED", "Managed Agents are not enabled.");
         if (this.logoutFlight || this.serverSwitchFlight) throw new ClientModeError("CONNECTION_FAILED", "Account change in progress.", true);
         signal.throwIfAborted();
@@ -142113,7 +141933,6 @@ var HARNESS_REMOTE_ALLOWLIST = [
   "session/create",
   "managedAgent/agents",
   "managedAgent/create",
-  "managedAgent/management",
   "managedAgent/manage",
   "session/follow",
   "session/fork",

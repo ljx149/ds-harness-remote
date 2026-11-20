@@ -190,3 +190,5 @@ console.log(`Verified DSH bundle package ${manifest.name}@${manifest.version}`)
 assert.equal(manifest.bin.xagent, manifest.bin['xcodex-remote'])
 assert.equal(pluginManifest.bin.xagent, pluginManifest.bin['xcodex-remote'])
 assert.equal(pluginManifest.publishConfig.access, 'public')
+
+assert.doesNotMatch(clientBundle, /xcodex-managed-agent-management/, 'retired Agent management panel must not be bundled')

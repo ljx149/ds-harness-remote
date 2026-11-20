@@ -138,7 +138,7 @@ export class PluginControlRuntime {
       // A request arriving during replacement must use the new Server runtime.
       if (endpoint !== 'settings.server.set' && endpoint !== 'settings.identity.reset'
         && endpoint !== 'settings.startup.retry') await this.serverSwitchFlight
-      if (endpoint === 'managedAgent.agents' || endpoint === 'managedAgent.create' || endpoint === 'managedAgent.catalog' || endpoint === 'managedAgent.management' || endpoint === 'managedAgent.manage') {
+      if (endpoint === 'managedAgent.agents' || endpoint === 'managedAgent.create' || endpoint === 'managedAgent.catalog' || endpoint === 'managedAgent.manage') {
         if (!this.managedAgents) throw new ClientModeError('METHOD_NOT_ALLOWED', 'Managed Agents are not enabled.')
         if (this.logoutFlight || this.serverSwitchFlight) throw new ClientModeError('CONNECTION_FAILED', 'Account change in progress.', true)
         signal.throwIfAborted()

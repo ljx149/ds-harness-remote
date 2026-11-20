@@ -8,6 +8,6 @@
  * If they diverge, `npm scripts` checks in `scripts/verify-version-sync.mjs`
  * will fail fast during build/check/test.
  */
-export const PLUGIN_VERSION = '0.8.1-xagent.2'
+export const PLUGIN_VERSION = '0.8.1-xagent.3'
 
 export const PLUGIN_PACKAGE_NAME = '@xcoder/xagent'

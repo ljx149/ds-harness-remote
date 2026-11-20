@@ -9,7 +9,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 // retired dsh-TUI modules out of npm's dist directory when rebuilding an
 // existing checkout.
 await Promise.all(
-  ['api-proxy-switch', 'harness-api-bridge', 'harness-api-history', 'remote-api-proxy', 'tui-command']
+  ['client/managed-agent-management', 'api-proxy-switch', 'harness-api-bridge', 'harness-api-history', 'remote-api-proxy', 'tui-command']
     .flatMap(name => ['.js', '.js.map', '.d.ts', '.d.ts.map'].map(extension =>
       rm(join(root, 'dist', `${name}${extension}`), { force: true }),
     )),
