@@ -483,7 +483,7 @@ export class ManagedAgentBackend {
       } finally { this.answerFlights.delete(operationId) }
     }
     if (endpoint === 'managedAgent/models' || endpoint === 'session/models' || endpoint === 'session/modelCatalog') {
-      const catalog = await this.models(session)
+      const catalog = await this.models(session, request.refresh === true)
       return { ...catalog, current: this.selection(session), routable: catalog.groups.length > 0, routableProviders: [session.agentId] }
     }
     if (endpoint === 'session/initializeDefaultModel') { if (!this.selection(session)) await this.models(session); return { selected: this.selection(session) } }
@@ -583,9 +583,9 @@ export class ManagedAgentBackend {
   private selection(session: ManagedSession): { provider: string; model: string; reasoningEffort?: string } | undefined {
     return this.records(session).reverse().find(record => record.event.type === 'model/selection')?.event.data as { provider: string; model: string; reasoningEffort?: string } | undefined
   }
-  private async models(session: ManagedSession) {
+  private async models(session: ManagedSession, refresh = false) {
     const connection = await this.connect(session)
-    const raw = await connection.models?.()
+    const raw = await connection.models?.({ refresh })
     const principal = this.principal()
     if (!principal || principal.ownerId !== session.ownerId || principal.hostId !== session.hostId) throw new Error('MANAGED_AUTH_CHANGED')
     const actualDefault = connection.defaultModel

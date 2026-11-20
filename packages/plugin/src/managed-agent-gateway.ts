@@ -41,6 +41,16 @@ export function managedAgentOwnsRequest(backend: ManagedAgentNativeBackend, endp
     && (endpoint.startsWith('session/') || endpoint.startsWith('workspace/'))
 }
 
+/** Native create may name a blank from the merged list. Managed blanks are
+ * not native drafts: decline only that reuse hint, preserving native validation,
+ * workspace/preset selection and the original caller's authority. */
+function withoutManagedBlank(args: unknown): Row {
+  const outer = row(args) ?? {}
+  const nested = row(outer.request)
+  const { sessionId: _ignored, ...request } = nested ?? outer
+  return nested ? { ...outer, request } : request
+}
+
 /** Merge membership into existing native workspaces; never invent a workspace or import Agent history. */
 export function mergeManagedWorkspaces(value: unknown, entries: readonly ManagedAgentCatalogEntry[]): unknown {
   const source = row(value)
@@ -121,7 +131,8 @@ export function installManagedAgentGateway(gateway: TypertGatewayLike, backend: 
     const endpoint = `${request.namespace}/${request.method}`
     if (await owns(endpoint, { args: request.args }, request.signal ?? new AbortController().signal, request.peer)) {
       if (!isLiveOwner(request.peer)) throw ownerDenied()
-      return backend.invoke({ ...request, signal: ownerSignal(request.signal ?? new AbortController().signal, request.peer) })
+      if (endpoint === 'session/create') request = { ...request, args: withoutManagedBlank(request.args) }
+      else return backend.invoke({ ...request, signal: ownerSignal(request.signal ?? new AbortController().signal, request.peer) })
     }
     let value: unknown
     try { value = await invoke.call(runtime, request) }
@@ -141,7 +152,8 @@ export function installManagedAgentGateway(gateway: TypertGatewayLike, backend: 
     const peer = args[3]
     if (await owns(endpoint, payload, signal, peer)) {
       if (!isLiveOwner(peer)) return { ok: false, error: { code: 'remote-access/denied', message: ownerDenied().message, details: {} } }
-      return backend.dispatch(endpoint, payload, ownerSignal(signal, peer))
+      if (endpoint === 'session/create') args[1] = { ...row(payload), args: withoutManagedBlank(argsOf(payload)) }
+      else return backend.dispatch(endpoint, payload, ownerSignal(signal, peer))
     }
     const result = await dispatch.apply(runtime, args)
     return isLiveOwner(peer) ? merge(endpoint, result, ownerSignal(signal, peer), payload) : result

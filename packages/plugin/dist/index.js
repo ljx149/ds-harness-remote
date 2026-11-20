@@ -105263,7 +105263,7 @@ var ManagedAgentBackend = class {
       }
     }
     if (endpoint === "managedAgent/models" || endpoint === "session/models" || endpoint === "session/modelCatalog") {
-      const catalog = await this.models(session2);
+      const catalog = await this.models(session2, request.refresh === true);
       return { ...catalog, current: this.selection(session2), routable: catalog.groups.length > 0, routableProviders: [session2.agentId] };
     }
     if (endpoint === "session/initializeDefaultModel") {
@@ -105375,9 +105375,9 @@ var ManagedAgentBackend = class {
   selection(session2) {
     return this.records(session2).reverse().find((record14) => record14.event.type === "model/selection")?.event.data;
   }
-  async models(session2) {
+  async models(session2, refresh = false) {
     const connection = await this.connect(session2);
-    const raw = await connection.models?.();
+    const raw = await connection.models?.({ refresh });
     const principal = this.principal();
     if (!principal || principal.ownerId !== session2.ownerId || principal.hostId !== session2.hostId) throw new Error("MANAGED_AUTH_CHANGED");
     const actualDefault = connection.defaultModel;
@@ -105901,7 +105901,7 @@ import { spawn as spawn4 } from "node:child_process";
 import { Buffer as Buffer2 } from "node:buffer";
 
 // packages/plugin/src/version.ts
-var PLUGIN_VERSION = "0.7.0-xcodex.7";
+var PLUGIN_VERSION = "0.7.0-xcodex.8";
 
 // packages/plugin/src/acp/adapters/cursor-process.ts
 var ACP_REQUEST_TIMEOUT_MS = 6e4;
@@ -107273,11 +107273,25 @@ function isRecord6(value) {
 
 // packages/plugin/src/managed-agents/codex-adapter.ts
 var record7 = (value) => value !== null && typeof value === "object" && !Array.isArray(value) ? value : {};
-async function modelCatalog2(client) {
+function timings() {
+  const trace = randomUUID6();
+  return async (stage, work) => {
+    const start = performance.now();
+    let ok5 = false;
+    try {
+      const result = await work();
+      ok5 = true;
+      return result;
+    } finally {
+      if (process.env.XAGENT_MODEL_TIMING === "1") console.error("[xagent:model-timing]", JSON.stringify({ trace, stage, elapsedMs: Math.round(performance.now() - start), ok: ok5 }));
+    }
+  };
+}
+async function modelCatalog2(client, measure) {
   const data2 = [], seen = /* @__PURE__ */ new Set();
   let cursor3;
   for (let page = 0; page < 100; page++) {
-    const response = record7(await client.call("model/list", cursor3 ? { cursor: cursor3 } : {}));
+    const response = record7(await measure("model-list-page", () => client.call("model/list", cursor3 ? { cursor: cursor3 } : {})));
     if (!Array.isArray(response.data)) throw new Error("CODEX_MODEL_CATALOG_INVALID");
     data2.push(...response.data);
     const next = response.nextCursor;
@@ -107296,6 +107310,22 @@ var ManagedCodexAdapter = class {
   async open(input4, emit2) {
     const launch = this.createClient ? void 0 : this.launches.resolve({ sessionId: input4.sessionId, agent: input4.agent, workspacePath: input4.workspacePath, selection: input4.launch, previousFingerprint: input4.launchFingerprint });
     const client = this.createClient?.() ?? new CodexAppServerClient("codex", void 0, (executable) => launch.spawn(executable, ["app-server"]));
+    const measure = timings();
+    let catalog;
+    let catalogFlight;
+    const models = (options) => {
+      if (ended) return Promise.reject(new Error("Codex process is unavailable."));
+      if (catalogFlight) return catalogFlight;
+      if (!options?.refresh && catalog && performance.now() < catalog.expiresAt) return Promise.resolve(catalog.value);
+      const flight = modelCatalog2(client, measure).then((value) => {
+        if (!ended) catalog = { value, expiresAt: performance.now() + 3e4 };
+        return value;
+      }).finally(() => {
+        if (catalogFlight === flight) catalogFlight = void 0;
+      });
+      catalogFlight = flight;
+      return flight;
+    };
     let backgroundUncertain = false;
     let threadId = input4.providerSessionId;
     let turnId;
@@ -107377,14 +107407,16 @@ var ManagedCodexAdapter = class {
       emit2({ type: "unavailable", code });
     });
     try {
-      await client.start();
-      const response = record7(await client.call(input4.providerSessionId ? "thread/resume" : "thread/start", {
+      await measure("startup-initialize", () => client.start());
+      const starting = measure(input4.providerSessionId ? "thread-resume" : "thread-start", () => client.call(input4.providerSessionId ? "thread/resume" : "thread/start", {
         ...input4.providerSessionId ? { threadId: input4.providerSessionId } : {},
         cwd: input4.workspacePath,
         approvalPolicy: "on-request",
         sandbox: "workspace-write",
         ...input4.model ? { model: input4.model } : {}
       }));
+      void models().catch(() => void 0);
+      const response = record7(await starting);
       const id8 = record7(response.thread).id;
       if (typeof id8 !== "string" || !id8 || input4.providerSessionId && id8 !== input4.providerSessionId) throw new Error("Codex returned an invalid session identity.");
       threadId = id8;
@@ -107440,7 +107472,7 @@ var ManagedCodexAdapter = class {
           approvals.delete(requestId);
           await client.respond(request, { decision: choice === "allow-once" ? "accept" : choice === "cancel" ? "cancel" : "decline" });
         },
-        models: () => modelCatalog2(client),
+        models,
         setOption: async (key, value) => {
           if (active2 || sending) throw new Error("Stop the turn before changing options.");
           if (key === "model") input4.model = value;
@@ -107759,6 +107791,12 @@ function managedAgentOwnsRequest(backend, endpoint, payload) {
   const id8 = request.sessionId ?? row(request.address)?.sessionId ?? row(request.address)?.id;
   return typeof id8 === "string" && backend.ownsSession(id8) && (endpoint.startsWith("session/") || endpoint.startsWith("workspace/"));
 }
+function withoutManagedBlank(args) {
+  const outer = row(args) ?? {};
+  const nested = row(outer.request);
+  const { sessionId: _ignored, ...request } = nested ?? outer;
+  return nested ? { ...outer, request } : request;
+}
 function mergeManagedWorkspaces(value, entries) {
   const source = row(value);
   if (!source || !Array.isArray(source.items)) return value;
@@ -107834,7 +107872,8 @@ function installManagedAgentGateway(gateway, backend) {
     const endpoint = `${request.namespace}/${request.method}`;
     if (await owns(endpoint, { args: request.args }, request.signal ?? new AbortController().signal, request.peer)) {
       if (!isLiveOwner(request.peer)) throw ownerDenied();
-      return backend.invoke({ ...request, signal: ownerSignal(request.signal ?? new AbortController().signal, request.peer) });
+      if (endpoint === "session/create") request = { ...request, args: withoutManagedBlank(request.args) };
+      else return backend.invoke({ ...request, signal: ownerSignal(request.signal ?? new AbortController().signal, request.peer) });
     }
     let value;
     try {
@@ -107855,7 +107894,8 @@ function installManagedAgentGateway(gateway, backend) {
     const peer = args[3];
     if (await owns(endpoint, payload, signal, peer)) {
       if (!isLiveOwner(peer)) return { ok: false, error: { code: "remote-access/denied", message: ownerDenied().message, details: {} } };
-      return backend.dispatch(endpoint, payload, ownerSignal(signal, peer));
+      if (endpoint === "session/create") args[1] = { ...row(payload), args: withoutManagedBlank(argsOf(payload)) };
+      else return backend.dispatch(endpoint, payload, ownerSignal(signal, peer));
     }
     const result = await dispatch.apply(runtime, args);
     return isLiveOwner(peer) ? merge3(endpoint, result, ownerSignal(signal, peer), payload) : result;

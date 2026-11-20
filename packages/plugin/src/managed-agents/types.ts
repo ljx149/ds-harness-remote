@@ -49,7 +49,7 @@ export interface ManagedAgentConnection {
   cancel(): Promise<void>
   approve(requestId: string, choice: string): Promise<void>
   close(): Promise<void>
-  models?(): Promise<unknown>
+  models?(options?: { refresh?: boolean }): Promise<unknown>
   setOption?(key: string, value: string): Promise<void>
 }
 

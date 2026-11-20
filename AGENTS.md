@@ -1,3 +1,7 @@
+## 2026-11-20 模型发现与原生新建修复
+
+当前恢复版 .8 在 .7 上修复 Codex 串行/重复目录读取和原生 session/create 误复用 managed blank。只移除 native create 的 managed sessionId 提示，不放宽 owner gate；其他 session 方法仍按注册表归属。模型缓存限单连接 30 秒，不跨账号/工作区/配置。验证与后续真机项目见 docs/design/model-discovery-native-create-fix.md。
+
 ## 2026-11-20 当前授权：在旧版分支重新评审恢复五项能力
 
 最新用户要求优先于下方旧版冻结约定。在 release/baseline-0.7.0-xcodex.5 上逐项恢复流式/恢复、队列、结构化问题、多配置/进程保护/空闲回收、重启目录。不得整笔合并高级管理提交。保持旧版界面和默认本机配置；高级管理面板不恢复。测试资源规则继续生效。

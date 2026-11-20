@@ -6,12 +6,26 @@ import type { ManagedAgentAdapter, ManagedAgentConnection, ManagedAgentEmit, Man
 
 const record = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 
+type Measure = <T>(stage: string, work: () => Promise<T>) => Promise<T>
+/** Opt-in diagnostics contain no paths, request bodies, model names or credentials. */
+function timings(): Measure {
+  const trace = randomUUID()
+  return async (stage, work) => {
+    const start = performance.now()
+    let ok = false
+    try { const result = await work(); ok = true; return result }
+    finally {
+      if (process.env.XAGENT_MODEL_TIMING === '1') console.error('[xagent:model-timing]', JSON.stringify({ trace, stage, elapsedMs: Math.round(performance.now() - start), ok }))
+    }
+  }
+}
+
 /** Model selection must use the same complete catalog as discovery. */
-async function modelCatalog(client: CodexAppServerLike): Promise<{ data: unknown[] }> {
+async function modelCatalog(client: CodexAppServerLike, measure: Measure): Promise<{ data: unknown[] }> {
   const data: unknown[] = [], seen = new Set<string>()
   let cursor: string | undefined
   for (let page = 0; page < 100; page++) {
-    const response = record(await client.call('model/list', cursor ? { cursor } : {}))
+    const response = record(await measure('model-list-page', () => client.call('model/list', cursor ? { cursor } : {})))
     if (!Array.isArray(response.data)) throw new Error('CODEX_MODEL_CATALOG_INVALID')
     data.push(...response.data)
     const next = response.nextCursor
@@ -28,6 +42,21 @@ export class ManagedCodexAdapter implements ManagedAgentAdapter {
   async open(input: ManagedAgentOpen, emit: ManagedAgentEmit): Promise<ManagedAgentConnection> {
     const launch = this.createClient ? undefined : this.launches.resolve({ sessionId: input.sessionId, agent: input.agent, workspacePath: input.workspacePath, selection: input.launch, previousFingerprint: input.launchFingerprint })
     const client = this.createClient?.() ?? new CodexAppServerClient('codex', undefined, executable => launch!.spawn(executable, ['app-server']))
+    const measure = timings()
+    // Connection-local: never share models across workspaces, profiles or users.
+    let catalog: { value: { data: unknown[] }; expiresAt: number } | undefined
+    let catalogFlight: Promise<{ data: unknown[] }> | undefined
+    const models = (options?: { refresh?: boolean }): Promise<{ data: unknown[] }> => {
+      if (ended) return Promise.reject(new Error('Codex process is unavailable.'))
+      if (catalogFlight) return catalogFlight
+      if (!options?.refresh && catalog && performance.now() < catalog.expiresAt) return Promise.resolve(catalog.value)
+      const flight = modelCatalog(client, measure).then(value => {
+        if (!ended) catalog = { value, expiresAt: performance.now() + 30_000 }
+        return value
+      }).finally(() => { if (catalogFlight === flight) catalogFlight = undefined })
+      catalogFlight = flight
+      return flight
+    }
     let backgroundUncertain = false
     let threadId = input.providerSessionId
     let turnId: string | undefined
@@ -90,12 +119,17 @@ export class ManagedCodexAdapter implements ManagedAgentAdapter {
     })
     const unavailable = client.onUnavailable(code => { ended = true; emit({ type: 'unavailable', code }) })
     try {
-      await client.start()
-      const response = record(await client.call(input.providerSessionId ? 'thread/resume' : 'thread/start', {
+      await measure('startup-initialize', () => client.start())
+      const starting = measure(input.providerSessionId ? 'thread-resume' : 'thread-start', () => client.call(input.providerSessionId ? 'thread/resume' : 'thread/start', {
         ...(input.providerSessionId ? { threadId: input.providerSessionId } : {}),
         cwd: input.workspacePath, approvalPolicy: 'on-request', sandbox: 'workspace-write',
         ...(input.model ? { model: input.model } : {}),
       }))
+      // Listing is independent of thread creation. Overlap the two RPCs, but
+      // retain the identity fence before exposing a usable connection. Failure
+      // to prefetch must not turn a successful thread startup into a failure.
+      void models().catch(() => undefined)
+      const response = record(await starting)
       const id = record(response.thread).id
       if (typeof id !== 'string' || !id || (input.providerSessionId && id !== input.providerSessionId)) throw new Error('Codex returned an invalid session identity.')
       threadId = id
@@ -145,7 +179,7 @@ export class ManagedCodexAdapter implements ManagedAgentAdapter {
           approvals.delete(requestId)
           await client.respond(request, { decision: choice === 'allow-once' ? 'accept' : choice === 'cancel' ? 'cancel' : 'decline' })
         },
-        models: () => modelCatalog(client),
+        models,
         setOption: async (key, value) => {
           if (active || sending) throw new Error('Stop the turn before changing options.')
           if (key === 'model') input.model = value

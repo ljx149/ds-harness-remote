@@ -13,6 +13,36 @@ function backend(): ManagedAgentNativeBackend {
   }
 }
 describe('managed Agent native gateway authority', () => {
+  it('declines managed blank reuse for native create through both entry points without mutating the draft', async () => {
+    const agent = backend()
+    let loaded = false
+    agent.ownsSession = id => loaded && id === 'managed:1'
+    agent.catalog = async () => { loaded = true; return entries }
+    const native = vi.fn(async (_request: any) => 'new-native')
+    const dispatch = vi.fn(async (..._args: any[]): Promise<TypertRpcResult> => ({ ok: true, value: 'new-native' }))
+    const wire = { invoke: native, dispatchRpc: dispatch }
+    const undo = installManagedAgentGateway(wire, agent)
+    const peer = owner(), signal = new AbortController().signal
+    const request = { sessionId: 'managed:1', workspaceId: 'w1', agentPreset: 'my-preset' }
+    expect(await wire.invoke({ namespace: 'session', method: 'create', args: { request }, peer, signal })).toBe('new-native')
+    expect(native).toHaveBeenCalledWith({ namespace: 'session', method: 'create', args: { request: { workspaceId: 'w1', agentPreset: 'my-preset' } }, peer, signal })
+    loaded = false
+    const extra = {}
+    await wire.dispatchRpc('session/create', { args: request }, signal, peer, extra)
+    expect(dispatch).toHaveBeenCalledWith('session/create', { args: { workspaceId: 'w1', agentPreset: 'my-preset' } }, signal, peer, extra)
+    expect(request.sessionId).toBe('managed:1')
+    expect(agent.invoke).not.toHaveBeenCalled()
+    expect(agent.dispatch).not.toHaveBeenCalled()
+    // Ordinary native draft reuse remains exactly as before.
+    const nativeRequest = { ...request, sessionId: 'native-blank' }
+    await wire.invoke({ namespace: 'session', method: 'create', args: nativeRequest, peer, signal })
+    expect(native.mock.calls.at(-1)?.[0].args).toBe(nativeRequest)
+    // The special case cannot bypass the managed owner gate.
+    await expect(wire.invoke({ namespace: 'session', method: 'create', args: request, peer: undefined, signal })).rejects.toMatchObject({ code: 'remote-access/denied' })
+    expect(await wire.dispatchRpc('session/create', { args: request }, signal, { principal: { kind: 'grant' }, signal })).toMatchObject({ ok: false, error: { code: 'remote-access/denied' } })
+    undo()
+  })
+
   it('resolves persisted membership before a phone resumes without listing after Host restart', async () => {
     const agent = backend()
     let loaded = false
