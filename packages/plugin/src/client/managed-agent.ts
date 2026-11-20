@@ -57,14 +57,15 @@ export function createManagedAgentUi(React: ClientReact, ctx: ManagedAgentUiCont
   }
   function NewSession({ wide }: { wide?: boolean }): unknown {
     useSnapshots()
-    const [agents, setAgents] = React.useState<Array<{ id: string; label: string }>>([])
+    const [agents, setAgents] = React.useState<Array<{ id: string; label: string; profiles?: Array<{ id: string; label: string }> }>>([])
     const [expanded, setExpanded] = React.useState(false)
     const [busy, setBusy] = React.useState(false)
     const [error, setError] = React.useState<string | undefined>(undefined)
-    const [attempt, setAttempt] = React.useState<{ workspaceId: string; agentId: string; operationId: string } | undefined>(undefined)
+    const [attempt, setAttempt] = React.useState<{ workspaceId: string; agentId: string; operationId: string; profileId?: string } | undefined>(undefined)
     const [loading, setLoading] = React.useState(true)
     const [reload, setReload] = React.useState(0)
     const [chosenWorkspace, setChosenWorkspace] = React.useState<string | undefined>(undefined)
+    const [profiles, setProfiles] = React.useState<Record<string, string>>({})
     const mounted = React.useRef(false)
     const creating = React.useRef(false)
     React.useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
@@ -76,7 +77,7 @@ export function createManagedAgentUi(React: ClientReact, ctx: ManagedAgentUiCont
         if (!Array.isArray(values)) throw new Error(ctx.chinese ? 'Agent 列表格式错误' : 'Invalid Agent list')
         if (active) setAgents(values.flatMap(item => {
           const agent = record(item)
-          return typeof agent.id === 'string' && agent.available !== false ? [{ id: agent.id, label: typeof agent.name === 'string' ? agent.name : agent.id }] : []
+          return typeof agent.id === 'string' && agent.available !== false ? [{ id: agent.id, label: typeof agent.name === 'string' ? agent.name : agent.id, profiles: Array.isArray(agent.profiles) ? agent.profiles.flatMap(item => { const p = record(item); return typeof p.id === 'string' && typeof p.label === 'string' ? [{ id: p.id, label: p.label }] : [] }) : [] }] : []
         }))
       }).catch(reason => { if (active) setError(reason instanceof Error ? reason.message : String(reason)) })
         .finally(() => { if (active) setLoading(false) })
@@ -90,7 +91,7 @@ export function createManagedAgentUi(React: ClientReact, ctx: ManagedAgentUiCont
     const create = async (agentId: string): Promise<void> => {
       if (creating.current || !workspace || !ctx.workspaces.list.getSnapshot().items.some(item => item.workspaceId === workspace.workspaceId)) return
       creating.current = true
-      const request = attempt?.workspaceId === workspace.workspaceId && attempt.agentId === agentId ? attempt : { workspaceId: workspace.workspaceId, agentId, operationId: crypto.randomUUID() }
+      const request = attempt?.workspaceId === workspace.workspaceId && attempt.agentId === agentId && (attempt.profileId ?? 'host') === (profiles[agentId] ?? 'host') ? attempt : { workspaceId: workspace.workspaceId, agentId, ...(profiles[agentId] && profiles[agentId] !== 'host' ? { profileId: profiles[agentId] } : {}), operationId: crypto.randomUUID() }
       setAttempt(request); setBusy(true); setError(undefined)
       try {
         const result = record(await ctx.call('managedAgent/create', { request }))
@@ -112,6 +113,9 @@ export function createManagedAgentUi(React: ClientReact, ctx: ManagedAgentUiCont
             ...workspaces.map(item => React.createElement('option', { key: item.workspaceId, value: item.workspaceId }, item.path ?? item.title ?? item.workspaceId)))),
         loading ? React.createElement('div', { role: 'status' }, ctx.chinese ? '正在加载 Agent…' : 'Loading Agents…') : null,
         !loading && !agents.length && !error ? React.createElement('div', null, ctx.chinese ? '没有可用 Agent，请检查插件配置后重试' : 'No Agents available. Check plugin configuration and retry.') : null,
+        ...agents.filter(agent => (agent.profiles?.length ?? 0) > 1).map(agent => React.createElement('label', { key: `profile:${agent.id}` }, `${agent.label} ${ctx.chinese ? '配置' : 'profile'}`,
+          React.createElement('select', { value: profiles[agent.id] ?? 'host', disabled: busy, onChange: (event: Event) => setProfiles(previous => ({ ...previous, [agent.id]: (event.target as HTMLSelectElement).value })) },
+            ...agent.profiles!.map(profile => React.createElement('option', { key: profile.id, value: profile.id }, profile.id === 'host' ? ctx.chinese ? '本机当前配置' : 'Computer configuration' : profile.label))))),
         ...agents.map(agent => React.createElement('button', { className: 'xcodexManagedAgentButton', key: agent.id, type: 'button', disabled: busy || !workspace, onClick: () => { void create(agent.id) } }, agent.label)),
         React.createElement('button', { className: 'xcodexManagedAgentButton', type: 'button', disabled: busy || loading, onClick: () => setReload(value => value + 1) }, ctx.chinese ? '重新加载 Agent' : 'Reload Agents')) : null,
       error ? React.createElement('div', { role: 'alert' }, error) : null)

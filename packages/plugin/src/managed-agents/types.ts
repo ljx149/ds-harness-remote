@@ -1,3 +1,5 @@
+import type { ManagedLaunchSelection } from './launch.js'
+import type { ManagedQuestion } from './questions.js'
 import type { AgentSessionCapabilities } from './capabilities.js'
 
 export interface ManagedAgentDefinition {
@@ -9,6 +11,8 @@ export interface ManagedAgentDefinition {
 
 export interface ManagedAgentOpen {
   sessionId: string
+  launch?: ManagedLaunchSelection
+  launchFingerprint?: string
   workspacePath: string
   agent: string
   providerSessionId?: string
@@ -17,6 +21,9 @@ export interface ManagedAgentOpen {
 }
 
 export type ManagedAgentEvent =
+  | { type: 'question'; requestId: string; title: string; questions: ManagedQuestion[] }
+  | { type: 'question-closed'; requestId: string }
+  | { type: 'text-delta' | 'reasoning-delta'; text: string; itemId: string }
   | { type: 'text'; text: string; itemId?: string }
   | { type: 'reasoning'; text: string; itemId?: string }
   | { type: 'tool'; itemId: string; name: string; status: 'running' | 'completed'; data: unknown }
@@ -37,6 +44,8 @@ export interface ManagedAgentConnection {
   providerSessionId: string
   readonly defaultModel?: { model: string; reasoningEffort?: string }
   send(input: { messageId: string; text: string }): Promise<ManagedAgentDispatch>
+  answerQuestion?(requestId: string, answers: Record<string, string[]>): Promise<void>
+  isIdle?(): Promise<'idle' | 'busy' | 'unknown'>
   cancel(): Promise<void>
   approve(requestId: string, choice: string): Promise<void>
   close(): Promise<void>

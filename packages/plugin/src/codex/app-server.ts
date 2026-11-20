@@ -64,6 +64,7 @@ export class CodexAppServerClient implements CodexAppServerLike {
   private stdoutBuffer: Buffer<ArrayBufferLike> = Buffer.alloc(0)
   private stderrBytes = 0
   private ready = false
+  private closePromise?: Promise<void>
   private closed = false
   private failureNotified = false
   private startPromise?: Promise<void>
@@ -109,25 +110,56 @@ export class CodexAppServerClient implements CodexAppServerLike {
     return () => this.unavailableHandlers.delete(handler)
   }
 
-  async close(): Promise<void> {
-    if (this.closed) return
+  close(): Promise<void> {
+    if (!this.closePromise) {
+      this.closed = true
+      this.ready = false
+      // Publish the single-flight promise before kill() can emit synchronous events.
+      this.closePromise = Promise.resolve().then(() => this.closeOnce())
+    }
+    return this.closePromise
+  }
+
+  private async closeOnce(): Promise<void> {
     this.closed = true
     this.ready = false
     this.failPending(new CodexAppServerError('CODEX_CLOSED', 'Codex App Server was closed.'))
     const child = this.process
-    this.process = undefined
-    if (child === undefined || child.exitCode !== null || child.killed) return
-    await new Promise<void>(resolve => {
-      const timer = setTimeout(() => {
-        child.kill('SIGKILL')
-        resolve()
+    if (child === undefined) return
+    // `killed` confirms that a signal was sent, not that the process exited.
+    if (child.exitCode != null || child.signalCode != null) {
+      if (this.process === child) this.process = undefined
+      return
+    }
+    await new Promise<void>((resolve, reject) => {
+      let settled = false
+      let escalation: ReturnType<typeof setTimeout> | undefined
+      let deadline: ReturnType<typeof setTimeout> | undefined
+      const finish = (confirmed: boolean) => {
+        if (settled) return
+        settled = true
+        if (escalation) clearTimeout(escalation)
+        if (deadline) clearTimeout(deadline)
+        child.removeListener('exit', exited)
+        child.removeListener('close', exited)
+        if (confirmed) {
+          if (this.process === child) this.process = undefined
+          resolve()
+        } else reject(new CodexAppServerError('CODEX_CLEANUP_UNCONFIRMED', 'Codex App Server exit could not be confirmed.'))
+      }
+      const exited = () => finish(true)
+      const signal = (name: NodeJS.Signals) => {
+        try { child.kill(name) } catch { /* Only an exit/close event proves cleanup. */ }
+      }
+      child.once('exit', exited)
+      child.once('close', exited)
+      escalation = setTimeout(() => {
+        deadline = setTimeout(() => finish(false), 2_000)
+        deadline.unref?.()
+        signal('SIGKILL')
       }, 2_000)
-      timer.unref?.()
-      child.once('exit', () => {
-        clearTimeout(timer)
-        resolve()
-      })
-      child.kill('SIGTERM')
+      escalation.unref?.()
+      signal('SIGTERM')
     })
   }
 
@@ -173,6 +205,7 @@ export class CodexAppServerClient implements CodexAppServerLike {
           mcpServerOpenaiFormElicitation: false,
         },
       }, APP_SERVER_START_TIMEOUT_MS)
+      if (this.closed) throw new CodexAppServerError('CODEX_CLOSED', 'Codex closed during startup.')
       this.write({ method: 'initialized', params: {} })
       this.ready = true
       this.logger?.info('Codex App Server ready')
@@ -262,7 +295,6 @@ export class CodexAppServerClient implements CodexAppServerLike {
     this.ready = false
     this.failPending(new CodexAppServerError(code, 'Codex App Server communication failed.', { cause }))
     const child = this.process
-    this.process = undefined
     child?.kill('SIGTERM')
     this.logger?.warn('Codex App Server communication failed', { code })
     if (!this.closed) this.notifyUnavailable(code)

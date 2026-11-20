@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -26,10 +28,11 @@ function fixture(existingDirectory?: string, services: ConstructorParameters<typ
   const send = vi.fn(async (_input: { messageId: string; text: string }): Promise<ManagedAgentDispatch> => ({ state: 'accepted', providerTurnId: 'turn-1' }))
   const cancel = vi.fn(async () => {}), close = vi.fn(async () => {}), approve = vi.fn(async () => {})
   const models = vi.fn(async (): Promise<unknown> => ({ data: [{ id: 'gpt-test', model: 'gpt-test', displayName: 'Test model', supportedReasoningEfforts: [{ reasoningEffort: 'high' }, { reasoningEffort: 'low' }] }] }))
+  const answerQuestion = vi.fn(async (_id: string, _answers: Record<string, string[]>) => {})
   const setOption = vi.fn(async (_key: string, _value: string): Promise<void> => {})
   const open = vi.fn<ManagedAgentAdapter['open']>(async (input, callback) => {
     emit = callback
-    return { providerSessionId: input.providerSessionId ?? 'provider-1', send, cancel, close, approve, models, setOption }
+    return { providerSessionId: input.providerSessionId ?? 'provider-1', send, cancel, close, approve, models, setOption, answerQuestion }
   })
   const registry = new ManagedAgentRegistry([{ definition: { agent: 'codex', title: 'Codex', icon: 'codex', capabilities: {
     rewind: false, compact: false, threadGoal: false, contextUsage: false, imagePrompts: false, steering: 'queue', approvalEnforcement: 'provider',
@@ -44,7 +47,7 @@ function fixture(existingDirectory?: string, services: ConstructorParameters<typ
   }
   const create = async (workspaceId = 'a', operationId = 'create-a') => (await call('managedAgent/create', { workspaceId, operationId, agentId: 'codex' })).sessionId as string
   const prompt = (sessionId: string, requestId = 'message-1', text = 'hello') => call('session/prompt', { sessionId, requestId, content: [{ type: 'text', text }] })
-  return { directory, backend, store, runtime, open, send, close, cancel, approve, models, setOption, call, create, prompt,
+  return { directory, backend, store, runtime, open, send, close, cancel, approve, models, setOption, answerQuestion, call, create, prompt,
     emit: (event: Parameters<ManagedAgentEmit>[0]) => emit(event),
     captureEmitter: () => emit,
     setPrincipal: (value: typeof principal) => { principal = value },
@@ -53,11 +56,130 @@ function fixture(existingDirectory?: string, services: ConstructorParameters<typ
   }
 }
 describe('managed backend integration', () => {
+  it('delivers first-turn text, tools, and final settlements through the actual DSH fold without switching sessions', async () => {
+    // Optional pinned package path allows the same contract to run against a
+    // user's exact DSH build, without changing production dependencies.
+    const nativePath = process.env.XAGENT_DSH_ASSISTANT_FOLD
+      ?? new URL('./types/client/sessions/assistant-stream.js', pathToFileURL(createRequire(import.meta.url).resolve('@deepseek-ai/dsh-api-session-controller')).href).href
+    const { ClientAssistantStream } = await import(/* @vite-ignore */ nativePath)
+    const fold = new ClientAssistantStream()
+    const f = fixture(), sessionId = await f.create()
+    const controller = new AbortController()
+    const frames = await f.backend.open('session/follow', { args: { sessionId } }, controller.signal)
+    const published: any[] = [], rebaseline: unknown[] = []
+    const consuming = (async () => {
+      for await (const raw of frames) {
+        const frame = raw as any
+        if (frame.type === 'snapshot') { fold.replace(frame.records, frame.assistantStream); continue }
+        const result = frame.type === 'assistant-stream' ? fold.acceptFrame(frame.frame) : fold.acceptDurable(frame)
+        if (result?.type === 'rebaseline') rebaseline.push(result)
+        if (result?.entry) published.push(result.entry)
+      }
+    })()
+    await f.prompt(sessionId)
+    f.emit({ type: 'text-delta', itemId: 'first', text: 'Checking' })
+    await vi.waitFor(() => expect(published.some(item => item.event.type === 'assistant/live-chunk' && item.event.data.chunk.text === 'Checking')).toBe(true))
+    f.emit({ type: 'tool', itemId: 'tool1', name: 'shell', status: 'running', data: { command: 'pwd' } })
+    f.emit({ type: 'tool', itemId: 'tool1', name: 'shell', status: 'completed', data: { output: '/project/a' } })
+    f.emit({ type: 'text-delta', itemId: 'second', text: 'Done' })
+    f.emit({ type: 'turn-completed', status: 'completed' })
+    await vi.waitFor(() => expect(published.filter(item => item.event.type === 'assistant/message')).toHaveLength(2))
+    expect(published.filter(item => item.event.type === 'tool/call')).toHaveLength(1)
+    expect(published.filter(item => item.event.type === 'tool/result')).toHaveLength(1)
+    expect(rebaseline).toEqual([])
+    // The native conversation assembler rejects older matches even when the
+    // stream fold itself does not request a rebaseline. In particular finish
+    // must precede the durable settlement, not receive a later fractional seq.
+    const sequences = published.map(item => item.event.seq)
+    expect(sequences).toEqual([...sequences].sort((a, b) => a - b))
+    controller.abort(); await consuming
+  })
+
+  it('keeps a durable FIFO queue in the native inbox and dispatches once after completion', async () => {
+    const f = fixture(), sessionId = await f.create()
+    await f.prompt(sessionId)
+    const queued = { sessionId, requestId: 'next', mode: 'queue', content: [{ type: 'text', text: 'second' }] }
+    expect(await f.call('session/prompt', queued)).toMatchObject({ queued: true })
+    await f.call('session/prompt', queued)
+    expect(f.send).toHaveBeenCalledTimes(1)
+    expect((await f.call('session/projections', { sessionId })).values.inbox['next-turn']).toHaveLength(1)
+    f.emit({ type: 'turn-completed', status: 'completed' })
+    await vi.waitFor(() => expect(f.send).toHaveBeenCalledTimes(2))
+    expect(f.send.mock.calls[1]![0].text).toBe('second')
+    expect((await f.call('session/projections', { sessionId })).values.inbox['next-turn']).toEqual([])
+    f.emit({ type: 'turn-completed', status: 'completed' })
+    await f.call('session/prompt', queued)
+    expect(f.send).toHaveBeenCalledTimes(2)
+  })
+  it('pauses queued work on stop, supports native removal/edit, and requires explicit resume', async () => {
+    const f = fixture(), sessionId = await f.create(); await f.prompt(sessionId)
+    await f.call('session/prompt', { sessionId, requestId: 'two', mode: 'queue', content: [{ type: 'text', text: 'second' }] })
+    await f.call('session/prompt', { sessionId, requestId: 'three', mode: 'queue', content: [{ type: 'text', text: 'third' }] })
+    await f.call('session/updateQueue', { sessionId, itemId: 'two', action: { kind: 'remove' } })
+    await f.call('session/updateQueue', { sessionId, itemId: 'three', action: { kind: 'edit', content: [{ type: 'text', text: 'edited' }] } })
+    await f.call('session/cancel', { sessionId }); f.emit({ type: 'turn-completed', status: 'cancelled' })
+    expect((await f.call('managedAgent/chatState', { sessionId })).paused).toBe(true)
+    expect(f.send).toHaveBeenCalledTimes(1)
+    await f.call('managedAgent/resumeQueue', { sessionId })
+    await vi.waitFor(() => expect(f.send).toHaveBeenCalledTimes(2))
+    expect(f.send.mock.calls[1]![0].text).toBe('edited')
+  })
+  it('does not resend uncertain queued delivery', async () => {
+    const f = fixture(), sessionId = await f.create(); await f.prompt(sessionId)
+    await f.call('session/prompt', { sessionId, requestId: 'next', mode: 'queue', content: [{ type: 'text', text: 'second' }] })
+    f.send.mockResolvedValueOnce({ state: 'unknown', reason: 'lost acknowledgement' })
+    f.emit({ type: 'turn-completed', status: 'completed' })
+    await vi.waitFor(async () => expect((await f.call('managedAgent/chatState', { sessionId })).queue[0].state).toBe('unknown'))
+    await expect(f.call('managedAgent/resumeQueue', { sessionId })).rejects.toThrow('UNKNOWN')
+    expect(f.send).toHaveBeenCalledTimes(2)
+  })
+  it('answers only a live owned question and deduplicates acknowledged responses', async () => {
+    const f = fixture(), sessionId = await f.create(); await f.prompt(sessionId)
+    f.emit({ type: 'question', requestId: 'question1', title: 'Codex', questions: [{ id: 'q1', question: 'Choose one' }] })
+    const input = { sessionId, requestId: 'question1', answers: { q1: ['answer'] } }
+    f.setPrincipal({ ownerId: 'other', hostId: 'host' })
+    await expect(f.call('managedAgent/answerQuestion', input)).rejects.toThrow('NOT_FOUND')
+    f.setPrincipal({ ownerId: 'owner', hostId: 'host' })
+    await f.call('managedAgent/answerQuestion', input); await f.call('managedAgent/answerQuestion', input)
+    expect(f.answerQuestion).toHaveBeenCalledTimes(1)
+    await expect(f.call('managedAgent/answerQuestion', { ...input, answers: { q1: ['changed'] } })).rejects.toThrow('CONFLICT')
+    f.emit({ type: 'question', requestId: 'question2', title: 'Codex', questions: [{ id: 'q1', question: 'Expired' }] })
+    f.emit({ type: 'turn-completed', status: 'completed' })
+    await expect(f.call('managedAgent/answerQuestion', { ...input, requestId: 'question2' })).rejects.toThrow('EXPIRED')
+  })
+
+  it('pauses queued messages on archive and requires explicit resume after reopening', async () => {
+    const f = fixture(), sessionId = await f.create()
+    await f.prompt(sessionId)
+    await f.call('session/prompt', { sessionId, requestId: 'queued', mode: 'queue', content: [{ type: 'text', text: 'later' }] })
+    await f.call('workspace/archiveSession', { sessionId, stopActivity: true })
+    f.emit({ type: 'turn-completed', status: 'completed' })
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(f.send).toHaveBeenCalledTimes(1)
+    await expect(f.call('managedAgent/resumeQueue', { sessionId })).rejects.toThrow('ARCHIVED')
+    await f.call('workspace/unarchiveSession', { sessionId })
+    await f.call('managedAgent/resumeQueue', { sessionId })
+    await vi.waitFor(() => expect(f.send).toHaveBeenCalledTimes(2))
+  })
+  it('restores a pending queue after Host restart without automatically sending it', async () => {
+    const f = fixture(), sessionId = await f.create()
+    await f.prompt(sessionId)
+    await f.call('session/prompt', { sessionId, requestId: 'queued', mode: 'queue', content: [{ type: 'text', text: 'later' }] })
+    await f.backend.close()
+    const restored = fixture(f.directory)
+    const state = await restored.call('managedAgent/chatState', { sessionId })
+    expect(state).toMatchObject({ paused: true, queue: [{ requestId: 'queued', state: 'queued' }] })
+    expect(restored.open).not.toHaveBeenCalled()
+    await restored.call('managedAgent/resumeQueue', { sessionId })
+    await vi.waitFor(() => expect(restored.send).toHaveBeenCalledTimes(1))
+    expect(restored.open.mock.calls[0]![0].providerSessionId).toBe('provider-1')
+  })
+
   it('advertises implemented mobile capabilities in discovery and session snapshots without probing a CLI', async () => {
     const f = fixture(), sessionId = await f.create()
     const identity = { agentId: 'codex', name: 'Codex', registered: true, availability: 'unverified', capabilities: {
       textPrompts: true, modelSelection: true, reasoningEffort: true, archive: true, unarchive: true,
-      imagePrompts: false, fileAttachments: false, steering: false, queueWhileBusy: false, fork: false, compact: false,
+      imagePrompts: false, fileAttachments: false, steering: false, queueWhileBusy: true, fork: false, compact: false,
     } }
     expect((await f.call('managedAgent/agents', {})).items[0]).toMatchObject({ id: 'codex', ...identity })
     expect((await f.backend.catalog())[0]!.summary.projections.values.managedAgent).toMatchObject(identity)
@@ -227,7 +349,7 @@ describe('managed backend integration', () => {
     const firstSignal = new AbortController(), secondSignal = new AbortController()
     const first = (await f.backend.open('session/follow', { args: { sessionId } }, firstSignal.signal))[Symbol.asyncIterator]()
     const second = (await f.backend.open('session/follow', { args: { sessionId } }, secondSignal.signal))[Symbol.asyncIterator]()
-    expect((await first.next()).value).toMatchObject({ type: 'snapshot', records: [] })
+    expect((await first.next()).value).toMatchObject({ type: 'snapshot', records: [{ event: { type: 'managed/launch' } }] })
     await second.next()
     await f.prompt(sessionId)
     firstSignal.abort()
@@ -235,6 +357,7 @@ describe('managed backend integration', () => {
     expect(f.cancel).not.toHaveBeenCalled()
     expect(f.close).not.toHaveBeenCalled()
     f.emit({ type: 'text', text: 'reply from running task' })
+    f.emit({ type: 'turn-completed', status: 'completed' })
     const records = (await f.call('session/history', { sessionId })).records
     expect(records.filter((record: any) => record.event.type === 'user/message')).toHaveLength(1)
     expect(records.filter((record: any) => record.event.type === 'assistant/message')).toHaveLength(1)

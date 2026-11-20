@@ -30,7 +30,7 @@ This is not a claim that all Orca management features have been migrated. The en
 - Accepted send means dispatch acceptance, never turn completion. The Host must persist an operation receipt before dispatch. An unknown write cannot be retried automatically.
 - Output currently publishes completed assistant blocks/items rather than every text delta. Reasoning and tool events remain distinct types. This avoids duplicate text in native history without replacing partially streamed rows.
 - Approval choices are single-use. Native providers expose `allow-once`, `reject-once`, `cancel`; unknown/expired IDs reject. Device authorization belongs to the Host RPC boundary.
-- Runtime unavailable removes the live route so recovery may resume the stored provider ID. There is no claim of continuing an in-flight task after Host process death.
+- Runtime unavailable waits for confirmed process cleanup before releasing the live route; uncertain cleanup blocks reopening. There is no claim of continuing an in-flight task after Host process death.
 
 ## Validation on 2026-11-19
 
@@ -44,3 +44,7 @@ This is not a claim that all Orca management features have been migrated. The en
 ## Background title generation (0.7.0-xcodex.3)
 
 `title.ts` adapts `shared/source-control/ai/generation/commit-message-agent-specs-primary.ts` and `shared/text-generation/launch/claude-background-run-isolation.ts`: separate CLI calls using the session model, ephemeral execution, timeout/output bounds, and fallback. Claude is tool-free, strict MCP, hooks disabled; Codex uses Orca's read-only exec mode (not a claim of disabling every tool). This is an additional adapted slice, not complete Orca extraction. A real Claude title succeeded; the configured Codex process failed locally. MIT notice retained.
+
+## Reviewed baseline restoration (0.7.0-xcodex.7)
+
+Narrow native streaming, durable FIFO, user-input questions, local account-home profiles and opt-in idle lifecycle have been reviewed onto the baseline branch. No advanced management panel, rewind, fork or context controls were imported. See `docs/design/baseline-chat-restoration.md` for validation and platform limitations.

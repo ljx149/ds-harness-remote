@@ -163,7 +163,12 @@ export function installManagedAgentGateway(gateway: TypertGatewayLike, backend: 
           const currentIds = new Set(entries.map(entry => entry.sessionId))
           const membershipChanged = currentIds.size !== knownManagedIds.size || [...currentIds].some(id => !knownManagedIds.has(id))
           for (const id of knownManagedIds) if (!currentIds.has(id)) queue.push({ type: 'emit', event: 'api-session/removed', args: [id] })
-          for (const entry of entries) queue.push({ type: 'emit', event: 'api-session/added', args: [entry.summary] })
+          for (const entry of entries) {
+            queue.push({ type: 'emit', event: 'api-session/added', args: [entry.summary] })
+            // Native DSH does not update an attached Session's running flag
+            // from added summaries. Explicit status is required after a turn.
+            queue.push({ type: 'emit', event: 'api-session/status', args: [entry.sessionId, entry.summary.running === true] })
+          }
           if (membershipChanged) queue.push({ type: 'emit', event: 'llm/models-updated', args: ['xcodex-remote'] })
           knownManagedIds = currentIds
         }

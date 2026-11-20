@@ -1,3 +1,5 @@
+import { installManagedModelDirectories, type ManagedModelServices } from './client/managed-model-directory.js'
+import { createChatActions } from './client/chat-actions.js'
 import { createManagedAgentUi } from './client/managed-agent.js'
 import { createBrowserLogin } from './client/browser-login.js'
 import { renderBodyPortal } from './client/portal.js'
@@ -578,6 +580,18 @@ window.__ModuleLoader__.load({
         locale: localeNamespace,
         inject: () => ({ control, statusFeed, onSignIn: openRemote }),
       }, RemoteSessionHeaderAction))
+      const ChatActions = createChatActions(React, control, ctx.locale.getLocale().active === 'zh')
+      ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
+        name: 'conversation.session.header.utilities', id: 'xcodex-chat-actions', order: 30,
+      }, ChatActions))
+      ctx.inject(['modelDirectories'], scope => {
+        const resolver = scope.get<ManagedModelServices['resolver']>('modelDirectories')
+        if (resolver) scope.effect(() => installManagedModelDirectories({ resolver,
+          sessions: ctx.sessions as unknown as ManagedModelServices['sessions'],
+          call: (endpoint, payload) => control(endpoint, payload),
+          subscribeReset: listener => (ctx as unknown as { on?: (event: string, listener: () => void) => () => void }).on?.('connection/reset', listener) ?? (() => {}),
+        }), 'xagent: native session model selectors')
+      })
       const managedUi = createManagedAgentUi(React, {
         sessions: ctx.sessions as unknown as import('./client/managed-agent.js').ManagedAgentUiContext['sessions'],
         workspaces: ctx.workspaces,

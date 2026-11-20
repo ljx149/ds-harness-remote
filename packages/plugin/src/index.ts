@@ -1,3 +1,5 @@
+import { ManagedLaunchRegistry } from './managed-agents/launch.js'
+import { ManagedProcessOwnership } from './managed-agents/process-ownership.js'
 import { generateManagedTitle } from './managed-agents/title.js'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
@@ -292,11 +294,13 @@ async function activate(
         await iterator.return?.()
       }
     }
-    managedBackend = new ManagedAgentBackend(store, createManagedAgentRuntime(), () => {
+    const ownership = process.platform === 'linux' ? new ManagedProcessOwnership(join(`${defaultIdentityDirectory}-agent-sessions`, scopeKey, 'process-ownership'), { exclusiveHostLockHeld: true }) : undefined
+    const launches = new ManagedLaunchRegistry({ profiles: config.managedAgents.profiles }, undefined, ownership ? input => ownership.forSession(input) : undefined)
+    managedBackend = new ManagedAgentBackend(store, createManagedAgentRuntime(launches), () => {
       const status = runtime?.hostStatus()
       if (!status?.authorized || !status.account || !status.deviceId || status.accountRequired) return undefined
       return { ownerId: createHash('sha256').update(`${config.serverUrl}:${status.account}`).digest('hex'), hostId: status.deviceId }
-    }, async signal => (await workspaceSnapshot(signal)).items!, { generateTitle: generateManagedTitle, nativeArchived: async signal => (await workspaceSnapshot(signal)).archivedSessionIds ?? [] })
+    }, async signal => (await workspaceSnapshot(signal)).items!, { launches, idleTimeoutMs: config.managedAgents.idleTimeoutMs, generateTitle: generateManagedTitle, nativeArchived: async signal => (await workspaceSnapshot(signal)).archivedSessionIds ?? [] })
     removeManagedGateway = installManagedAgentGateway(nativeTypertGateway, managedBackend)
   }
   const hostGateway = new TypertGatewaySwitch(nativeTypertGateway, () => fallbackPeer)

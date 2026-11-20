@@ -1619,19 +1619,189 @@ Minimum version required to store current data is: ` + bestVersion + `.
     }
   });
 
+  // packages/plugin/src/client/managed-model-directory.ts
+  var record = (value) => value && typeof value == "object" ? value : {}, ManagedModelDirectory = class {
+    constructor(sessionId, agentId, call, projection) {
+      this.sessionId = sessionId;
+      this.agentId = agentId;
+      this.call = call;
+      this.projection = projection;
+      this.unsubscribe = projection.subscribe(() => this.sync()), this.sync();
+    }
+    state = { current: null, routable: null, groups: [], failures: [], status: "idle", pending: null, error: null };
+    listeners = /* @__PURE__ */ new Set();
+    flight;
+    generation = 0;
+    disposed = !1;
+    unsubscribe;
+    store = { getSnapshot: () => this.state, subscribe: (listener) => (this.listeners.add(listener), () => {
+      this.listeners.delete(listener);
+    }) };
+    publish(patch) {
+      if (!this.disposed) {
+        this.state = { ...this.state, ...patch };
+        for (let listener of this.listeners) listener();
+      }
+    }
+    sync() {
+      let current = record(this.projection.getSnapshot()).next ?? this.state.current;
+      this.publish({ current, routable: current === null || this.state.status === "idle" || this.state.status === "loading" ? null : this.state.groups.some((group) => group.id === current.provider && group.models.some((model) => model.id === current.model)) });
+    }
+    load() {
+      if (this.flight) return this.flight;
+      let generation = this.generation;
+      this.publish({ status: "loading", error: null });
+      let flight = this.call("managedAgent.models", { sessionId: this.sessionId }).then((value) => {
+        if (this.disposed || generation !== this.generation) return this.state;
+        let catalog = value;
+        return this.publish({ groups: catalog.groups.filter((group) => group.id === this.agentId), current: catalog.current ?? null, failures: [], status: "ready" }), this.sync(), this.state;
+      }).catch((error) => {
+        throw generation === this.generation && this.publish({ status: "error", error: error instanceof Error ? error.message : String(error) }), error;
+      }).finally(() => {
+        this.flight === flight && (this.flight = void 0);
+      });
+      return this.flight = flight, flight;
+    }
+    async select(selection) {
+      let generation = this.generation;
+      this.publish({ status: "selecting", pending: selection, error: null });
+      try {
+        return await this.call("managedAgent.selectModel", { sessionId: this.sessionId, ...selection }), generation === this.generation && this.publish({ current: selection, pending: null, status: "ready", routable: !0 }), { ok: !0, value: void 0 };
+      } catch (error) {
+        let message = error instanceof Error ? error.message : String(error);
+        return generation === this.generation && this.publish({ pending: null, status: "error", error: message }), { ok: !1, error: { code: "managed-agent/model-selection", message } };
+      }
+    }
+    resetConnected() {
+      ++this.generation, this.flight = void 0, this.publish({ current: null, groups: [], failures: [], pending: null, status: "idle", error: null, routable: null });
+    }
+    dispose() {
+      this.disposed = !0, ++this.generation, this.unsubscribe(), this.listeners.clear();
+    }
+  };
+  function installManagedModelDirectories({ resolver, sessions, call, subscribeReset }) {
+    let original = resolver.directoryFor, live = /* @__PURE__ */ new Set(), byBinding = /* @__PURE__ */ new WeakMap(), wrapped = function(sessionId) {
+      let binding = sessions.binding(sessionId), identity = record(binding?.session.projections.faceOf("managedAgent").getSnapshot());
+      if (!binding || typeof identity.agentId != "string") return original.call(resolver, sessionId);
+      let directory = byBinding.get(binding);
+      if (!directory) {
+        directory = new ManagedModelDirectory(sessionId, identity.agentId, call, binding.session.projections.faceOf("modelSelection")), byBinding.set(binding, directory), live.add(directory);
+        let owned = directory;
+        sessions.scope(sessionId)?.effect(() => () => {
+          owned.dispose(), live.delete(owned), byBinding.delete(binding);
+        }, "xagent: scoped model directory");
+      }
+      return directory;
+    };
+    resolver.directoryFor = wrapped;
+    let unsubscribeReset = subscribeReset?.(() => {
+      for (let directory of live) directory.resetConnected();
+    });
+    return () => {
+      unsubscribeReset?.(), resolver.directoryFor === wrapped && (resolver.directoryFor = original);
+      for (let directory of live) directory.dispose();
+      live.clear();
+    };
+  }
+
+  // packages/plugin/src/client/chat-actions.ts
+  function createChatActions(React, call, chinese) {
+    return function({ sessionId }) {
+      let [state, setState] = React.useState(void 0), [answers, setAnswers] = React.useState({}), [error, setError] = React.useState(""), [busy, setBusy] = React.useState(!1), [open, setOpen] = React.useState(!1), flight = React.useRef(!1), activeId = React.useRef(sessionId);
+      activeId.current = sessionId, React.useEffect(() => {
+        let live = !0, pending = !1, unavailable = !1;
+        setState(void 0), setAnswers({}), setOpen(!1), setError(""), setBusy(!1);
+        let refresh = async () => {
+          if (!(pending || unavailable)) {
+            pending = !0;
+            try {
+              let value = await call("managedAgent.chatState", { sessionId });
+              live && setState(value);
+            } catch (reason) {
+              live && (setState(void 0), unavailable = String(reason).includes("MANAGED_SESSION_NOT_FOUND"));
+            } finally {
+              pending = !1;
+            }
+          }
+        };
+        refresh();
+        let timer = setInterval(() => {
+          refresh();
+        }, 1e3);
+        return () => {
+          live = !1, clearInterval(timer);
+        };
+      }, [sessionId]);
+      let question = state?.questions[0];
+      React.useEffect(() => {
+        setAnswers({}), setError("");
+      }, [question?.requestId]);
+      let queueWaiting = !!state?.queue.some((item) => item.state === "queued"), uncertain = !!state?.queue.some((item) => ["unknown", "dispatching"].includes(item.state));
+      if (!question && !(state?.paused && queueWaiting) && !uncertain) return null;
+      let run = async (endpoint, values) => {
+        if (!flight.current) {
+          flight.current = !0, setBusy(!0), setError("");
+          try {
+            await call(endpoint, { sessionId, ...values });
+            let value = await call("managedAgent.chatState", { sessionId });
+            activeId.current === sessionId && (setState(value), setAnswers({}));
+          } catch (reason) {
+            activeId.current === sessionId && setError(reason instanceof Error ? reason.message : String(reason));
+          } finally {
+            flight.current = !1, activeId.current === sessionId && setBusy(!1);
+          }
+        }
+      };
+      return React.createElement(
+        "div",
+        { className: "xcodexChatActions", style: { position: "relative" } },
+        React.createElement("button", { type: "button", onClick: () => setOpen((value) => !value) }, question ? chinese ? "\u9700\u8981\u4F60\u56DE\u7B54" : "Answer Agent" : chinese ? "\u5F85\u53D1\u9001\u6D88\u606F" : "Pending messages"),
+        open ? React.createElement(
+          "div",
+          { role: "dialog", "aria-label": chinese ? "\u5BF9\u8BDD\u5F85\u529E" : "Conversation actions", style: { position: "absolute", right: 0, top: "100%", zIndex: 100, width: "min(360px, 85vw)", maxHeight: "65vh", overflowY: "auto", padding: 16, background: "var(--background, #242424)", color: "var(--foreground, #eee)", border: "1px solid #777", borderRadius: 8 } },
+          question ? React.createElement(
+            "form",
+            { key: question.requestId, onSubmit: (event) => {
+              event.preventDefault(), run("managedAgent.answerQuestion", { requestId: question.requestId, answers });
+            } },
+            ...question.questions.map((item) => React.createElement(
+              "fieldset",
+              { key: item.id, disabled: busy },
+              React.createElement("legend", null, item.question),
+              ...(item.options ?? []).map((option) => React.createElement(
+                "label",
+                { key: option.label, style: { display: "block" } },
+                React.createElement("input", { type: item.multiSelect ? "checkbox" : "radio", name: item.id, checked: (answers[item.id] ?? []).includes(option.label), onChange: () => setAnswers((previous) => ({ ...previous, [item.id]: item.multiSelect ? (previous[item.id] ?? []).includes(option.label) ? previous[item.id].filter((value) => value !== option.label) : [...previous[item.id] ?? [], option.label] : [option.label] })) }),
+                option.label
+              )),
+              React.createElement("input", { type: item.isSecret ? "password" : "text", "aria-label": item.question, placeholder: chinese ? "\u8F93\u5165\u56DE\u7B54\u6216\u8865\u5145" : "Enter an answer", value: (answers[item.id] ?? []).filter((value) => !item.options?.some((option) => option.label === value)).join(", "), onChange: (event) => setAnswers((previous) => ({ ...previous, [item.id]: [event.target.value] })) })
+            )),
+            React.createElement("button", { type: "submit", disabled: busy || question.questions.some((item) => !answers[item.id]?.some((value) => value.trim())) }, chinese ? "\u63D0\u4EA4\u56DE\u7B54" : "Submit answer")
+          ) : null,
+          uncertain ? React.createElement("p", null, chinese ? "\u4E0A\u4E00\u6761\u6D88\u606F\u7684\u6267\u884C\u7ED3\u679C\u5F85\u786E\u8BA4\uFF0C\u540E\u7EED\u961F\u5217\u5DF2\u6682\u505C\uFF0C\u907F\u514D\u91CD\u590D\u6267\u884C\u3002" : "A previous delivery is uncertain. The queue is paused to prevent duplicate execution.") : null,
+          state?.paused && queueWaiting && !uncertain ? React.createElement("button", { type: "button", disabled: busy, onClick: () => {
+            run("managedAgent.resumeQueue", {});
+          } }, chinese ? "\u7EE7\u7EED\u53D1\u9001\u6392\u961F\u6D88\u606F" : "Resume queued messages") : null,
+          error ? React.createElement("p", { role: "alert" }, error) : null,
+          React.createElement("button", { type: "button", onClick: () => setOpen(!1) }, chinese ? "\u6536\u8D77" : "Close")
+        ) : null
+      );
+    };
+  }
+
   // packages/plugin/src/client/icons.ts
   var deepSeekWorkspaceIcon = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAACVBMVEUAAADy8vXx8fUsA3vyAAAAAXRSTlMAQObYZgAAAOxJREFUWMPtlsEOwyAMQxP+/6OnTZMGxHGcot3wDYgfhkJbs6urprzveGtu9d1NgEdto8w93GuA7zPS2RFg7ynsCOAokbtAmLr2YaeKgJ6fxpT8jCAC0qSqPyNoO5DXdvyouj4ClFAdYaDxK09uiBDCIYBf6CxLesnR0uF2pG+JmhCqrUb0AOvjjoQaYDTCEAAgMg5grhAeAQIB+/M15IcKlnUIp4CkTCd0AKb4zVsRSJVGYEVzT0agK107IMGMEurvromEpaX4wzk/IKw378kq4LafED6Oowxfk7AP2q8W16EdM3p29Eyvrv6vF0WIBfBziKyCAAAAAElFTkSuQmCC", gptWorkspaceIcon = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAclBMVEX////v7+++wMf////s7O3k5OTExcrX2Ny6vMTv8PPW19yXmqRqboJmaHd3eoaqrLPs7fGMjpfb3eKlpq1eYXOxs7pWWWd+gY5HSVdRVGVub3k+QU74+Pg4OkcvMT1ISlUoKjUiIy4fICueoKkaGyUSFB21Bp+qAAAAAXRSTlMAQObYZgAABChJREFUWMPtl916qjoQhlsdEwIECEgMYCBxx/u/xT1DrFUL1LO1DtY8LSLJvPnmB4gfH//sr7TPDfvdebf/xXZbkE/4zZ0MVhGHd9zJDsv+7F3//Z69tT5wljAu3tXw+TIlzXKJlhflYmJ+5uF5WpWhb54X+C/zZCmT2wJA4dJZwus0UYjIGqWyMhVbEp4yKNRRqlv0opW5PJLJ4rFJXvP4JKDRMqturBZjkMVJFYjR6iHQDQDI4+k2k51wZbWrqwp4mR/1CVYATyko9TFGxBUqL5IvMbXSWt0T8bkGgFLqgqZBI/Uxbx5UAxLaNcCNLBpttM7wbCc1pmJOpWAsDtey68UaQMyrFgb9uxLPjqg3+nGluyKN0XUdWw0BJ0NvTFFqgzpr9J+Dh4w0Ga1qkqBNswagxdRgFPAbgHRQG5jumGWyMxrTIaRRa4AzFs0YrNMXgI4MJWnsKYFhGNMnIh/mBOPsV8CZBFjN9w8ArowxnZzDr5IcvxTaKpxJCVsoI3SWysz1UM4AqQdzlCgho1IKrK+x1mKFzisANtgEU8E7GwHDgOqxe4w9tnM166wbaA2xBMBLrTWcAGYGdCiYVUJUrMCF+7l6gklrW1RwPi8ByjuActANqhKzVWoYrFGcCFzbDgNaBrTWpncFQMcI2DfWoAiDqRCiHcYM/ZdCEKkZqfR8spj4F0CiJjv2gHL6URNoCQDaYacL6O1oFDO2eQDUFP7AKdCRdC4CRDZaNifbjA41l/uYb/SZMAFNTBGzY7sG4J2jTsJgToOzIzXF3HZqBpSOAGduXbkGEKV1OqVGqRJpRxtvwbSw5IqAiUJItwBCOT9R32FCGo3nCkAN3t0UTBRC6zDONcBeOee9pr4T+ASbnDOdc5OmtREwEEB5w8Wqgt4bOV5c7Lt9iiK8zdP/IsBbutUGX4gNwEVCqd3FUt/xYnRWt7BvPBYQjwjAGXa3ASguHVAZ/WXKlA3eZDX1wRegFsr7E2wAlB9xFbx/7MV70kFT8aqNgLL3F8nFBmA3hrn/IJHjKJOK2oj1WI4Z4FzwN/81AOhgYD6v2xbIvaZIurLC9AfvB1WLTYAoXejF1xeBL5cpBIyEbmxkZymIXwDQh1BAfOrhI1lfwtgz8tozF5T4ttf3+32AyxC6klwAgw/YVTHpoK82xYt3wLP/Bw4AAI4D7/01TLKXBj9NEz2wEuGiKpoy68S/FwCLMQAZ3gXhihaCa25vQo6RyToOz9PE6wYjJgGi1YnqZX8qMIK+TDlnargGzSv4NvFjlwXf/nfLLMrAB4O/Xl3BH0d+RIASFgDA8IYMIXgr2+cBsbDdPSwAAHjSZFmb3txETCKIxc0uWwI8rxsLJcTiVndNwyMgKljbbNN2/zcEAja2+4RgIDYN2Bu/WtAOaEodnu2dnzz/7I/Y/w/LaEcX/MdfAAAAAElFTkSuQmCC";
 
   // packages/plugin/src/client/managed-agent.ts
-  var record = (value) => typeof value == "object" && value !== null ? value : {}, claudeIcon = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g stroke="#D97757" stroke-width="2.2"><path d="M12 1v22M1 12h22M4.2 4.2l15.6 15.6M4.2 19.8L19.8 4.2M7.8 1.8l8.4 20.4M1.8 7.8l20.4 8.4M1.8 16.2l20.4-8.4M7.8 22.2l8.4-20.4"/></g></svg>');
+  var record2 = (value) => typeof value == "object" && value !== null ? value : {}, claudeIcon = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g stroke="#D97757" stroke-width="2.2"><path d="M12 1v22M1 12h22M4.2 4.2l15.6 15.6M4.2 19.8L19.8 4.2M7.8 1.8l8.4 20.4M1.8 7.8l20.4 8.4M1.8 16.2l20.4-8.4M7.8 22.2l8.4-20.4"/></g></svg>');
   function createManagedAgentUi(React, ctx) {
     let managedIds = /* @__PURE__ */ new Map(), catalogFlight, catalogListeners = /* @__PURE__ */ new Set(), refreshCatalog = () => {
       catalogFlight || (catalogFlight = ctx.call("managedAgent/catalog", {}).then((value) => {
-        let items = Array.isArray(value) ? value : record(value).items;
+        let items = Array.isArray(value) ? value : record2(value).items;
         if (Array.isArray(items)) {
           managedIds.clear();
           for (let item of items) {
-            let entry = record(item);
+            let entry = record2(item);
             typeof entry.sessionId == "string" && typeof entry.agentId == "string" && managedIds.set(entry.sessionId, entry.agentId);
           }
           for (let listener of catalogListeners) listener();
@@ -1660,24 +1830,27 @@ Minimum version required to store current data is: ` + bestVersion + `.
       useSnapshots();
       let session = ctx.sessions.list.getSnapshot().byId?.[sessionId];
       if (!session) return null;
-      let projected = record(session.projections?.values?.managedAgent).agentId, id = typeof projected == "string" ? projected : managedIds.get(sessionId);
+      let projected = record2(session.projections?.values?.managedAgent).agentId, id = typeof projected == "string" ? projected : managedIds.get(sessionId);
       if (!id || id === "dsh" || id === "deepseek") return null;
       let src = id === "codex" ? gptWorkspaceIcon : id === "claude" || id === "claude-code" ? claudeIcon : void 0;
       return src ? React.createElement("img", { src, alt: id, title: id, width: 16, height: 16, style: { flexShrink: 0 } }) : React.createElement("span", { title: id, "aria-label": id }, id.slice(0, 1).toUpperCase());
     }
     function NewSession({ wide }) {
       useSnapshots();
-      let [agents, setAgents] = React.useState([]), [expanded, setExpanded] = React.useState(!1), [busy, setBusy] = React.useState(!1), [error, setError] = React.useState(void 0), [attempt, setAttempt] = React.useState(void 0), [loading, setLoading] = React.useState(!0), [reload, setReload] = React.useState(0), [chosenWorkspace, setChosenWorkspace] = React.useState(void 0), mounted = React.useRef(!1), creating = React.useRef(!1);
+      let [agents, setAgents] = React.useState([]), [expanded, setExpanded] = React.useState(!1), [busy, setBusy] = React.useState(!1), [error, setError] = React.useState(void 0), [attempt, setAttempt] = React.useState(void 0), [loading, setLoading] = React.useState(!0), [reload, setReload] = React.useState(0), [chosenWorkspace, setChosenWorkspace] = React.useState(void 0), [profiles, setProfiles] = React.useState({}), mounted = React.useRef(!1), creating = React.useRef(!1);
       React.useEffect(() => (mounted.current = !0, () => {
         mounted.current = !1;
       }), []), React.useEffect(() => {
         let active = !0;
         return setLoading(!0), setError(void 0), setAgents([]), ctx.call("managedAgent/agents", {}).then((value) => {
-          let values = Array.isArray(value) ? value : record(value).items;
+          let values = Array.isArray(value) ? value : record2(value).items;
           if (!Array.isArray(values)) throw new Error(ctx.chinese ? "Agent \u5217\u8868\u683C\u5F0F\u9519\u8BEF" : "Invalid Agent list");
           active && setAgents(values.flatMap((item) => {
-            let agent = record(item);
-            return typeof agent.id == "string" && agent.available !== !1 ? [{ id: agent.id, label: typeof agent.name == "string" ? agent.name : agent.id }] : [];
+            let agent = record2(item);
+            return typeof agent.id == "string" && agent.available !== !1 ? [{ id: agent.id, label: typeof agent.name == "string" ? agent.name : agent.id, profiles: Array.isArray(agent.profiles) ? agent.profiles.flatMap((item2) => {
+              let p = record2(item2);
+              return typeof p.id == "string" && typeof p.label == "string" ? [{ id: p.id, label: p.label }] : [];
+            }) : [] }] : [];
           }));
         }).catch((reason) => {
           active && setError(reason instanceof Error ? reason.message : String(reason));
@@ -1690,10 +1863,10 @@ Minimum version required to store current data is: ` + bestVersion + `.
       let current = Object.values(ctx.sessions.list.getSnapshot().byId ?? {}).find((item) => (item.retainedBy?.mainView ?? 0) > 0), workspaces = ctx.workspaces.list.getSnapshot().items, workspace = chosenWorkspace ? workspaces.find((item) => item.workspaceId === chosenWorkspace) : workspaces.find((item) => current && item.sessionIds?.includes(current.id)) ?? (workspaces.length === 1 ? workspaces[0] : void 0), create = async (agentId) => {
         if (creating.current || !workspace || !ctx.workspaces.list.getSnapshot().items.some((item) => item.workspaceId === workspace.workspaceId)) return;
         creating.current = !0;
-        let request = attempt?.workspaceId === workspace.workspaceId && attempt.agentId === agentId ? attempt : { workspaceId: workspace.workspaceId, agentId, operationId: crypto.randomUUID() };
+        let request = attempt?.workspaceId === workspace.workspaceId && attempt.agentId === agentId && (attempt.profileId ?? "host") === (profiles[agentId] ?? "host") ? attempt : { workspaceId: workspace.workspaceId, agentId, ...profiles[agentId] && profiles[agentId] !== "host" ? { profileId: profiles[agentId] } : {}, operationId: crypto.randomUUID() };
         setAttempt(request), setBusy(!0), setError(void 0);
         try {
-          let result = record(await ctx.call("managedAgent/create", { request }));
+          let result = record2(await ctx.call("managedAgent/create", { request }));
           if (typeof result.sessionId != "string") throw new Error(ctx.chinese ? "\u521B\u5EFA\u4F1A\u8BDD\u5931\u8D25" : "Session creation failed");
           if (await ctx.sessions.refresh?.(), !mounted.current || !ctx.workspaces.list.getSnapshot().items.some((item) => item.workspaceId === request.workspaceId)) return;
           ctx.open(result.sessionId), setAttempt(void 0), setExpanded(!1);
@@ -1728,6 +1901,16 @@ Minimum version required to store current data is: ` + bestVersion + `.
           ),
           loading ? React.createElement("div", { role: "status" }, ctx.chinese ? "\u6B63\u5728\u52A0\u8F7D Agent\u2026" : "Loading Agents\u2026") : null,
           !loading && !agents.length && !error ? React.createElement("div", null, ctx.chinese ? "\u6CA1\u6709\u53EF\u7528 Agent\uFF0C\u8BF7\u68C0\u67E5\u63D2\u4EF6\u914D\u7F6E\u540E\u91CD\u8BD5" : "No Agents available. Check plugin configuration and retry.") : null,
+          ...agents.filter((agent) => (agent.profiles?.length ?? 0) > 1).map((agent) => React.createElement(
+            "label",
+            { key: `profile:${agent.id}` },
+            `${agent.label} ${ctx.chinese ? "\u914D\u7F6E" : "profile"}`,
+            React.createElement(
+              "select",
+              { value: profiles[agent.id] ?? "host", disabled: busy, onChange: (event) => setProfiles((previous) => ({ ...previous, [agent.id]: event.target.value })) },
+              ...agent.profiles.map((profile) => React.createElement("option", { key: profile.id, value: profile.id }, profile.id === "host" ? ctx.chinese ? "\u672C\u673A\u5F53\u524D\u914D\u7F6E" : "Computer configuration" : profile.label))
+            )
+          )),
           ...agents.map((agent) => React.createElement("button", { className: "xcodexManagedAgentButton", key: agent.id, type: "button", disabled: busy || !workspace, onClick: () => {
             create(agent.id);
           } }, agent.label)),
@@ -2940,9 +3123,9 @@ If a code was sent, recover the original submission without changing it.`,
     };
     inspect(document.body);
     let observer = new MutationObserver((records) => {
-      for (let record2 of records) {
-        record2.type === "attributes" && inspect(record2.target);
-        for (let node of Array.from(record2.addedNodes))
+      for (let record3 of records) {
+        record3.type === "attributes" && inspect(record3.target);
+        for (let node of Array.from(record3.addedNodes))
           node instanceof Element && inspect(node);
       }
     });
@@ -6105,6 +6288,21 @@ If a code was sent, recover the original submission without changing it.`,
           locale: localeNamespace,
           inject: () => ({ control, statusFeed, onSignIn: openRemote })
         }, RemoteSessionHeaderAction));
+        let ChatActions = createChatActions(React, control, ctx.locale.getLocale().active === "zh");
+        ctx.slots.inject("conversation.session.header.utilities", () => ctx.slots.register({
+          name: "conversation.session.header.utilities",
+          id: "xcodex-chat-actions",
+          order: 30
+        }, ChatActions)), ctx.inject(["modelDirectories"], (scope) => {
+          let resolver = scope.get("modelDirectories");
+          resolver && scope.effect(() => installManagedModelDirectories({
+            resolver,
+            sessions: ctx.sessions,
+            call: (endpoint, payload) => control(endpoint, payload),
+            subscribeReset: (listener) => ctx.on?.("connection/reset", listener) ?? (() => {
+            })
+          }), "xagent: native session model selectors");
+        });
         let managedUi = createManagedAgentUi(React, {
           sessions: ctx.sessions,
           workspaces: ctx.workspaces,

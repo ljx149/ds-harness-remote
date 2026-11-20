@@ -1,26 +1,56 @@
+import { defaultManagedLaunchRegistry, type ManagedLaunchRegistry } from './launch.js'
+import { questionsSchema, validateAnswers, type ManagedQuestion } from './questions.js'
 import { randomUUID } from 'node:crypto'
 import { CodexAppServerClient, type CodexAppServerLike } from '../codex/app-server.js'
 import type { ManagedAgentAdapter, ManagedAgentConnection, ManagedAgentEmit, ManagedAgentOpen } from './types.js'
 
 const record = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 
+/** Model selection must use the same complete catalog as discovery. */
+async function modelCatalog(client: CodexAppServerLike): Promise<{ data: unknown[] }> {
+  const data: unknown[] = [], seen = new Set<string>()
+  let cursor: string | undefined
+  for (let page = 0; page < 100; page++) {
+    const response = record(await client.call('model/list', cursor ? { cursor } : {}))
+    if (!Array.isArray(response.data)) throw new Error('CODEX_MODEL_CATALOG_INVALID')
+    data.push(...response.data)
+    const next = response.nextCursor
+    if (next === undefined || next === null || next === '') return { data }
+    if (typeof next !== 'string' || seen.has(next)) throw new Error('CODEX_MODEL_CURSOR_INVALID')
+    seen.add(next); cursor = next
+  }
+  throw new Error('CODEX_MODEL_CATALOG_TOO_LARGE')
+}
+
 export class ManagedCodexAdapter implements ManagedAgentAdapter {
-  constructor(private readonly createClient: () => CodexAppServerLike = () => new CodexAppServerClient('codex')) {}
+  constructor(private readonly createClient?: () => CodexAppServerLike, private readonly launches: ManagedLaunchRegistry = defaultManagedLaunchRegistry) {}
 
   async open(input: ManagedAgentOpen, emit: ManagedAgentEmit): Promise<ManagedAgentConnection> {
-    const client = this.createClient()
+    const launch = this.createClient ? undefined : this.launches.resolve({ sessionId: input.sessionId, agent: input.agent, workspacePath: input.workspacePath, selection: input.launch, previousFingerprint: input.launchFingerprint })
+    const client = this.createClient?.() ?? new CodexAppServerClient('codex', undefined, executable => launch!.spawn(executable, ['app-server']))
+    let backgroundUncertain = false
     let threadId = input.providerSessionId
     let turnId: string | undefined
     let sending = false
     let active = false
     let ended = false
+    const questions = new Map<string, { id: string | number; questions: ManagedQuestion[] }>()
     const approvals = new Map<string, string | number>()
     const reasoning = new Map<string, string>()
     const pendingText = new Map<string, string>()
     const unsubscribe = client.onInbound(message => {
       const p = record(message.params)
-      if (typeof p.threadId === 'string' && p.threadId !== threadId) return
+      if (typeof p.threadId === 'string' && p.threadId !== threadId) {
+        if (message.kind === 'request') void client.respondError(message.id, -32602, 'Foreign thread.').catch(() => undefined)
+        return
+      }
       if (message.kind === 'request') {
+        if (message.method === 'item/tool/requestUserInput' && threadId && p.threadId === threadId) {
+          const parsed = questionsSchema.safeParse(p.questions)
+          if (!parsed.success) { void client.respondError(message.id, -32602, 'Invalid questions.').catch(() => undefined); return }
+          const requestId = randomUUID(); questions.set(requestId, { id: message.id, questions: parsed.data })
+          emit({ type: 'question', requestId, title: 'Codex', questions: parsed.data }); return
+        }
         if (!['item/commandExecution/requestApproval', 'item/fileChange/requestApproval'].includes(message.method) || !threadId || p.threadId !== threadId) {
           void client.respondError(message.id, -32601, 'Unsupported managed agent request.').catch(() => undefined)
           return
@@ -31,11 +61,12 @@ export class ManagedCodexAdapter implements ManagedAgentAdapter {
         return
       }
       const item = record(p.item)
+      if (['collabAgentToolCall', 'subAgentActivity'].includes(String(item.type))) backgroundUncertain = true
       const itemId = typeof p.itemId === 'string' ? p.itemId : typeof item.id === 'string' ? item.id : undefined
       if (message.method === 'item/agentMessage/delta' && typeof p.delta === 'string') {
-        if (itemId) pendingText.set(itemId, (pendingText.get(itemId) ?? '') + p.delta)
+        if (itemId) { pendingText.set(itemId, (pendingText.get(itemId) ?? '') + p.delta); emit({ type: 'text-delta', itemId, text: p.delta }) }
       } else if (message.method === 'item/reasoning/summaryTextDelta' && typeof p.delta === 'string') {
-        if (itemId) reasoning.set(itemId, (reasoning.get(itemId) ?? '') + p.delta)
+        if (itemId) { reasoning.set(itemId, (reasoning.get(itemId) ?? '') + p.delta); emit({ type: 'reasoning-delta', itemId, text: p.delta }) }
       } else if (message.method === 'item/completed' && item.type === 'agentMessage') {
         const text = typeof item.text === 'string' ? item.text : itemId ? pendingText.get(itemId) : undefined
         if (text) emit({ type: 'text', text, ...(itemId ? { itemId } : {}) })
@@ -54,7 +85,7 @@ export class ManagedCodexAdapter implements ManagedAgentAdapter {
         emit({ type: 'turn-completed', ...(typeof turn.id === 'string' ? { turnId: turn.id } : {}), status: turn.status === 'failed' ? 'failed' : turn.status === 'interrupted' ? 'cancelled' : 'completed' })
         turnId = undefined
         active = false
-        approvals.clear()
+        approvals.clear(); for (const requestId of questions.keys()) emit({ type: 'question-closed', requestId }); questions.clear()
       } else if (message.method === 'error') emit({ type: 'error', code: 'CODEX_TURN_ERROR', message: 'Codex reported an execution error.' })
     })
     const unavailable = client.onUnavailable(code => { ended = true; emit({ type: 'unavailable', code }) })
@@ -74,6 +105,16 @@ export class ManagedCodexAdapter implements ManagedAgentAdapter {
       return {
         providerSessionId: id,
         get defaultModel() { return defaultModel },
+        isIdle: async () => {
+          if (ended) return 'unknown'
+          if (active || sending || approvals.size || questions.size || backgroundUncertain) return 'busy'
+          // Capability absence is not proof of idleness; never guess from UI state.
+          try {
+            const response = record(await client.call('thread/read', { threadId, includeTurns: false }, 2000))
+            const status = record(record(response.thread).status)
+            return status.type === 'idle' ? 'idle' : status.type === 'active' ? 'busy' : 'unknown'
+          } catch { return 'unknown' }
+        },
         send: async ({ text }) => {
           if (ended) throw new Error('Codex process is unavailable.')
           if (sending || active) throw new Error('A turn is already running.')
@@ -89,6 +130,13 @@ export class ManagedCodexAdapter implements ManagedAgentAdapter {
           } catch { return { state: 'unknown', reason: 'Codex submission acknowledgement was not received; do not automatically resend.' } }
           finally { sending = false }
         },
+        answerQuestion: async (requestId, values) => {
+          const question = questions.get(requestId); if (!question) throw new Error('MANAGED_QUESTION_EXPIRED')
+          const answers = validateAnswers(question.questions, values)
+          questions.delete(requestId)
+          await client.respond(question.id, { answers: Object.fromEntries(Object.entries(answers).map(([id, answers]) => [id, { answers }])) })
+          emit({ type: 'question-closed', requestId })
+        },
         cancel: async () => { if (turnId) await client.call('turn/interrupt', { threadId, turnId }) },
         approve: async (requestId, choice) => {
           if (!['allow-once', 'reject-once', 'cancel'].includes(choice)) throw new Error('Invalid approval choice.')
@@ -97,7 +145,7 @@ export class ManagedCodexAdapter implements ManagedAgentAdapter {
           approvals.delete(requestId)
           await client.respond(request, { decision: choice === 'allow-once' ? 'accept' : choice === 'cancel' ? 'cancel' : 'decline' })
         },
-        models: () => client.call('model/list', {}),
+        models: () => modelCatalog(client),
         setOption: async (key, value) => {
           if (active || sending) throw new Error('Stop the turn before changing options.')
           if (key === 'model') input.model = value
@@ -106,8 +154,8 @@ export class ManagedCodexAdapter implements ManagedAgentAdapter {
           if (key === 'model') defaultModel = { model: value, ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}) }
           else if (defaultModel) defaultModel = { ...defaultModel, reasoningEffort: value }
         },
-        close: async () => { ended = true; unsubscribe(); unavailable(); approvals.clear(); await client.close() },
+        close: async () => { ended = true; unsubscribe(); unavailable(); approvals.clear(); questions.clear(); await client.close(); await launch?.awaitExitProof() },
       }
-    } catch (error) { unsubscribe(); unavailable(); await client.close(); throw error }
+    } catch (error) { unsubscribe(); unavailable(); await client.close(); await launch?.awaitExitProof(); throw Object.assign(error instanceof Error ? error : new Error('Codex startup failed.'), { cleanupConfirmed: true }) }
   }
 }

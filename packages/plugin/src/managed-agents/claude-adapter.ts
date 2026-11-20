@@ -1,6 +1,9 @@
+import { defaultManagedLaunchRegistry, type ManagedLaunchRegistry } from './launch.js'
+import { questionsSchema, validateAnswers, type ManagedQuestion } from './questions.js'
+import { ClaudeChatProjection } from './claude-projection.js'
 // Orca SDK lifecycle adaptation; Copyright (c) 2026 Lovecast Inc. MIT; see ORCA-LICENSE.
 import { randomUUID } from 'node:crypto'
-import type { Options, PermissionResult, Query, SDKMessage } from '@anthropic-ai/claude-agent-sdk'
+import type { Options, PermissionResult, Query } from '@anthropic-ai/claude-agent-sdk'
 import { createClaudeUserMessageQueue, claudeUserMessageWasProvablyUnwritten } from './claude-message-queue.js'
 import { createClaudeControlSurface } from './claude-controls.js'
 import type { ManagedAgentAdapter, ManagedAgentConnection, ManagedAgentEmit, ManagedAgentOpen } from './types.js'
@@ -10,31 +13,51 @@ const record = (value: unknown): Record<string, unknown> => value !== null && ty
 
 /** Native installed Claude Code; no Orca process and no ACP bridge executable. */
 export class ManagedClaudeAdapter implements ManagedAgentAdapter {
-  constructor(private readonly queryFactory?: ClaudeQueryFactory, private readonly executable = 'claude') {}
+  constructor(private readonly queryFactory?: ClaudeQueryFactory, private readonly executable = 'claude', private readonly launches: ManagedLaunchRegistry = defaultManagedLaunchRegistry) {}
 
   async open(input: ManagedAgentOpen, emit: ManagedAgentEmit): Promise<ManagedAgentConnection> {
+    const launch = this.launches.resolve({ sessionId: input.sessionId, agent: input.agent, workspacePath: input.workspacePath, selection: input.launch, previousFingerprint: input.launchFingerprint })
     const query = this.queryFactory ?? (await import('@anthropic-ai/claude-agent-sdk')).query
     const sessionId = input.providerSessionId ?? randomUUID()
     const inbox = createClaudeUserMessageQueue()
+    const projection = new ClaudeChatProjection(emit)
     let closed = false
     let busy = false
     let turnId: string | undefined
     let defaultModel: { model: string; reasoningEffort?: string } | undefined
     const abort = new AbortController()
+    const questions = new Map<string, { questions: ManagedQuestion[]; finish: (answers?: Record<string, string[]>) => void }>()
     const approvals = new Map<string, (choice: string) => void>()
     const session = query({ prompt: inbox.messages, options: {
-      cwd: input.workspacePath,
+      ...launch.claudeOptions(),
       pathToClaudeCodeExecutable: this.executable,
       ...(input.providerSessionId ? { resume: sessionId } : { sessionId }),
       ...(input.model ? { model: input.model } : {}),
       settingSources: ['user', 'project', 'local'],
       systemPrompt: { type: 'preset', preset: 'claude_code' },
-      permissionMode: 'default', includePartialMessages: false,
+      permissionMode: 'default', includePartialMessages: true,
       abortController: abort,
       canUseTool: async (name, toolInput, options) => {
         if (closed || options.signal.aborted) return { behavior: 'deny', message: 'Session closed.', interrupt: true }
         return new Promise<PermissionResult>(resolve => {
           const requestId = randomUUID()
+          if (name === 'AskUserQuestion') {
+            const raw = Array.isArray(toolInput.questions) ? toolInput.questions : []
+            const parsed = questionsSchema.safeParse(raw.map((item, index) => ({ ...record(item), id: `q${index}` })))
+            if (!parsed.success) { resolve({ behavior: 'deny', message: 'Invalid question.', interrupt: true }); return }
+            const cancelled = () => finishQuestion()
+            const finishQuestion = (answers?: Record<string, string[]>) => {
+              if (!questions.delete(requestId)) return
+              options.signal.removeEventListener('abort', cancelled)
+              resolve(answers ? { behavior: 'allow', updatedInput: { ...toolInput, answers: Object.fromEntries(parsed.data.map(question => [question.question, answers[question.id]!.join(', ')])) } } : { behavior: 'deny', message: 'Question cancelled.', interrupt: true })
+              emit({ type: 'question-closed', requestId })
+            }
+            questions.set(requestId, { questions: parsed.data, finish: finishQuestion })
+            options.signal.addEventListener('abort', cancelled, { once: true })
+            if (options.signal.aborted) cancelled()
+            else emit({ type: 'question', requestId, title: 'Claude Code', questions: parsed.data })
+            return
+          }
           const finish = (choice: string) => {
             if (!approvals.delete(requestId)) return
             options.signal.removeEventListener('abort', cancelled)
@@ -54,12 +77,18 @@ export class ManagedClaudeAdapter implements ManagedAgentAdapter {
         for await (const message of session) {
           if (closed) break
           if (message.type === 'system' && message.subtype === 'init' && typeof message.model === 'string' && message.model) defaultModel = { model: message.model }
-          this.project(message, emit, turnId)
-          if (message.type === 'result') { busy = false; turnId = undefined }
+          projection.observe(message)
+          if (message.type === 'result' && record(message).parent_tool_use_id == null) {
+            const finished = turnId
+            busy = false; turnId = undefined
+            for (const question of [...questions.values()]) question.finish()
+            if (finished) emit({ type: 'turn-completed', turnId: finished, status: record(message).is_error === true ? 'failed' : 'completed' })
+          }
         }
       } catch {
         if (!closed) emit({ type: 'error', code: 'CLAUDE_PROCESS_FAILED', message: 'Claude Code stopped unexpectedly.' })
       } finally {
+        for (const question of [...questions.values()]) question.finish()
         inbox.fail(new Error('Claude Code input closed.'))
         for (const finish of [...approvals.values()]) finish('cancel')
         if (!closed) { closed = true; emit({ type: 'unavailable', code: 'CLAUDE_PROCESS_EXITED' }) }
@@ -68,12 +97,14 @@ export class ManagedClaudeAdapter implements ManagedAgentAdapter {
     const reader = consume()
     const close = async () => {
       closed = true
+      for (const question of [...questions.values()]) question.finish()
       inbox.fail(new Error('Claude Code session closed.'))
       inbox.end()
       for (const finish of [...approvals.values()]) finish('cancel')
-      session.close()
-      abort.abort()
-      await reader
+      try { session.close() } finally { abort.abort() }
+      let timer: ReturnType<typeof setTimeout> | undefined
+      try { await Promise.race([Promise.all([reader, launch.awaitExitProof()]), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Claude cleanup unconfirmed.')), 6000) })]) }
+      finally { clearTimeout(timer) }
     }
     try {
       // Bounded startup; failure closes this owned query rather than abandoning a child.
@@ -108,6 +139,11 @@ export class ManagedClaudeAdapter implements ManagedAgentAdapter {
             return { state: 'unknown', reason: 'Claude message write outcome is unknown; do not automatically resend.' }
           }
         },
+        answerQuestion: async (requestId, answers) => {
+          const question = questions.get(requestId); if (!question) throw new Error('MANAGED_QUESTION_EXPIRED')
+          question.finish(validateAnswers(question.questions, answers))
+        },
+        isIdle: async () => closed ? 'unknown' : busy || approvals.size || questions.size || !projection.idleSafe ? 'busy' : 'idle',
         cancel: async () => { await controls.interrupt({ cancelQueued: true }) },
         approve: async (requestId, choice) => {
           if (!['allow-once', 'reject-once', 'cancel'].includes(choice)) throw new Error('Invalid approval choice.')
@@ -124,22 +160,7 @@ export class ManagedClaudeAdapter implements ManagedAgentAdapter {
         },
         close,
       }
-    } catch (error) { await close(); throw error }
+    } catch (error) { await close(); throw Object.assign(error instanceof Error ? error : new Error('Claude startup failed.'), { cleanupConfirmed: true }) }
   }
 
-  private project(message: SDKMessage, emit: ManagedAgentEmit, turnId?: string): void {
-    const frame = record(message)
-    const body = record(frame.message)
-    if ((message.type === 'assistant' || message.type === 'user') && Array.isArray(body.content)) {
-      for (const block of body.content) {
-        const value = record(block)
-        if (message.type === 'assistant' && value.type === 'text' && typeof value.text === 'string') emit({ type: 'text', text: value.text, ...(typeof frame.uuid === 'string' ? { itemId: frame.uuid } : {}) })
-        else if (message.type === 'assistant' && value.type === 'thinking' && typeof value.thinking === 'string') emit({ type: 'reasoning', text: value.thinking })
-        else if (value.type === 'tool_use' && typeof value.id === 'string') emit({ type: 'tool', itemId: value.id, name: String(value.name ?? 'Tool'), status: 'running', data: value })
-        else if (value.type === 'tool_result' && typeof value.tool_use_id === 'string') emit({ type: 'tool', itemId: value.tool_use_id, name: 'Tool result', status: 'completed', data: value })
-      }
-    } else if (message.type === 'result') {
-      emit({ type: 'turn-completed', ...(turnId ? { turnId } : {}), status: frame.is_error === true ? 'failed' : 'completed' })
-    }
-  }
 }

@@ -1,3 +1,5 @@
+> 当前旧版分支测试包：`xcodex-remote@0.7.0-xcodex.7`。恢复范围、配置方式和验收限制见 [会话能力恢复记录](docs/design/baseline-chat-restoration.md)。
+
 <p align="center">
 
   <img src="docs/logo.svg" alt="DeepSeek Harness Remote" width="600">

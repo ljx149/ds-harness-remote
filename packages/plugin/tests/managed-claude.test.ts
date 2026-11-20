@@ -37,6 +37,7 @@ describe('Orca Claude management extraction', () => {
     expect(options.settingSources).toEqual(['user', 'project', 'local'])
     expect(options.pathToClaudeCodeExecutable).toBe('claude')
     expect(options.permissionMode).toBe('default')
+    expect(options.includePartialMessages).toBe(true)
     expect(await connection.send({ messageId: 'msg', text: 'hello' })).toEqual({ state: 'accepted', providerTurnId: 'msg' })
     const pending = options.canUseTool!('Bash', { command: 'pwd' }, { signal: new AbortController().signal, toolUseID: 'tool-1', requestId: 'provider-request-1' })
     const approval = events.find(event => event.type === 'approval')!
@@ -60,9 +61,29 @@ describe('Orca Claude management extraction', () => {
     const events: ManagedAgentEvent[] = []
     const connection = await new ManagedClaudeAdapter(factory).open({ sessionId: 'managed', agent: 'claude', workspacePath: '/work/a' }, event => events.push(event))
     expect(events).toEqual([
-      { type: 'reasoning', text: 'reason' }, { type: 'text', text: 'answer', itemId: 'answer' },
+      { type: 'reasoning', text: 'reason', itemId: 'claude:answer:0' }, { type: 'text', text: 'answer', itemId: 'claude:answer:1' },
       { type: 'tool', itemId: 'tool', name: 'Read', status: 'running', data: { type: 'tool_use', id: 'tool', name: 'Read', input: {} } },
     ])
+    await connection.close()
+  })
+
+  it('returns AskUserQuestion answers through the native permission callback and expires them on abort', async () => {
+    let options!: Options, finish!: () => void
+    const events: ManagedAgentEvent[] = []
+    const factory: ClaudeQueryFactory = input => {
+      options = input.options
+      return { initializationResult: async () => ({}), close: () => finish(), async *[Symbol.asyncIterator]() { await new Promise<void>(resolve => { finish = resolve }) } } as unknown as Query
+    }
+    const connection = await new ManagedClaudeAdapter(factory).open({ sessionId: 's', agent: 'claude', workspacePath: '/work/a' }, event => events.push(event))
+    const signal = new AbortController()
+    const pending = options.canUseTool!('AskUserQuestion', { questions: [{ question: 'Which?', options: [{ label: 'A' }, { label: 'B' }] }] }, { signal: signal.signal, toolUseID: 'q', requestId: 'provider-q' })
+    const event = events.find(event => event.type === 'question')!
+    if (event.type !== 'question') throw new Error('No question')
+    await connection.answerQuestion!(event.requestId, { q0: ['B'] })
+    expect(await pending).toMatchObject({ behavior: 'allow', updatedInput: { answers: { 'Which?': 'B' } } })
+    await expect(connection.answerQuestion!(event.requestId, { q0: ['A'] })).rejects.toThrow('EXPIRED')
+    const cancelled = options.canUseTool!('AskUserQuestion', { questions: [{ question: 'Cancel?' }] }, { signal: signal.signal, toolUseID: 'q2', requestId: 'provider-q2' })
+    signal.abort(); expect(await cancelled).toMatchObject({ behavior: 'deny', interrupt: true })
     await connection.close()
   })
 

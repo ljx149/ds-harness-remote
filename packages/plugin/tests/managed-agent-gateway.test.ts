@@ -166,6 +166,14 @@ describe('managed Agent native gateway authority', () => {
     changed()
     await vi.waitFor(() => expect(events.some(event => event.event === 'api-session/added')).toBe(true))
     expect(events.filter(event => event.event === 'llm/models-updated')).toHaveLength(0)
+    await vi.waitFor(() => expect(events.some(event => event.event === 'api-session/status' && event.args[1] === false)).toBe(true))
+    current = current.map(entry => ({ ...entry, summary: { ...entry.summary, running: true } }))
+    changed()
+    await vi.waitFor(() => expect(events.filter(event => event.event === 'api-session/status').at(-1).args[1]).toBe(true))
+    current = current.map(entry => ({ ...entry, summary: { ...entry.summary, running: false } }))
+    changed()
+    await vi.waitFor(() => expect(events.filter(event => event.event === 'api-session/status').at(-1).args[1]).toBe(false))
+
     current = [...current, { ...entries[0]!, sessionId: 'managed:2' }]
     changed()
     await vi.waitFor(() => expect(events.filter(event => event.event === 'llm/models-updated')).toHaveLength(1))
