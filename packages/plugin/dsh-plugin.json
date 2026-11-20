@@ -2,7 +2,7 @@
   "$schema": "https://dsh.community/schemas/dsh-plugin-0.15.json",
   "id": "vip.xcodex.remote",
   "name": "@xcoder/xagent",
-  "version": "0.8.1-xagent.3",
+  "version": "0.8.1-xagent.4",
   "manifestVersion": "0.15",
   "facets": {
     "host": {

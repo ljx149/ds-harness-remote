@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -57,7 +59,7 @@ describe('managed backend integration', () => {
     // Optional pinned package path allows the same contract to run against a
     // user's exact DSH build, without changing production dependencies.
     const nativePath = process.env.XAGENT_DSH_ASSISTANT_FOLD
-      ?? new URL('./types/client/sessions/assistant-stream.js', import.meta.resolve('@deepseek-ai/dsh-api-session-controller')).href
+      ?? new URL('./types/client/sessions/assistant-stream.js', pathToFileURL(createRequire(import.meta.url).resolve('@deepseek-ai/dsh-api-session-controller')).href).href
     const { ClientAssistantStream } = await import(/* @vite-ignore */ nativePath)
     const fold = new ClientAssistantStream()
     const f = fixture(), sessionId = await f.create()
@@ -84,6 +86,11 @@ describe('managed backend integration', () => {
     expect(published.filter(item => item.event.type === 'tool/call')).toHaveLength(1)
     expect(published.filter(item => item.event.type === 'tool/result')).toHaveLength(1)
     expect(rebaseline).toEqual([])
+    // The native conversation assembler rejects older matches even when the
+    // stream fold itself does not request a rebaseline. In particular finish
+    // must precede the durable settlement, not receive a later fractional seq.
+    const sequences = published.map(item => item.event.seq)
+    expect(sequences).toEqual([...sequences].sort((a, b) => a - b))
     controller.abort(); await consuming
   })
   it('does not restore history during global model discovery, but probes a blank session explicitly', async () => {

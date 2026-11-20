@@ -8,6 +8,22 @@ import type { ManagedAgentAdapter, ManagedAgentConnection, ManagedAgentEmit, Man
 
 const record = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 
+/** Model selection must use the same complete catalog as discovery. */
+async function modelCatalog(client: CodexAppServerLike): Promise<{ data: unknown[] }> {
+  const data: unknown[] = [], seen = new Set<string>()
+  let cursor: string | undefined
+  for (let page = 0; page < 100; page++) {
+    const response = record(await client.call('model/list', cursor ? { cursor } : {}))
+    if (!Array.isArray(response.data)) throw new Error('CODEX_MODEL_CATALOG_INVALID')
+    data.push(...response.data)
+    const next = response.nextCursor
+    if (next === undefined || next === null || next === '') return { data }
+    if (typeof next !== 'string' || seen.has(next)) throw new Error('CODEX_MODEL_CURSOR_INVALID')
+    seen.add(next); cursor = next
+  }
+  throw new Error('CODEX_MODEL_CATALOG_TOO_LARGE')
+}
+
 type PermissionPolicy = { approvalPolicy: 'on-request' | 'never'; sandbox: string; approvalsReviewer: 'user' | 'auto_review' }
 function permissionPolicy(mode: string): PermissionPolicy {
   if (mode === 'read-only') return { approvalPolicy: 'on-request', sandbox: 'read-only', approvalsReviewer: 'user' }
@@ -144,7 +160,7 @@ export class ManagedCodexAdapter implements ManagedAgentAdapter {
       const setOption = async (key: string, value: string) => {
         if (active || sending) throw new Error('Stop the turn before changing options.')
         if (key === 'model') {
-          const catalog = record(await client.call('model/list', {}))
+          const catalog = await modelCatalog(client)
           const entry = (Array.isArray(catalog.data) ? catalog.data : []).map(record).find(candidate => candidate.model === value || candidate.id === value)
           if (!entry) throw new Error('Unsupported model.')
           if (ended || active || sending) throw new Error('Codex session changed while selecting a model.')
@@ -154,7 +170,7 @@ export class ManagedCodexAdapter implements ManagedAgentAdapter {
         }
         else if (key === 'reasoningEffort') {
           const model = input.model ?? defaultModel?.model
-          const catalog = record(await client.call('model/list', {}))
+          const catalog = await modelCatalog(client)
           const entry = (Array.isArray(catalog.data) ? catalog.data : []).map(record).find(candidate => candidate.model === model || candidate.id === model)
           if (!entry || !(Array.isArray(entry.supportedReasoningEfforts) ? entry.supportedReasoningEfforts : []).some(effort => record(effort).reasoningEffort === value)) throw new Error('Unsupported reasoning effort for this model.')
           if (ended || active || sending) throw new Error('Codex session changed while selecting reasoning effort.')
@@ -229,7 +245,7 @@ export class ManagedCodexAdapter implements ManagedAgentAdapter {
             ? choice === 'allow-once' ? { action: 'accept', content: {}, _meta: null } : { action: 'cancel', content: null, _meta: { codex_approval_cancellation_reason: 'user' } }
             : { decision: choice === 'allow-once' ? 'accept' : choice === 'cancel' ? 'cancel' : 'decline' })
         },
-        models: () => client.call('model/list', {}),
+        models: () => modelCatalog(client),
         setOption,
         close: async () => { ended = true; unsubscribe(); unavailable(); approvals.clear(); management?.close(); await client.close() },
       }

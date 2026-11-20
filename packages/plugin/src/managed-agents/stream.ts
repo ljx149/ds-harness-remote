@@ -42,8 +42,11 @@ export class ManagedAssistantStream {
     const active = this.active
     if (!active) return false
     for (const block of this.blocks) if (!block.ended) this.chunk({ type: 'block-end', index: block.index, block: { type: block.kind, text: block.text } })
-    const seq = commit(this.blocks.map(block => ({ type: block.kind, text: block.text })))
     this.chunk({ type: 'finish', reason: { kind: 'stop' } })
+    // Finish transient output before advancing the durable cursor. Otherwise
+    // DSH assigns this chunk a sequence after the held settlement, then tries
+    // to append the older settlement to the same conversation context.
+    const seq = commit(this.blocks.map(block => ({ type: block.kind, text: block.text })))
     this.publish({ type: 'end', attemptId: active.attemptId, revision: ++this.revision, index: active.nextIndex, outcome: { kind: 'committed', eventType: 'assistant/message', seq } })
     for (const block of this.blocks) this.committed.add(block.itemId)
     this.active = undefined; this.blocks = []

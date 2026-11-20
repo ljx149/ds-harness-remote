@@ -101637,11 +101637,11 @@ var ManagedAssistantStream = class {
     active2.stream.push({ type: "chunk", time: time3, chunk });
     this.publish({ type: "chunk", attemptId: active2.attemptId, revision: ++this.revision, index, time: time3, chunk });
   }
-  accept(itemId, kind, text, final, cursor3, turn) {
+  accept(itemId, kind, text, final, cursor3, turn, step = 1) {
     if (this.committed.has(itemId)) return;
     if (!this.active) {
-      this.active = { attemptId: randomUUID2(), startedAfterSeq: cursor3, turn, step: 1, nextIndex: 0, stream: [] };
-      this.publish({ type: "start", attemptId: this.active.attemptId, startedAfterSeq: cursor3, turn, step: 1, revision: ++this.revision });
+      this.active = { attemptId: randomUUID2(), startedAfterSeq: cursor3, turn, step, nextIndex: 0, stream: [] };
+      this.publish({ type: "start", attemptId: this.active.attemptId, startedAfterSeq: cursor3, turn, step, revision: ++this.revision });
     }
     let block = this.blocks.find((block2) => block2.itemId === itemId);
     if (!block) {
@@ -101661,14 +101661,15 @@ var ManagedAssistantStream = class {
   }
   flush(commit) {
     const active2 = this.active;
-    if (!active2) return;
+    if (!active2) return false;
     for (const block of this.blocks) if (!block.ended) this.chunk({ type: "block-end", index: block.index, block: { type: block.kind, text: block.text } });
-    const seq = commit(this.blocks.map((block) => ({ type: block.kind, text: block.text })));
     this.chunk({ type: "finish", reason: { kind: "stop" } });
+    const seq = commit(this.blocks.map((block) => ({ type: block.kind, text: block.text })));
     this.publish({ type: "end", attemptId: active2.attemptId, revision: ++this.revision, index: active2.nextIndex, outcome: { kind: "committed", eventType: "assistant/message", seq } });
     for (const block of this.blocks) this.committed.add(block.itemId);
     this.active = void 0;
     this.blocks = [];
+    return true;
   }
 };
 
@@ -104828,6 +104829,8 @@ var ManagedAgentBackend = class {
   streams = /* @__PURE__ */ new Map();
   streamListeners = /* @__PURE__ */ new Map();
   promptStarts = /* @__PURE__ */ new Map();
+  modelCatalogs = /* @__PURE__ */ new Map();
+  steps = /* @__PURE__ */ new Map();
   turns = /* @__PURE__ */ new Map();
   titleJobs = /* @__PURE__ */ new Set();
   ownsSession(sessionId) {
@@ -105006,9 +105009,9 @@ var ManagedAgentBackend = class {
     const turn = this.turns.get(session2.id) ?? 1;
     if (event.type === "text" || event.type === "reasoning" || event.type === "text-delta" || event.type === "reasoning-delta") {
       if (!event.itemId && (event.type === "text" || event.type === "reasoning")) {
-        this.append(session2, "assistant/message", { turn, step: 1, message: { id: randomUUID3(), role: "assistant", content: [{ type: event.type, text: event.text }], source: { kind: "model", provider: session2.agentId, model: session2.agentId } } });
+        this.append(session2, "assistant/message", { turn, step: this.steps.get(session2.id) ?? 1, message: { id: randomUUID3(), role: "assistant", content: [{ type: event.type, text: event.text }], source: { kind: "model", provider: session2.agentId, model: session2.agentId } } });
       } else {
-        this.stream(session2).accept(event.itemId, event.type.startsWith("text") ? "text" : "reasoning", event.text, !event.type.endsWith("-delta"), this.records(session2).length - 1, turn);
+        this.stream(session2).accept(event.itemId, event.type.startsWith("text") ? "text" : "reasoning", event.text, !event.type.endsWith("-delta"), this.records(session2).length - 1, turn, this.steps.get(session2.id) ?? 1);
       }
     } else if (event.type === "turn-started" || event.type === "checkpoint") {
       if (event.type === "checkpoint" && event.position === "after") this.flushStream(session2);
@@ -105016,6 +105019,7 @@ var ManagedAgentBackend = class {
         if (!this.busy.has(session2.id)) {
           this.busy.add(session2.id);
           const nextTurn = this.records(session2).filter((record12) => record12.event.type === "turn/start").length + 1;
+          this.steps.set(session2.id, 1);
           this.turns.set(session2.id, nextTurn);
           this.append(session2, "turn/start", { turn: nextTurn });
           this.append(session2, "step/start", { turn: nextTurn, step: 1 });
@@ -105035,8 +105039,8 @@ var ManagedAgentBackend = class {
       this.append(session2, `managed/${event.type}`, "data" in event ? event.data : {});
     } else if (event.type === "tool") {
       this.flushStream(session2);
-      if (event.status === "running") this.append(session2, "tool/call", { turn, step: 1, callId: event.itemId, name: event.name, arguments: JSON.stringify(event.data) });
-      else this.append(session2, "tool/result", { turn, step: 1, message: {
+      if (event.status === "running") this.append(session2, "tool/call", { turn, step: this.steps.get(session2.id) ?? 1, callId: event.itemId, name: event.name, arguments: JSON.stringify(event.data) });
+      else this.append(session2, "tool/result", { turn, step: this.steps.get(session2.id) ?? 1, message: {
         id: `${event.itemId}:result`,
         role: "user",
         content: [{ type: "tool-result", toolCallId: event.itemId, content: [{ type: "text", text: JSON.stringify(event.data) }] }],
@@ -105052,7 +105056,7 @@ var ManagedAgentBackend = class {
       this.busy.delete(session2.id);
       this.questions.delete(session2.id);
       this.promptStarts.delete(session2.id);
-      this.append(session2, "step/end", { turn, step: 1 });
+      this.append(session2, "step/end", { turn, step: this.steps.get(session2.id) ?? 1 });
       this.append(session2, "turn/end", { turn, reason: event.status === "completed" ? { kind: "completed" } : event.status === "cancelled" ? { kind: "interrupted" } : { kind: "error", error: { code: "MANAGED_TURN_FAILED", message: "Agent turn failed." } } });
       queueMicrotask(() => {
         void this.drainQueue(session2).catch(() => void 0);
@@ -105064,14 +105068,14 @@ var ManagedAgentBackend = class {
         this.busy.delete(session2.id);
         for (const [key, approval] of this.approvals) if (approval.session.id === session2.id) this.approvals.delete(key);
       }
-      this.append(session2, "assistant/message", { turn, step: 1, message: {
+      this.append(session2, "assistant/message", { turn, step: this.steps.get(session2.id) ?? 1, message: {
         id: randomUUID3(),
         role: "assistant",
         content: [{ type: "text", text: `Agent error: ${event.code}` }],
         source: { kind: "model", provider: session2.agentId, model: session2.agentId }
       } });
       if (event.type === "unavailable" && wasBusy) {
-        this.append(session2, "step/end", { turn, step: 1 });
+        this.append(session2, "step/end", { turn, step: this.steps.get(session2.id) ?? 1 });
         this.append(session2, "turn/end", { turn, reason: { kind: "error", error: { code: event.code, message: "Agent process became unavailable." } } });
       }
     }
@@ -105091,8 +105095,9 @@ var ManagedAgentBackend = class {
     return stream;
   }
   flushStream(session2) {
-    this.streams.get(session2.id)?.flush((content) => {
-      this.append(session2, "assistant/message", { turn: this.turns.get(session2.id) ?? 1, step: 1, message: {
+    const step = this.steps.get(session2.id) ?? 1;
+    const flushed = this.streams.get(session2.id)?.flush((content) => {
+      this.append(session2, "assistant/message", { turn: this.turns.get(session2.id) ?? 1, step, message: {
         id: randomUUID3(),
         role: "assistant",
         content,
@@ -105100,6 +105105,12 @@ var ManagedAgentBackend = class {
       } });
       return this.records(session2).length - 1;
     });
+    if (flushed) {
+      const turn = this.turns.get(session2.id) ?? 1;
+      this.append(session2, "step/end", { turn, step });
+      this.steps.set(session2.id, step + 1);
+      this.append(session2, "step/start", { turn, step: step + 1 });
+    }
   }
   publishApproval(eventId, approval, target3) {
     for (const [queue, owner] of this.eventQueues) {
@@ -105255,6 +105266,7 @@ var ManagedAgentBackend = class {
       }
       this.busy.add(session2.id);
       const turn = this.records(session2).filter((item) => item.event.type === "turn/start").length + 1;
+      this.steps.set(session2.id, 1);
       this.turns.set(session2.id, turn);
       this.append(session2, "user/message", { id: input4.requestId, role: "user", content, source: { kind: "user", rpcId: input4.requestId } }, `user:${input4.requestId}`);
       const promptSeq = this.records(session2).length - 1;
@@ -105266,7 +105278,7 @@ var ManagedAgentBackend = class {
         if (title && first2) this.rename(session2, title, "fallback", [first2.event.seq]);
       }
       this.append(session2, "turn/start", { turn });
-      this.append(session2, "step/start", { turn, step: 1 });
+      this.append(session2, "step/start", { turn, step: this.steps.get(session2.id) ?? 1 });
       let dispatched = false;
       try {
         const connection = await this.connect(session2);
@@ -105312,12 +105324,15 @@ var ManagedAgentBackend = class {
       await connection.cancel();
       return { accepted: true };
     }
-    if (endpoint === "session/models" || endpoint === "session/modelCatalog") {
+    if (endpoint === "managedAgent/models" || endpoint === "session/models" || endpoint === "session/modelCatalog") {
       const catalog = await this.models(session2);
       return { ...catalog, current: this.selection(session2), routable: catalog.groups.length > 0, routableProviders: [session2.agentId] };
     }
-    if (endpoint === "session/initializeDefaultModel") return { selected: this.selection(session2) };
-    if (endpoint === "session/selectModel") {
+    if (endpoint === "session/initializeDefaultModel") {
+      await this.models(session2);
+      return { selected: this.selection(session2) };
+    }
+    if (endpoint === "session/selectModel" || endpoint === "managedAgent/selectModel") {
       if (this.busy.has(session2.id)) throw new Error("MANAGED_SESSION_BUSY");
       if (this.optionFlights.has(session2.id) || this.managementFlights.has(session2.id)) throw new Error("MANAGED_SESSION_BUSY");
       this.optionFlights.add(session2.id);
@@ -105524,14 +105539,16 @@ var ManagedAgentBackend = class {
       const efforts = Array.isArray(row2.supportedReasoningEfforts) ? row2.supportedReasoningEfforts.flatMap((item) => {
         const effort = item;
         return typeof effort.reasoningEffort === "string" ? [{ id: effort.reasoningEffort, name: effort.reasoningEffort }] : [];
-      }) : [];
+      }) : Array.isArray(row2.supportedEffortLevels) ? row2.supportedEffortLevels.flatMap((effort) => typeof effort === "string" ? [{ id: effort, name: effort }] : []) : [];
       models.push({
         id: name2,
         name: typeof row2.displayName === "string" ? row2.displayName : name2,
         ...efforts.length ? { reasoning: { efforts } } : {}
       });
     }
-    return { groups: models.length ? [{ id: session2.agentId, name: session2.agentId, models }] : [], failures: [] };
+    const catalog = { groups: models.length ? [{ id: session2.agentId, name: session2.agentId, models }] : [], failures: [] };
+    this.modelCatalogs.set(session2.id, catalog);
+    return catalog;
   }
   async managedModelCatalog(signal) {
     const sessions = await this.visible(signal);
@@ -105539,20 +105556,14 @@ var ManagedAgentBackend = class {
     const failures = [];
     let defaultSelection;
     for (const session2 of sessions) {
-      if (this.services.launches && !session2.providerSessionId) continue;
-      try {
-        const catalog = await this.models(session2);
-        this.assertPrincipal(session2, signal);
-        for (const group of catalog.groups) {
-          const existing = groups.find((item) => item.id === group.id);
-          if (existing) existing.models.push(...group.models.filter((model) => !existing.models.some((item) => item.id === model.id)));
-          else groups.push(group);
-        }
-        defaultSelection ??= this.selection(session2);
-      } catch (error62) {
-        this.assertPrincipal(session2, signal);
-        failures.push({ id: session2.agentId, name: session2.agentId, message: "Unable to read the local Agent model configuration." });
+      const catalog = this.modelCatalogs.get(session2.id);
+      if (!catalog) continue;
+      for (const group of catalog.groups) {
+        const existing = groups.find((item) => item.id === group.id);
+        if (existing) existing.models.push(...group.models.filter((model) => !existing.models.some((item) => item.id === model.id)));
+        else groups.push(structuredClone(group));
       }
+      defaultSelection ??= this.selection(session2);
     }
     return { groups, failures, routableProviders: groups.map((group) => group.id), ...defaultSelection ? { default: defaultSelection } : {} };
   }
@@ -106107,7 +106118,7 @@ import { spawn as spawn4 } from "node:child_process";
 import { Buffer as Buffer2 } from "node:buffer";
 
 // packages/plugin/src/version.ts
-var PLUGIN_VERSION = "0.8.1-xagent.3";
+var PLUGIN_VERSION = "0.8.1-xagent.4";
 var PLUGIN_PACKAGE_NAME = "@xcoder/xagent";
 
 // packages/plugin/src/acp/adapters/cursor-process.ts
@@ -108456,6 +108467,21 @@ function isRecord6(value) {
 
 // packages/plugin/src/managed-agents/codex-adapter.ts
 var record5 = (value) => value !== null && typeof value === "object" && !Array.isArray(value) ? value : {};
+async function modelCatalog2(client) {
+  const data2 = [], seen = /* @__PURE__ */ new Set();
+  let cursor3;
+  for (let page = 0; page < 100; page++) {
+    const response = record5(await client.call("model/list", cursor3 ? { cursor: cursor3 } : {}));
+    if (!Array.isArray(response.data)) throw new Error("CODEX_MODEL_CATALOG_INVALID");
+    data2.push(...response.data);
+    const next = response.nextCursor;
+    if (next === void 0 || next === null || next === "") return { data: data2 };
+    if (typeof next !== "string" || seen.has(next)) throw new Error("CODEX_MODEL_CURSOR_INVALID");
+    seen.add(next);
+    cursor3 = next;
+  }
+  throw new Error("CODEX_MODEL_CATALOG_TOO_LARGE");
+}
 function permissionPolicy(mode2) {
   if (mode2 === "read-only") return { approvalPolicy: "on-request", sandbox: "read-only", approvalsReviewer: "user" };
   if (mode2 === "workspace-write") return { approvalPolicy: "on-request", sandbox: "workspace-write", approvalsReviewer: "auto_review" };
@@ -108621,7 +108647,7 @@ var ManagedCodexAdapter = class {
       const setOption = async (key, value) => {
         if (active2 || sending) throw new Error("Stop the turn before changing options.");
         if (key === "model") {
-          const catalog = record5(await client.call("model/list", {}));
+          const catalog = await modelCatalog2(client);
           const entry = (Array.isArray(catalog.data) ? catalog.data : []).map(record5).find((candidate) => candidate.model === value || candidate.id === value);
           if (!entry) throw new Error("Unsupported model.");
           if (ended || active2 || sending) throw new Error("Codex session changed while selecting a model.");
@@ -108630,7 +108656,7 @@ var ManagedCodexAdapter = class {
           if (input4.reasoningEffort && !(Array.isArray(entry.supportedReasoningEfforts) ? entry.supportedReasoningEfforts : []).some((effort) => record5(effort).reasoningEffort === input4.reasoningEffort)) input4.reasoningEffort = void 0;
         } else if (key === "reasoningEffort") {
           const model = input4.model ?? defaultModel?.model;
-          const catalog = record5(await client.call("model/list", {}));
+          const catalog = await modelCatalog2(client);
           const entry = (Array.isArray(catalog.data) ? catalog.data : []).map(record5).find((candidate) => candidate.model === model || candidate.id === model);
           if (!entry || !(Array.isArray(entry.supportedReasoningEfforts) ? entry.supportedReasoningEfforts : []).some((effort) => record5(effort).reasoningEffort === value)) throw new Error("Unsupported reasoning effort for this model.");
           if (ended || active2 || sending) throw new Error("Codex session changed while selecting reasoning effort.");
@@ -108718,7 +108744,7 @@ var ManagedCodexAdapter = class {
           approvals.delete(requestId);
           await client.respond(request.id, request.mcp ? choice === "allow-once" ? { action: "accept", content: {}, _meta: null } : { action: "cancel", content: null, _meta: { codex_approval_cancellation_reason: "user" } } : { decision: choice === "allow-once" ? "accept" : choice === "cancel" ? "cancel" : "decline" });
         },
-        models: () => client.call("model/list", {}),
+        models: () => modelCatalog2(client),
         setOption,
         close: async () => {
           ended = true;
@@ -109905,7 +109931,7 @@ function nativeWorkspace2(view) {
     updatedAt: view.updatedAt
   };
 }
-function modelCatalog2(backend = "cursor") {
+function modelCatalog3(backend = "cursor") {
   const provider = acpBackendProvider(backend);
   const name2 = acpBackendLabel(backend);
   const models = [];
@@ -111068,7 +111094,7 @@ var AcpVirtualHarness = class _AcpVirtualHarness {
           return business2(await this.attachment(requestArg2(args)));
         case "session/modelCatalog": {
           const sessionId = await this.preferredSessionId();
-          const catalog = modelCatalog2(this.backend);
+          const catalog = modelCatalog3(this.backend);
           if (!sessionId) return business2(success3(catalog));
           const models = await this.hostSessionModels(sessionId);
           return business2(success3({ default: models.current, routableProviders: models.routable ? [models.current.provider] : [], groups: models.groups, failures: models.failures }));
@@ -111520,7 +111546,7 @@ var AcpVirtualHarness = class _AcpVirtualHarness {
       cwd: workspace2?.path ?? "",
       home: workspace2?.path ?? "",
       provider: name2,
-      model: modelCatalog2(this.backend).default.model,
+      model: modelCatalog3(this.backend).default.model,
       attachedSessions: this.sessions.size,
       canOpenPath: workspace2 !== void 0
     };
@@ -111658,7 +111684,7 @@ var AcpVirtualHarness = class _AcpVirtualHarness {
   }
   modelSelection(sessionId) {
     const resolved = this.resolveSessionId(sessionId);
-    return this.selectedModels.get(resolved) ?? this.selectedModels.get(sessionId) ?? modelCatalog2(this.backend).default;
+    return this.selectedModels.get(resolved) ?? this.selectedModels.get(sessionId) ?? modelCatalog3(this.backend).default;
   }
   modelSelectionProjection(sessionId) {
     const selection = this.modelSelection(sessionId);
@@ -111726,7 +111752,7 @@ var AcpVirtualHarness = class _AcpVirtualHarness {
   async hostSessionModels(sessionId) {
     const resolvedId = this.resolveSessionId(sessionId);
     if (!this.client.sessionModels) {
-      const catalog = modelCatalog2(this.backend);
+      const catalog = modelCatalog3(this.backend);
       return {
         current: this.modelSelection(resolvedId),
         routable: false,
@@ -138734,7 +138760,7 @@ var PluginControlRuntime = class {
   async handle(endpoint, payload, signal) {
     try {
       if (endpoint !== "settings.server.set" && endpoint !== "settings.identity.reset" && endpoint !== "settings.startup.retry") await this.serverSwitchFlight;
-      if (endpoint === "managedAgent.agents" || endpoint === "managedAgent.create" || endpoint === "managedAgent.catalog" || endpoint === "managedAgent.manage") {
+      if (endpoint === "managedAgent.agents" || endpoint === "managedAgent.create" || endpoint === "managedAgent.catalog" || endpoint === "managedAgent.manage" || endpoint === "managedAgent.models" || endpoint === "managedAgent.selectModel") {
         if (!this.managedAgents) throw new ClientModeError("METHOD_NOT_ALLOWED", "Managed Agents are not enabled.");
         if (this.logoutFlight || this.serverSwitchFlight) throw new ClientModeError("CONNECTION_FAILED", "Account change in progress.", true);
         signal.throwIfAborted();

@@ -1619,19 +1619,104 @@ Minimum version required to store current data is: ` + bestVersion + `.
     }
   });
 
+  // packages/plugin/src/client/managed-model-directory.ts
+  var record = (value) => value && typeof value == "object" ? value : {}, ManagedModelDirectory = class {
+    constructor(sessionId, agentId, call, projection) {
+      this.sessionId = sessionId;
+      this.agentId = agentId;
+      this.call = call;
+      this.projection = projection;
+      this.unsubscribe = projection.subscribe(() => this.sync());
+    }
+    state = { current: null, routable: null, groups: [], failures: [], status: "idle", pending: null, error: null };
+    listeners = /* @__PURE__ */ new Set();
+    flight;
+    generation = 0;
+    disposed = !1;
+    unsubscribe;
+    store = { getSnapshot: () => this.state, subscribe: (listener) => (this.listeners.add(listener), () => {
+      this.listeners.delete(listener);
+    }) };
+    publish(patch) {
+      if (!this.disposed) {
+        this.state = { ...this.state, ...patch };
+        for (let listener of this.listeners) listener();
+      }
+    }
+    sync() {
+      let current = record(this.projection.getSnapshot()).next ?? this.state.current;
+      this.publish({ current, routable: current === null ? null : this.state.groups.some((group) => group.id === current.provider && group.models.some((model) => model.id === current.model)) });
+    }
+    load() {
+      if (this.flight) return this.flight;
+      let generation = this.generation;
+      this.publish({ status: "loading", error: null });
+      let flight = this.call("managedAgent.models", { sessionId: this.sessionId }).then((value) => {
+        if (this.disposed || generation !== this.generation) return this.state;
+        let catalog = value;
+        return this.publish({ groups: catalog.groups.filter((group) => group.id === this.agentId), current: catalog.current ?? null, failures: [], status: "ready" }), this.sync(), this.state;
+      }).catch((error) => {
+        throw generation === this.generation && this.publish({ status: "error", error: error instanceof Error ? error.message : String(error) }), error;
+      }).finally(() => {
+        this.flight === flight && (this.flight = void 0);
+      });
+      return this.flight = flight, flight;
+    }
+    async select(selection) {
+      let generation = this.generation;
+      this.publish({ status: "selecting", pending: selection, error: null });
+      try {
+        return await this.call("managedAgent.selectModel", { sessionId: this.sessionId, ...selection }), generation === this.generation && this.publish({ current: selection, pending: null, status: "ready", routable: !0 }), { ok: !0, value: void 0 };
+      } catch (error) {
+        let message = error instanceof Error ? error.message : String(error);
+        return generation === this.generation && this.publish({ pending: null, status: "error", error: message }), { ok: !1, error: { code: "managed-agent/model-selection", message } };
+      }
+    }
+    resetConnected() {
+      ++this.generation, this.flight = void 0, this.publish({ current: null, groups: [], failures: [], pending: null, status: "idle", error: null, routable: null });
+    }
+    dispose() {
+      this.disposed = !0, ++this.generation, this.unsubscribe(), this.listeners.clear();
+    }
+  };
+  function installManagedModelDirectories({ resolver, sessions, call, subscribeReset }) {
+    let original = resolver.directoryFor, live = /* @__PURE__ */ new Set(), byBinding = /* @__PURE__ */ new WeakMap(), wrapped = function(sessionId) {
+      let binding = sessions.binding(sessionId), identity = record(binding?.session.projections.faceOf("managedAgent").getSnapshot());
+      if (!binding || typeof identity.agentId != "string") return original.call(resolver, sessionId);
+      let directory = byBinding.get(binding);
+      if (!directory) {
+        directory = new ManagedModelDirectory(sessionId, identity.agentId, call, binding.session.projections.faceOf("modelSelection")), byBinding.set(binding, directory), live.add(directory);
+        let owned = directory;
+        sessions.scope(sessionId)?.effect(() => () => {
+          owned.dispose(), live.delete(owned), byBinding.delete(binding);
+        }, "xagent: scoped model directory");
+      }
+      return directory;
+    };
+    resolver.directoryFor = wrapped;
+    let unsubscribeReset = subscribeReset?.(() => {
+      for (let directory of live) directory.resetConnected();
+    });
+    return () => {
+      unsubscribeReset?.(), resolver.directoryFor === wrapped && (resolver.directoryFor = original);
+      for (let directory of live) directory.dispose();
+      live.clear();
+    };
+  }
+
   // packages/plugin/src/client/icons.ts
   var deepSeekWorkspaceIcon = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAACVBMVEUAAADy8vXx8fUsA3vyAAAAAXRSTlMAQObYZgAAAOxJREFUWMPtlsEOwyAMQxP+/6OnTZMGxHGcot3wDYgfhkJbs6urprzveGtu9d1NgEdto8w93GuA7zPS2RFg7ynsCOAokbtAmLr2YaeKgJ6fxpT8jCAC0qSqPyNoO5DXdvyouj4ClFAdYaDxK09uiBDCIYBf6CxLesnR0uF2pG+JmhCqrUb0AOvjjoQaYDTCEAAgMg5grhAeAQIB+/M15IcKlnUIp4CkTCd0AKb4zVsRSJVGYEVzT0agK107IMGMEurvromEpaX4wzk/IKw378kq4LafED6Oowxfk7AP2q8W16EdM3p29Eyvrv6vF0WIBfBziKyCAAAAAElFTkSuQmCC", gptWorkspaceIcon = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAclBMVEX////v7+++wMf////s7O3k5OTExcrX2Ny6vMTv8PPW19yXmqRqboJmaHd3eoaqrLPs7fGMjpfb3eKlpq1eYXOxs7pWWWd+gY5HSVdRVGVub3k+QU74+Pg4OkcvMT1ISlUoKjUiIy4fICueoKkaGyUSFB21Bp+qAAAAAXRSTlMAQObYZgAABChJREFUWMPtl916qjoQhlsdEwIECEgMYCBxx/u/xT1DrFUL1LO1DtY8LSLJvPnmB4gfH//sr7TPDfvdebf/xXZbkE/4zZ0MVhGHd9zJDsv+7F3//Z69tT5wljAu3tXw+TIlzXKJlhflYmJ+5uF5WpWhb54X+C/zZCmT2wJA4dJZwus0UYjIGqWyMhVbEp4yKNRRqlv0opW5PJLJ4rFJXvP4JKDRMqturBZjkMVJFYjR6iHQDQDI4+k2k51wZbWrqwp4mR/1CVYATyko9TFGxBUqL5IvMbXSWt0T8bkGgFLqgqZBI/Uxbx5UAxLaNcCNLBpttM7wbCc1pmJOpWAsDtey68UaQMyrFgb9uxLPjqg3+nGluyKN0XUdWw0BJ0NvTFFqgzpr9J+Dh4w0Ga1qkqBNswagxdRgFPAbgHRQG5jumGWyMxrTIaRRa4AzFs0YrNMXgI4MJWnsKYFhGNMnIh/mBOPsV8CZBFjN9w8ArowxnZzDr5IcvxTaKpxJCVsoI3SWysz1UM4AqQdzlCgho1IKrK+x1mKFzisANtgEU8E7GwHDgOqxe4w9tnM166wbaA2xBMBLrTWcAGYGdCiYVUJUrMCF+7l6gklrW1RwPi8ByjuActANqhKzVWoYrFGcCFzbDgNaBrTWpncFQMcI2DfWoAiDqRCiHcYM/ZdCEKkZqfR8spj4F0CiJjv2gHL6URNoCQDaYacL6O1oFDO2eQDUFP7AKdCRdC4CRDZaNifbjA41l/uYb/SZMAFNTBGzY7sG4J2jTsJgToOzIzXF3HZqBpSOAGduXbkGEKV1OqVGqRJpRxtvwbSw5IqAiUJItwBCOT9R32FCGo3nCkAN3t0UTBRC6zDONcBeOee9pr4T+ASbnDOdc5OmtREwEEB5w8Wqgt4bOV5c7Lt9iiK8zdP/IsBbutUGX4gNwEVCqd3FUt/xYnRWt7BvPBYQjwjAGXa3ASguHVAZ/WXKlA3eZDX1wRegFsr7E2wAlB9xFbx/7MV70kFT8aqNgLL3F8nFBmA3hrn/IJHjKJOK2oj1WI4Z4FzwN/81AOhgYD6v2xbIvaZIurLC9AfvB1WLTYAoXejF1xeBL5cpBIyEbmxkZymIXwDQh1BAfOrhI1lfwtgz8tozF5T4ttf3+32AyxC6klwAgw/YVTHpoK82xYt3wLP/Bw4AAI4D7/01TLKXBj9NEz2wEuGiKpoy68S/FwCLMQAZ3gXhihaCa25vQo6RyToOz9PE6wYjJgGi1YnqZX8qMIK+TDlnargGzSv4NvFjlwXf/nfLLMrAB4O/Xl3BH0d+RIASFgDA8IYMIXgr2+cBsbDdPSwAAHjSZFmb3txETCKIxc0uWwI8rxsLJcTiVndNwyMgKljbbNN2/zcEAja2+4RgIDYN2Bu/WtAOaEodnu2dnzz/7I/Y/w/LaEcX/MdfAAAAAElFTkSuQmCC";
 
   // packages/plugin/src/client/managed-agent.ts
-  var record = (value) => typeof value == "object" && value !== null ? value : {}, claudeIcon = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g stroke="#D97757" stroke-width="2.2"><path d="M12 1v22M1 12h22M4.2 4.2l15.6 15.6M4.2 19.8L19.8 4.2M7.8 1.8l8.4 20.4M1.8 7.8l20.4 8.4M1.8 16.2l20.4-8.4M7.8 22.2l8.4-20.4"/></g></svg>');
+  var record2 = (value) => typeof value == "object" && value !== null ? value : {}, claudeIcon = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g stroke="#D97757" stroke-width="2.2"><path d="M12 1v22M1 12h22M4.2 4.2l15.6 15.6M4.2 19.8L19.8 4.2M7.8 1.8l8.4 20.4M1.8 7.8l20.4 8.4M1.8 16.2l20.4-8.4M7.8 22.2l8.4-20.4"/></g></svg>');
   function createManagedAgentUi(React, ctx) {
     let managedIds = /* @__PURE__ */ new Map(), catalogFlight, catalogListeners = /* @__PURE__ */ new Set(), refreshCatalog = () => {
       catalogFlight || (catalogFlight = ctx.call("managedAgent/catalog", {}).then((value) => {
-        let items = Array.isArray(value) ? value : record(value).items;
+        let items = Array.isArray(value) ? value : record2(value).items;
         if (Array.isArray(items)) {
           managedIds.clear();
           for (let item of items) {
-            let entry = record(item);
+            let entry = record2(item);
             typeof entry.sessionId == "string" && typeof entry.agentId == "string" && managedIds.set(entry.sessionId, entry.agentId);
           }
           for (let listener of catalogListeners) listener();
@@ -1660,7 +1745,7 @@ Minimum version required to store current data is: ` + bestVersion + `.
       useSnapshots();
       let session = ctx.sessions.list.getSnapshot().byId?.[sessionId];
       if (!session) return null;
-      let projected = record(session.projections?.values?.managedAgent).agentId, id = typeof projected == "string" ? projected : managedIds.get(sessionId);
+      let projected = record2(session.projections?.values?.managedAgent).agentId, id = typeof projected == "string" ? projected : managedIds.get(sessionId);
       if (!id || id === "dsh" || id === "deepseek") return null;
       let src = id === "codex" ? gptWorkspaceIcon : id === "claude" || id === "claude-code" ? claudeIcon : void 0;
       return src ? React.createElement("img", { src, alt: id, title: id, width: 16, height: 16, style: { flexShrink: 0 } }) : React.createElement("span", { title: id, "aria-label": id }, id.slice(0, 1).toUpperCase());
@@ -1673,10 +1758,10 @@ Minimum version required to store current data is: ` + bestVersion + `.
       }), []), React.useEffect(() => {
         let active = !0;
         return setLoading(!0), setError(void 0), setAgents([]), ctx.call("managedAgent/agents", {}).then((value) => {
-          let values = Array.isArray(value) ? value : record(value).items;
+          let values = Array.isArray(value) ? value : record2(value).items;
           if (!Array.isArray(values)) throw new Error(ctx.chinese ? "Agent \u5217\u8868\u683C\u5F0F\u9519\u8BEF" : "Invalid Agent list");
           active && setAgents(values.flatMap((item) => {
-            let agent = record(item);
+            let agent = record2(item);
             return typeof agent.id == "string" && agent.available !== !1 ? [{ id: agent.id, label: typeof agent.name == "string" ? agent.name : agent.id }] : [];
           }));
         }).catch((reason) => {
@@ -1693,7 +1778,7 @@ Minimum version required to store current data is: ` + bestVersion + `.
         let request = attempt?.workspaceId === workspace.workspaceId && attempt.agentId === agentId ? attempt : { workspaceId: workspace.workspaceId, agentId, operationId: crypto.randomUUID() };
         setAttempt(request), setBusy(!0), setError(void 0);
         try {
-          let result = record(await ctx.call("managedAgent/create", { request }));
+          let result = record2(await ctx.call("managedAgent/create", { request }));
           if (typeof result.sessionId != "string") throw new Error(ctx.chinese ? "\u521B\u5EFA\u4F1A\u8BDD\u5931\u8D25" : "Session creation failed");
           if (await ctx.sessions.refresh?.(), !mounted.current || !ctx.workspaces.list.getSnapshot().items.some((item) => item.workspaceId === request.workspaceId)) return;
           ctx.open(result.sessionId), setAttempt(void 0), setExpanded(!1);
@@ -2940,9 +3025,9 @@ If a code was sent, recover the original submission without changing it.`,
     };
     inspect(document.body);
     let observer = new MutationObserver((records) => {
-      for (let record2 of records) {
-        record2.type === "attributes" && inspect(record2.target);
-        for (let node of Array.from(record2.addedNodes))
+      for (let record3 of records) {
+        record3.type === "attributes" && inspect(record3.target);
+        for (let node of Array.from(record3.addedNodes))
           node instanceof Element && inspect(node);
       }
     });
@@ -6115,7 +6200,18 @@ If a code was sent, recover the original submission without changing it.`,
             if (!navigation) throw new Error("Native conversation navigation is unavailable");
             navigation.openSession(sessionId);
           }
-        }, managedUi = createManagedAgentUi(React, managedContext);
+        };
+        ctx.inject(["modelDirectories"], (scope) => {
+          let resolver = scope.get("modelDirectories");
+          resolver && scope.effect(() => installManagedModelDirectories({
+            resolver,
+            sessions: ctx.sessions,
+            call: (endpoint, payload) => control(endpoint, payload),
+            subscribeReset: (listener) => ctx.on?.("connection/reset", listener) ?? (() => {
+            })
+          }), "xagent: native session model selectors");
+        });
+        let managedUi = createManagedAgentUi(React, managedContext);
         ctx.slots.inject("sidebar.session.row.leading", () => ctx.slots.register({
           name: "sidebar.session.row.leading",
           id: "xcodex-managed-agent-logo",

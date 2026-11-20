@@ -34,6 +34,25 @@ function fixture(methods: string[] = []) {
 }
 
 describe('Codex managed controls', () => {
+  it('loads and selects models beyond the first provider catalog page', async () => {
+    const f = fixture()
+    f.routes['model/list'] = input => input.cursor === 'second'
+      ? { data: [{ model: 'configured', supportedReasoningEfforts: [{ reasoningEffort: 'high' }] }], nextCursor: null }
+      : { data: [{ model: 'first' }], nextCursor: 'second' }
+    const connection = await f.open()
+    expect(await connection.models!()).toMatchObject({ data: [{ model: 'first' }, { model: 'configured' }] })
+    await connection.setOption!('model', 'configured')
+    await connection.setOption!('reasoningEffort', 'high')
+    await connection.close()
+  })
+  it('rejects a looping model cursor instead of hanging or reporting a partial catalog', async () => {
+    const f = fixture()
+    f.routes['model/list'] = () => ({ data: [], nextCursor: 'loop' })
+    const connection = await f.open()
+    await expect(connection.models!()).rejects.toThrow('CODEX_MODEL_CURSOR_INVALID')
+    await connection.close()
+  })
+
   it('does not reclaim an idle foreground thread with background work or an active goal', async () => {
     const f = fixture(['thread/backgroundTerminals/list', 'thread/goal/get'])
     f.routes['thread/goal/get'] = () => ({ goal: { status: 'active' } })

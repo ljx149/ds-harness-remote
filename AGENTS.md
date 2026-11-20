@@ -1,3 +1,7 @@
+## 生产机验证资源限制（2026-11-20）
+
+用户要求每次测试最多使用空闲资源三分之一、结束释放资源。测试/构建/试装/隔离浏览器必须串行使用 `scripts/check-with-budget.py` 的 systemd cgroup 硬限制；不得只依赖 RSS 轮询。详见 [.agents/skills/production-bounded-checks/SKILL.md](.agents/skills/production-bounded-checks/SKILL.md)。不停止无关服务。
+
 ## 2026-11-20 范围收敛（当前约定）
 
 用户明确只要会话中间层。0.8.1-xagent.3 选择性撤回高级管理面板和对外操作，保留聊天、持久化、配置、更新检测及重启修复。此前“补齐完整 Orca 高级管理矩阵”不再是当前目标；优先会话稳定性与多端验收。拆分与保留边界见 `docs/design/xagent-conversation-scope-rollback.md`。

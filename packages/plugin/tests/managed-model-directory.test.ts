@@ -34,6 +34,22 @@ describe('managed native model directory', () => {
     expect(directory.store.getSnapshot().groups).toEqual([])
     directory.dispose()
   })
+  it('shares a managed directory per binding and disposes it with the native session scope', async () => {
+    const original = vi.fn(() => 'native'), cleanups: Array<() => void> = []
+    const identity = { getSnapshot: () => ({ agentId: 'claude' }), subscribe: () => () => {} }
+    const binding = { session: { projections: { faceOf: (key: string) => key === 'managedAgent' ? identity : projection() } } }
+    const resolver = { directoryFor: original as (id: string) => unknown }
+    const call = vi.fn(async () => ({ groups: [{ id: 'claude', name: 'Claude', models: [{ id: 'local', name: 'Local' }] }] }))
+    const cleanup = installManagedModelDirectories({ resolver, sessions: { binding: () => binding, scope: () => ({ effect: effect => { cleanups.push(effect()) } }) }, call })
+    const directory = resolver.directoryFor('cc') as ManagedModelDirectory
+    expect(resolver.directoryFor('cc')).toBe(directory)
+    await directory.load()
+    expect(call).toHaveBeenCalledWith('managedAgent.models', { sessionId: 'cc' })
+    expect(original).not.toHaveBeenCalled()
+    cleanups[0]!()
+    expect(resolver.directoryFor('cc')).not.toBe(directory)
+    cleanup()
+  })
   it('preserves the native directory for ordinary DSH sessions and restores on disposal', () => {
     const original = vi.fn(() => 'native')
     const resolver = { directoryFor: original as (id: string) => unknown }

@@ -1,6 +1,10 @@
 # Xagent 当前范围与安装
 
-更新：2026-11-20。测试版 `@xcoder/xagent@0.8.1-xagent.3`；分支 `feat/orca-agent-management`，源码提交以 Release 标签为准。
+更新：2026-11-20。测试版 `@xcoder/xagent@0.8.1-xagent.4`；分支 `feat/orca-agent-management`，源码提交以 Release 标签为准。
+
+## 本次修复
+
+按会话隔离模型目录、补齐 Codex 分页，修复首轮流式 Step 边界与结束时消息倒序导致的页面内容消失。原生 rc.5 页面使用受控 Agent 验证，真实用户模型和 macOS 仍待复验。详见 [验证记录](design/xagent-rc5-model-stream-regression.md)。
 
 ## 现在做什么
 
@@ -30,14 +34,14 @@ Xagent 是 DSH 的多 Agent 会话中间层，不是另一套 Agent 控制台，
 
 ## 安装测试版
 
-[发行页](https://github.com/ljx149/ds-harness-remote/releases/tag/xagent-0.8.1-xagent.3)
+[发行页](https://github.com/ljx149/ds-harness-remote/releases/tag/xagent-0.8.1-xagent.4)
 
-[下载 tgz](https://github.com/ljx149/ds-harness-remote/releases/download/xagent-0.8.1-xagent.3/xcoder-xagent-0.8.1-xagent.3.tgz)
+[下载 tgz](https://github.com/ljx149/ds-harness-remote/releases/download/xagent-0.8.1-xagent.4/xcoder-xagent-0.8.1-xagent.4.tgz)
 
 先结束本机正在运行的 Agent 任务，再更新插件；不要清理账号和会话数据。若仍使用旧包名 Xcodex Remote，先停用旧测试插件，避免同时加载。
 
 ```sh
-dsh plugin --profile web add -w /完整路径/xcoder-xagent-0.8.1-xagent.3.tgz
+dsh plugin --profile web add -w /完整路径/xcoder-xagent-0.8.1-xagent.4.tgz
 ```
 
 自定义 profile 请替换 `web`；更新后必要时重开对应 DSH 实例。此包还未发布 npm，不能按 npm 包名下载。单独 npm 全局安装也不等于注册进 DSH。
