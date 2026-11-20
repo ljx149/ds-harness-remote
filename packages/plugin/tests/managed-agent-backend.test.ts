@@ -53,6 +53,49 @@ function fixture(existingDirectory?: string, services: ConstructorParameters<typ
   }
 }
 describe('managed backend integration', () => {
+  it('delivers first-turn text, tools, and final settlements through the actual DSH fold without switching sessions', async () => {
+    // Optional pinned package path allows the same contract to run against a
+    // user's exact DSH build, without changing production dependencies.
+    const nativePath = process.env.XAGENT_DSH_ASSISTANT_FOLD
+      ?? new URL('./types/client/sessions/assistant-stream.js', import.meta.resolve('@deepseek-ai/dsh-api-session-controller')).href
+    const { ClientAssistantStream } = await import(/* @vite-ignore */ nativePath)
+    const fold = new ClientAssistantStream()
+    const f = fixture(), sessionId = await f.create()
+    const controller = new AbortController()
+    const frames = await f.backend.open('session/follow', { args: { sessionId } }, controller.signal)
+    const published: any[] = [], rebaseline: unknown[] = []
+    const consuming = (async () => {
+      for await (const raw of frames) {
+        const frame = raw as any
+        if (frame.type === 'snapshot') { fold.replace(frame.records, frame.assistantStream); continue }
+        const result = frame.type === 'assistant-stream' ? fold.acceptFrame(frame.frame) : fold.acceptDurable(frame)
+        if (result?.type === 'rebaseline') rebaseline.push(result)
+        if (result?.entry) published.push(result.entry)
+      }
+    })()
+    await f.prompt(sessionId)
+    f.emit({ type: 'text-delta', itemId: 'first', text: 'Checking' })
+    await vi.waitFor(() => expect(published.some(item => item.event.type === 'assistant/live-chunk' && item.event.data.chunk.text === 'Checking')).toBe(true))
+    f.emit({ type: 'tool', itemId: 'tool1', name: 'shell', status: 'running', data: { command: 'pwd' } })
+    f.emit({ type: 'tool', itemId: 'tool1', name: 'shell', status: 'completed', data: { output: '/project/a' } })
+    f.emit({ type: 'text-delta', itemId: 'second', text: 'Done' })
+    f.emit({ type: 'turn-completed', status: 'completed' })
+    await vi.waitFor(() => expect(published.filter(item => item.event.type === 'assistant/message')).toHaveLength(2))
+    expect(published.filter(item => item.event.type === 'tool/call')).toHaveLength(1)
+    expect(published.filter(item => item.event.type === 'tool/result')).toHaveLength(1)
+    expect(rebaseline).toEqual([])
+    controller.abort(); await consuming
+  })
+  it('does not restore history during global model discovery, but probes a blank session explicitly', async () => {
+    const f = fixture(), sessionId = await f.create()
+    expect((await f.backend.managedModelCatalog(new AbortController().signal)).groups).toEqual([])
+    expect(f.open).not.toHaveBeenCalled()
+    expect(await f.call('managedAgent/models', { sessionId })).toMatchObject({ groups: [{ id: 'codex' }] })
+    expect(f.open).toHaveBeenCalledTimes(1)
+    expect((await f.backend.managedModelCatalog(new AbortController().signal)).groups).toHaveLength(1)
+    expect(f.open).toHaveBeenCalledTimes(1)
+  })
+
   it('advertises implemented mobile capabilities in discovery and session snapshots without probing a CLI', async () => {
     const f = fixture(), sessionId = await f.create()
     const identity = { agentId: 'codex', name: 'Codex', registered: true, availability: 'unverified', capabilities: {

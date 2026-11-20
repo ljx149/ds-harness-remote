@@ -17,6 +17,7 @@ const createSchema = z.object({ workspaceId: id, agentId: id, operationId: id })
 const promptSchema = z.object({ sessionId: id, requestId: id, content: z.array(z.union([z.object({ type: z.literal('text'), text: z.string().max(262144) }).strict(), z.object({ type: z.literal('image'), mediaType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']), data: z.string().max(5600000), name: z.string().max(255).optional() }).strict()])).min(1).max(16), mode: z.enum(['queue', 'steer']).optional() })
 type Workspace = { workspaceId: string; path: string }
 type Principal = { ownerId: string; hostId: string }
+type ManagedModelCatalog = { groups: Array<{ id: string; name: string; models: Array<{ id: string; name: string; reasoning?: { efforts: Array<{ id: string; name: string }> } }> }>; failures: never[] }
 type NativeRecord = { type: 'event'; event: { type: string; seq: number; time: number; data: unknown; surfaceOp?: 'append' } }
 
 /** One Host owns execution; callers only own subscriptions and scoped operations. */
@@ -39,6 +40,8 @@ export class ManagedAgentBackend {
   private readonly streams = new Map<string, ManagedAssistantStream>()
   private readonly streamListeners = new Map<string, Set<(frame: unknown) => void>>()
   private readonly promptStarts = new Map<string, number>()
+  private readonly modelCatalogs = new Map<string, ManagedModelCatalog>()
+  private readonly steps = new Map<string, number>()
   private readonly turns = new Map<string, number>()
 
   private readonly titleJobs = new Set<Promise<void>>()
@@ -209,9 +212,9 @@ export class ManagedAgentBackend {
     const turn = this.turns.get(session.id) ?? 1
     if (event.type === 'text' || event.type === 'reasoning' || event.type === 'text-delta' || event.type === 'reasoning-delta') {
       if (!event.itemId && (event.type === 'text' || event.type === 'reasoning')) {
-        this.append(session, 'assistant/message', { turn, step: 1, message: { id: randomUUID(), role: 'assistant', content: [{ type: event.type, text: event.text }], source: { kind: 'model', provider: session.agentId, model: session.agentId } } })
+        this.append(session, 'assistant/message', { turn, step: this.steps.get(session.id) ?? 1, message: { id: randomUUID(), role: 'assistant', content: [{ type: event.type, text: event.text }], source: { kind: 'model', provider: session.agentId, model: session.agentId } } })
       } else {
-        this.stream(session).accept(event.itemId!, event.type.startsWith('text') ? 'text' : 'reasoning', event.text, !event.type.endsWith('-delta'), this.records(session).length - 1, turn)
+        this.stream(session).accept(event.itemId!, event.type.startsWith('text') ? 'text' : 'reasoning', event.text, !event.type.endsWith('-delta'), this.records(session).length - 1, turn, this.steps.get(session.id) ?? 1)
       }
     } else if (event.type === 'turn-started' || event.type === 'checkpoint') {
       if (event.type === 'checkpoint' && event.position === 'after') this.flushStream(session)
@@ -219,6 +222,7 @@ export class ManagedAgentBackend {
         if (!this.busy.has(session.id)) {
           this.busy.add(session.id)
           const nextTurn = this.records(session).filter(record => record.event.type === 'turn/start').length + 1
+          this.steps.set(session.id, 1)
           this.turns.set(session.id, nextTurn)
           this.append(session, 'turn/start', { turn: nextTurn })
           this.append(session, 'step/start', { turn: nextTurn, step: 1 })
@@ -235,8 +239,8 @@ export class ManagedAgentBackend {
       this.append(session, `managed/${event.type}`, 'data' in event ? event.data : {})
     } else if (event.type === 'tool') {
       this.flushStream(session)
-      if (event.status === 'running') this.append(session, 'tool/call', { turn, step: 1, callId: event.itemId, name: event.name, arguments: JSON.stringify(event.data) })
-      else this.append(session, 'tool/result', { turn, step: 1, message: { id: `${event.itemId}:result`, role: 'user',
+      if (event.status === 'running') this.append(session, 'tool/call', { turn, step: this.steps.get(session.id) ?? 1, callId: event.itemId, name: event.name, arguments: JSON.stringify(event.data) })
+      else this.append(session, 'tool/result', { turn, step: this.steps.get(session.id) ?? 1, message: { id: `${event.itemId}:result`, role: 'user',
         content: [{ type: 'tool-result', toolCallId: event.itemId, content: [{ type: 'text', text: JSON.stringify(event.data) }] }], source: { kind: 'tool', callId: event.itemId } } })
     } else if (event.type === 'approval') {
       const eventId = `managed-agent:${session.id}:${event.requestId}`
@@ -248,7 +252,7 @@ export class ManagedAgentBackend {
       this.busy.delete(session.id)
       this.questions.delete(session.id)
       this.promptStarts.delete(session.id)
-      this.append(session, 'step/end', { turn, step: 1 })
+      this.append(session, 'step/end', { turn, step: this.steps.get(session.id) ?? 1 })
       this.append(session, 'turn/end', { turn, reason: event.status === 'completed' ? { kind: 'completed' }
         : event.status === 'cancelled' ? { kind: 'interrupted' } : { kind: 'error', error: { code: 'MANAGED_TURN_FAILED', message: 'Agent turn failed.' } } })
       queueMicrotask(() => { void this.drainQueue(session).catch(() => undefined) })
@@ -259,10 +263,10 @@ export class ManagedAgentBackend {
         this.busy.delete(session.id)
         for (const [key, approval] of this.approvals) if (approval.session.id === session.id) this.approvals.delete(key)
       }
-      this.append(session, 'assistant/message', { turn, step: 1, message: { id: randomUUID(), role: 'assistant',
+      this.append(session, 'assistant/message', { turn, step: this.steps.get(session.id) ?? 1, message: { id: randomUUID(), role: 'assistant',
         content: [{ type: 'text', text: `Agent error: ${event.code}` }], source: { kind: 'model', provider: session.agentId, model: session.agentId } } })
       if (event.type === 'unavailable' && wasBusy) {
-        this.append(session, 'step/end', { turn, step: 1 })
+        this.append(session, 'step/end', { turn, step: this.steps.get(session.id) ?? 1 })
         this.append(session, 'turn/end', { turn, reason: { kind: 'error', error: { code: event.code, message: 'Agent process became unavailable.' } } })
       }
     }
@@ -280,12 +284,21 @@ export class ManagedAgentBackend {
     return stream
   }
   private flushStream(session: ManagedSession): void {
-    this.streams.get(session.id)?.flush(content => {
-      this.append(session, 'assistant/message', { turn: this.turns.get(session.id) ?? 1, step: 1, message: {
+    const step = this.steps.get(session.id) ?? 1
+    const flushed = this.streams.get(session.id)?.flush(content => {
+      this.append(session, 'assistant/message', { turn: this.turns.get(session.id) ?? 1, step, message: {
         id: randomUUID(), role: 'assistant', content, source: { kind: 'model', provider: session.agentId, model: this.selection(session)?.model ?? session.agentId },
       } })
       return this.records(session).length - 1
     })
+    if (flushed) {
+      // DSH retains a committed live attempt until its Step ends. A second
+      // attempt in that Step forces the native client to rebaseline.
+      const turn = this.turns.get(session.id) ?? 1
+      this.append(session, 'step/end', { turn, step })
+      this.steps.set(session.id, step + 1)
+      this.append(session, 'step/start', { turn, step: step + 1 })
+    }
   }
   private publishApproval(eventId: string, approval: { session: ManagedSession; requestId: string; choices: string[]; title: string; data: unknown }, target?: AsyncValueQueue) {
     for (const [queue, owner] of this.eventQueues) {
@@ -416,6 +429,7 @@ export class ManagedAgentBackend {
       }
       this.busy.add(session.id)
       const turn = this.records(session).filter(item => item.event.type === 'turn/start').length + 1
+      this.steps.set(session.id, 1)
       this.turns.set(session.id, turn)
       this.append(session, 'user/message', { id: input.requestId, role: 'user', content, source: { kind: 'user', rpcId: input.requestId } }, `user:${input.requestId}`)
       const promptSeq = this.records(session).length - 1
@@ -427,7 +441,7 @@ export class ManagedAgentBackend {
         if (title && first) this.rename(session, title, 'fallback', [first.event.seq])
       }
       this.append(session, 'turn/start', { turn })
-      this.append(session, 'step/start', { turn, step: 1 })
+      this.append(session, 'step/start', { turn, step: this.steps.get(session.id) ?? 1 })
       let dispatched = false
       try {
         const connection = await this.connect(session)
@@ -466,12 +480,12 @@ export class ManagedAgentBackend {
       return { attachment: image.ref, data: image.data }
     }
     if (endpoint === 'session/cancel') { const connection = await this.connect(session); this.assertPrincipal(session, signal); await connection.cancel(); return { accepted: true } }
-    if (endpoint === 'session/models' || endpoint === 'session/modelCatalog') {
+    if (endpoint === 'managedAgent/models' || endpoint === 'session/models' || endpoint === 'session/modelCatalog') {
       const catalog = await this.models(session)
       return { ...catalog, current: this.selection(session), routable: catalog.groups.length > 0, routableProviders: [session.agentId] }
     }
-    if (endpoint === 'session/initializeDefaultModel') return { selected: this.selection(session) }
-    if (endpoint === 'session/selectModel') {
+    if (endpoint === 'session/initializeDefaultModel') { await this.models(session); return { selected: this.selection(session) } }
+    if (endpoint === 'session/selectModel' || endpoint === 'managedAgent/selectModel') {
       if (this.busy.has(session.id)) throw new Error('MANAGED_SESSION_BUSY')
       if (this.optionFlights.has(session.id) || this.managementFlights.has(session.id)) throw new Error('MANAGED_SESSION_BUSY')
       this.optionFlights.add(session.id)
@@ -644,7 +658,7 @@ export class ManagedAgentBackend {
   private selection(session: ManagedSession): { provider: string; model: string; reasoningEffort?: string } | undefined {
     return this.records(session).reverse().find(record => record.event.type === 'model/selection')?.event.data as { provider: string; model: string; reasoningEffort?: string } | undefined
   }
-  private async models(session: ManagedSession) {
+  private async models(session: ManagedSession): Promise<ManagedModelCatalog> {
     const connection = await this.connect(session)
     const raw = await connection.models?.()
     const principal = this.principal()
@@ -662,32 +676,30 @@ export class ManagedAgentBackend {
       const efforts = Array.isArray(row.supportedReasoningEfforts) ? row.supportedReasoningEfforts.flatMap(item => {
         const effort = item as { reasoningEffort?: string; description?: string }
         return typeof effort.reasoningEffort === 'string' ? [{ id: effort.reasoningEffort, name: effort.reasoningEffort }] : []
-      }) : []
+      }) : Array.isArray(row.supportedEffortLevels) ? row.supportedEffortLevels.flatMap(effort => typeof effort === 'string' ? [{ id: effort, name: effort }] : []) : []
       models.push({ id: name, name: typeof row.displayName === 'string' ? row.displayName : name,
         ...(efforts.length ? { reasoning: { efforts } } : {}) })
     }
-    return { groups: models.length ? [{ id: session.agentId, name: session.agentId, models }] : [], failures: [] }
+    const catalog: ManagedModelCatalog = { groups: models.length ? [{ id: session.agentId, name: session.agentId, models }] : [], failures: [] }
+    this.modelCatalogs.set(session.id, catalog)
+    return catalog
   }
   async managedModelCatalog(signal: AbortSignal) {
     const sessions = await this.visible(signal)
     const groups: Awaited<ReturnType<ManagedAgentBackend['models']>>['groups'] = []
     const failures: Array<{ id: string; name: string; message: string }> = []
     let defaultSelection: ReturnType<ManagedAgentBackend['selection']>
+    // Global DSH discovery must never create/resume every historical Agent.
+    // The desktop directory requests the selected session explicitly instead.
     for (const session of sessions) {
-      if (this.services.launches && !session.providerSessionId) continue
-      try {
-        const catalog = await this.models(session)
-        this.assertPrincipal(session, signal)
-        for (const group of catalog.groups) {
-          const existing = groups.find(item => item.id === group.id)
-          if (existing) existing.models.push(...group.models.filter(model => !existing.models.some(item => item.id === model.id)))
-          else groups.push(group)
-        }
-        defaultSelection ??= this.selection(session)
-      } catch (error) {
-        this.assertPrincipal(session, signal)
-        failures.push({ id: session.agentId, name: session.agentId, message: 'Unable to read the local Agent model configuration.' })
+      const catalog = this.modelCatalogs.get(session.id)
+      if (!catalog) continue
+      for (const group of catalog.groups) {
+        const existing = groups.find(item => item.id === group.id)
+        if (existing) existing.models.push(...group.models.filter(model => !existing.models.some(item => item.id === model.id)))
+        else groups.push(structuredClone(group))
       }
+      defaultSelection ??= this.selection(session)
     }
     return { groups, failures, routableProviders: groups.map(group => group.id), ...(defaultSelection ? { default: defaultSelection } : {}) }
   }

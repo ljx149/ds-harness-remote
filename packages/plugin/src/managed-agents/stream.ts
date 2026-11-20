@@ -16,11 +16,11 @@ export class ManagedAssistantStream {
     active.stream.push({ type: 'chunk', time, chunk })
     this.publish({ type: 'chunk', attemptId: active.attemptId, revision: ++this.revision, index, time, chunk })
   }
-  accept(itemId: string, kind: Block['kind'], text: string, final: boolean, cursor: number, turn: number) {
+  accept(itemId: string, kind: Block['kind'], text: string, final: boolean, cursor: number, turn: number, step = 1) {
     if (this.committed.has(itemId)) return
     if (!this.active) {
-      this.active = { attemptId: randomUUID(), startedAfterSeq: cursor, turn, step: 1, nextIndex: 0, stream: [] }
-      this.publish({ type: 'start', attemptId: this.active.attemptId, startedAfterSeq: cursor, turn, step: 1, revision: ++this.revision })
+      this.active = { attemptId: randomUUID(), startedAfterSeq: cursor, turn, step, nextIndex: 0, stream: [] }
+      this.publish({ type: 'start', attemptId: this.active.attemptId, startedAfterSeq: cursor, turn, step, revision: ++this.revision })
     }
     let block = this.blocks.find(block => block.itemId === itemId)
     if (!block) {
@@ -40,12 +40,13 @@ export class ManagedAssistantStream {
   }
   flush(commit: (content: Array<{ type: string; text: string }>) => number) {
     const active = this.active
-    if (!active) return
+    if (!active) return false
     for (const block of this.blocks) if (!block.ended) this.chunk({ type: 'block-end', index: block.index, block: { type: block.kind, text: block.text } })
     const seq = commit(this.blocks.map(block => ({ type: block.kind, text: block.text })))
     this.chunk({ type: 'finish', reason: { kind: 'stop' } })
     this.publish({ type: 'end', attemptId: active.attemptId, revision: ++this.revision, index: active.nextIndex, outcome: { kind: 'committed', eventType: 'assistant/message', seq } })
     for (const block of this.blocks) this.committed.add(block.itemId)
     this.active = undefined; this.blocks = []
+    return true
   }
 }

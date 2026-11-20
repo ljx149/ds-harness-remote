@@ -1,3 +1,4 @@
+import { installManagedModelDirectories, type ManagedModelServices } from './client/managed-model-directory.js'
 import { createManagedAgentUi } from './client/managed-agent.js'
 import { createBrowserLogin } from './client/browser-login.js'
 import { renderBodyPortal } from './client/portal.js'
@@ -292,6 +293,7 @@ window.__ModuleLoader__.load({
     }
 
     function apply(ctx: {
+      on?(event: string, listener: () => void): () => void
       connection: { rpc: { call(channel: string, endpoint: string, payload: unknown): Promise<ControlResult> }; reconnect?(): void }
       effect(effect: () => (() => void), label: string): void
       inject(services: string[], callback: (ctx: {
@@ -591,6 +593,14 @@ window.__ModuleLoader__.load({
           navigation.openSession(sessionId)
         },
       }
+      ctx.inject(['modelDirectories'], scope => {
+        const resolver = scope.get<ManagedModelServices['resolver']>('modelDirectories')
+        if (resolver) scope.effect(() => installManagedModelDirectories({ resolver,
+          sessions: ctx.sessions as unknown as ManagedModelServices['sessions'],
+          call: (endpoint, payload) => control(endpoint, payload),
+          subscribeReset: listener => ctx.on?.('connection/reset', listener) ?? (() => {}),
+        }), 'xagent: native session model selectors')
+      })
       const managedUi = createManagedAgentUi(React, managedContext)
       ctx.slots.inject('sidebar.session.row.leading', () => ctx.slots.register({
         name: 'sidebar.session.row.leading', id: 'xcodex-managed-agent-logo', order: -100,
