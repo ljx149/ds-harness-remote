@@ -101672,7 +101672,7 @@ var AsyncValueQueue = class {
   }
 };
 
-// packages/protocol/dist/loopback.js
+// ../ds-harness-remote/packages/protocol/dist/loopback.js
 var LOOPBACK_CHUNK_BYTES = 64 * 1024;
 var LOOPBACK_MAX_BODY_BYTES = 1024 * 1024;
 var LOOPBACK_MAX_WS_BYTES = 256 * 1024;
@@ -101694,7 +101694,7 @@ var loopbackRequestSchema = external_exports.discriminatedUnion("op", [
   external_exports.object({ op: external_exports.literal("ws.send"), id, data, binary: external_exports.boolean() }).strict()
 ]);
 
-// packages/protocol/dist/wire-json.js
+// ../ds-harness-remote/packages/protocol/dist/wire-json.js
 function parseWireJson(input4) {
   try {
     const text = typeof input4 === "string" ? input4 : new TextDecoder("utf-8", { fatal: true }).decode(input4);
@@ -101734,7 +101734,7 @@ function parseWireJson(input4) {
   }
 }
 
-// packages/protocol/dist/close-semantics.js
+// ../ds-harness-remote/packages/protocol/dist/close-semantics.js
 var SERVER_SHUTDOWN_REASON = "server shutdown";
 var SERVER_SHUTDOWN_CLOSE_CODES = [4009, 4001, 1013];
 var HEARTBEAT_TIMEOUT_CLOSE_CODE = 4009;
@@ -101762,7 +101762,7 @@ function classifyControlClose(code, reason) {
   };
 }
 
-// packages/protocol/dist/index.js
+// ../ds-harness-remote/packages/protocol/dist/index.js
 var WEBRTC_RESUME_CAPABILITY = "transport.webrtc.resume.v1";
 var RELAY_RESUME_CAPABILITY = "transport.relay.resume.v1";
 var WEBRTC_LEASE_MS = 3e5;
@@ -102433,7 +102433,7 @@ function cryptoRandomId() {
   return `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
 }
 
-// packages/client-core/dist/remote-gateway.js
+// ../ds-harness-remote/packages/client-core/dist/remote-gateway.js
 var DIRECT_REMOTE_CALL_BYTES = 2 * 1024 * 1024;
 function remoteWorkspaceTypeAvailable(capabilities, workspaceTypes, id8, capability) {
   if (!capabilities.includes(capability))
@@ -102460,7 +102460,7 @@ function createRemoteId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-// packages/client-core/dist/codex-client.js
+// ../ds-harness-remote/packages/client-core/dist/codex-client.js
 var MAX_DISPLAY_ITEM_TEXT = 256 * 1024;
 var CODEX_IMAGE_MEDIA_TYPES3 = /* @__PURE__ */ new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 var DATA_IMAGE_URL2 = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/]+={0,2})$/u;
@@ -103073,7 +103073,7 @@ function isRecord3(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// packages/client-core/dist/acp-client.js
+// ../ds-harness-remote/packages/client-core/dist/acp-client.js
 var ACP_PROMPT_RPC_TIMEOUT_MS = 10 * 6e4;
 var AgentAcpClient = class {
   core;
@@ -103328,7 +103328,7 @@ function canonicalBase64ToBytes(value) {
   return bytes;
 }
 
-// packages/client-core/dist/index.js
+// ../ds-harness-remote/packages/client-core/dist/index.js
 var RemoteClientError = class extends Error {
   code;
   constructor(code, message, options) {
@@ -105250,7 +105250,7 @@ import { spawn as spawn2 } from "node:child_process";
 import { Buffer as Buffer2 } from "node:buffer";
 
 // packages/plugin/src/version.ts
-var PLUGIN_VERSION = "0.7.0-xcodex.5";
+var PLUGIN_VERSION = "0.7.0-xcodex.6";
 
 // packages/plugin/src/acp/adapters/cursor-process.ts
 var ACP_REQUEST_TIMEOUT_MS = 6e4;
@@ -109546,7 +109546,7 @@ var AcpVirtualHarness = class _AcpVirtualHarness {
   }
 };
 
-// packages/webrtc/dist/websocket-backpressure.js
+// ../ds-harness-remote/packages/webrtc/dist/websocket-backpressure.js
 async function waitForRelayCapacity(socket) {
   const started = Date.now();
   while ((socket.bufferedAmount ?? 0) > 512 * 1024) {
@@ -109558,7 +109558,7 @@ async function waitForRelayCapacity(socket) {
     throw new Error("Relay transport closed");
 }
 
-// packages/webrtc/dist/transport.js
+// ../ds-harness-remote/packages/webrtc/dist/transport.js
 var BaseTransport = class {
   handlers = /* @__PURE__ */ new Set();
   closeHandlers = /* @__PURE__ */ new Set();
@@ -109580,7 +109580,7 @@ var BaseTransport = class {
   }
 };
 
-// packages/webrtc/dist/util.js
+// ../ds-harness-remote/packages/webrtc/dist/util.js
 function toBase64Url(bytes) {
   const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
   const base643 = typeof btoa === "function" ? btoa(binary) : Buffer.from(bytes).toString("base64");
@@ -109594,7 +109594,7 @@ function fromBase64Url(value) {
   return new Uint8Array(Buffer.from(padded, "base64"));
 }
 
-// packages/webrtc/dist/rtc-adapter.js
+// ../ds-harness-remote/packages/webrtc/dist/rtc-adapter.js
 var RTC_DATA_CHANNEL_LABEL = "dsh";
 var RTC_DATA_CHANNEL_OPTIONS = { ordered: true };
 function browserRtcFactory() {
@@ -109827,7 +109827,7 @@ function adaptDataChannel(raw) {
   };
 }
 
-// packages/webrtc/dist/rtc-chunking.js
+// ../ds-harness-remote/packages/webrtc/dist/rtc-chunking.js
 var RTC_CHUNK_MAGIC = new Uint8Array([82, 84, 67, 72]);
 var RTC_CHUNK_HEADER_BYTES = 12;
 var RTC_CHUNK_PAYLOAD_BYTES = 8 * 1024;
@@ -109936,7 +109936,7 @@ function isChunk(frame) {
   return true;
 }
 
-// packages/webrtc/dist/rtc-data-channel.js
+// ../ds-harness-remote/packages/webrtc/dist/rtc-data-channel.js
 var DEFAULT_NEGOTIATE_TIMEOUT_MS = 8e3;
 var SELECTED_PATH_RETRY_COUNT = 5;
 var SELECTED_PATH_RETRY_DELAY_MS = 50;
@@ -110655,7 +110655,7 @@ function sleep(ms) {
   return new Promise((resolve11) => setTimeout(resolve11, ms));
 }
 
-// packages/webrtc/dist/control-lease.js
+// ../ds-harness-remote/packages/webrtc/dist/control-lease.js
 var WEBRTC_LEASE_MS2 = 3e5;
 var ControlLease = class {
   connectionId;
@@ -110737,7 +110737,7 @@ var ControlLease = class {
   }
 };
 
-// packages/webrtc/dist/adaptive-transport.js
+// ../ds-harness-remote/packages/webrtc/dist/adaptive-transport.js
 var DEFAULT_CAPABILITIES = [WEBRTC_RESUME_CAPABILITY, RELAY_RESUME_CAPABILITY, "transport.lan", "transport.p2p", "transport.turn", "transport.relay", "transport.relay.attach", "harness.api.v1"];
 var DEFAULT_PREFERRED_TRANSPORTS = ["lan", "p2p", "turn", "relay"];
 var AdaptiveTransport = class extends BaseTransport {
@@ -111519,7 +111519,7 @@ function throwIfAborted(signal) {
     throw new Error("Adaptive connection was aborted");
 }
 
-// packages/webrtc/dist/serial-send.js
+// ../ds-harness-remote/packages/webrtc/dist/serial-send.js
 var SerialSend = class {
   tail = Promise.resolve();
   bytes = 0;
@@ -118706,7 +118706,7 @@ function noiseIk() {
   ]]);
 }
 
-// packages/crypto/dist/noise.js
+// ../ds-harness-remote/packages/crypto/dist/noise.js
 var NOISE_IK_PROTOCOL = "Noise_IK_25519_ChaChaPoly_SHA256";
 var NoiseIkSession = class {
   handshake;
@@ -118841,7 +118841,7 @@ function constantTimeEqual(left, right) {
   return different === 0;
 }
 
-// packages/crypto/dist/index.js
+// ../ds-harness-remote/packages/crypto/dist/index.js
 function generateKeyPair(privateKeyBytes) {
   const privateKey = privateKeyBytes ?? x25519.utils.randomPrivateKey();
   if (privateKey.byteLength !== 32)
